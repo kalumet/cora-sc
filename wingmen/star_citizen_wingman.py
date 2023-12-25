@@ -6,6 +6,7 @@ from elevenlabs import generate, stream, Voice, voices
 from wingmen.open_ai_wingman import OpenAiWingman
 from wingmen.star_citizen_services.keybindings import SCKeybindings
 from wingmen.star_citizen_services.uex_api import UEXApi
+from wingmen.star_citizen_services.screenshot_ocr import TransportMissionAnalyzer
 from services.printr import Printr
 from services.secret_keeper import SecretKeeper
 
@@ -609,6 +610,8 @@ class StarCitizenWingman(OpenAiWingman):
             {} | None: The executed instant_activation command.
         """
     
+        TransportMissionAnalyzer.testScreenshot()
+        
         instant_activation_commands = [
             command
             for command in self.config.get("commands", [])

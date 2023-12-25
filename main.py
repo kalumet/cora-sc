@@ -4,6 +4,7 @@ import sys
 import asyncio
 import threading
 from pynput import keyboard
+from pynput import mouse
 from services.audio_recorder import AudioRecorder
 from services.secret_keeper import SecretKeeper
 from services.tower import Tower
@@ -98,6 +99,35 @@ class WingmanAI:
                 play_thread = threading.Thread(target=run_async_process)
                 play_thread.start()
 
+    def on_press_mouse(self, x, y, button, pressed):
+        # print(f"Button: {button.name}, Pressed: {pressed}")
+        if button.name == "x1":
+            if pressed and self.active and self.tower and self.active_recording["key"] == "":
+                wingman = self.tower.get_wingman_from_key(button)
+                if wingman:
+                    self.active_recording = dict(key=button, wingman=wingman)
+                    self.audio_recorder.start_recording()
+
+            if not pressed and self.active and self.active_recording["key"] == button:
+                wingman = self.active_recording["wingman"]
+                recorded_audio_wav = self.audio_recorder.stop_recording()
+                self.active_recording = dict(key="", wingman=None)
+
+                def run_async_process():
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    try:
+                        if isinstance(wingman, Wingman):
+                            loop.run_until_complete(
+                                wingman.process(str(recorded_audio_wav))
+                            )
+                    finally:
+                        loop.close()
+
+                if recorded_audio_wav:
+                    play_thread = threading.Thread(target=run_async_process)
+                    play_thread.start()
+
 
 # ─────────────────────────────────── ↓ START ↓ ─────────────────────────────────────────
 if __name__ == "__main__":
@@ -108,7 +138,14 @@ if __name__ == "__main__":
     listener.start()
     listener.wait()
 
+    # Maus-Listener starten
+    mouseListener = mouse.Listener(on_click=core.on_press_mouse)
+    mouseListener.start()
+    mouseListener.wait()
+
     ui = WingmanUI(core)
     ui.mainloop()
 
     listener.stop()
+    mouseListener.stop()
+

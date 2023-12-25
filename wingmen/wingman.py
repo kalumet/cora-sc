@@ -250,7 +250,7 @@ class Wingman:
             str: A random response from the command's responses list in the config.
         """
         command_responses = command.get("responses", None)
-        if (command_responses is None) or (len(command_responses) == 0):
+        if not command_responses or (len(command_responses) == 0):
             return None
 
         return random.choice(command_responses)

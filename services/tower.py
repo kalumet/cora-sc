@@ -1,3 +1,5 @@
+import traceback
+
 from exceptions import MissingApiKeyException
 from wingmen.open_ai_wingman import OpenAiWingman
 from wingmen.wingman import Wingman
@@ -61,6 +63,7 @@ class Tower:
                     }
                 )
             except Exception as e:  # pylint: disable=broad-except
+                traceback.print_exc()
                 # just in case we missed something
                 msg = str(e).strip()
                 if not msg:

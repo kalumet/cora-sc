@@ -4,6 +4,13 @@ import os
 from wingmen.star_citizen_services.model.delivery_mission import DeliveryMission
 
 
+DEBUG = False
+
+
+def print_debug(to_print):
+    if DEBUG:
+        print_debug(to_print)
+
 class MissionManager:
     """ maintains a set of all missions and provides functionality to manage this set
     

@@ -39,10 +39,10 @@ class LocationNameMatching:
             found_pickup_location = False
             found_dropoff_location = False
 
-            # print(
+            # print_debug(
             #     f'Checking pickup location "{pickup_location_name}" in trading database'
             # )
-            # print(
+            # print_debug(
             #     f'Checking dropoff location "{dropoff_location_name}" in trading database'
             # )
 
@@ -121,7 +121,7 @@ def _calculate_similarity(str1, str2, threshold):
 
 def _process_matched_location(location, matched_location, location_type):
     if matched_location:
-        # print(
+        # print_debug(
         #     f"Matched found for {location_type} ({location['name']}): {matched_location['name']}"
         # )
         for key in location:

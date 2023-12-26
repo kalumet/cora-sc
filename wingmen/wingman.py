@@ -271,6 +271,8 @@ class Wingman:
             if command.get("instant_activation")
         ]
 
+        best_command = None
+        best_ratio = 0
         # check if transcript matches any instant activation command. Each command has a list of possible phrases
         for command in instant_activation_commands:
             for phrase in command.get("instant_activation"):
@@ -279,14 +281,20 @@ class Wingman:
                     transcript.lower(),
                     phrase.lower(),
                 ).ratio()
-                if (
-                    ratio > 0.8
-                ):  # if the ratio is higher than 0.8, we assume that the command was spoken
-                    self._execute_command(command)
+                if ratio > 0.8:  # we only accept commands that have a high ration
+                    if ratio > best_ratio: # some command activations might have quite similar values, therefore, we need to check if there are better commands!
+                        best_command = command
+                        best_ratio = ratio
+        
+        self._execute_command(best_command)
 
-                    if command.get("responses"):
-                        return command
-                    return None
+        if best_command:
+            if best_command.get("responses") is False:
+                return "Ok"
+            
+            if len(best_command.get("responses", [])) == 0:
+                return None  # gpt decides how the response should be
+            return self._select_command_response(best_command)  # we want gpt to decide how the response should be
         return None
 
     def _execute_command(self, command: dict) -> str:
@@ -334,19 +342,57 @@ class Wingman:
             command (dict): The command object from the config to execute
         """
 
-        for entry in command.get("keys", []):
-            if entry.get("modifier"):
-                key_module.keyDown(entry["modifier"])
+        modifier_order = ["alt", "ctrl", "shift", "altleft", "ctrlleft", "shiftleft", "altright", "ctrlrigth", "shiftright"]
+        keys = command.get("keys", [])
+        
+        active_modifiers = []
 
+        for entry in keys:
+            if self.debug:
+                printr.print(entry,console_only=True)
+            key = entry["key"]
+            if entry.get("modifier"):
+                if self.debug:
+                    printr.print(f'down {entry.get("modifier")}',console_only=True)
+                key_module.keyDown(entry.get("modifier"))
+            
+            if entry.get("modifiers"):
+                modifiers = entry.get("modifiers").split(",")
+                modifiers = sorted(modifiers, key=lambda x: modifier_order.index(x) if x in modifier_order else len(modifier_order))
+                for modifier in modifiers:
+                    if self.debug:
+                        printr.print(f"modifier down {modifier}",console_only=True)
+                    key_module.keyDown(modifier)
+                    active_modifiers.insert(0, modifier)  # we build a reverse list, as we want to release in the opposite order
+                    
             if entry.get("hold"):
-                key_module.keyDown(entry["key"])
+                if self.debug:
+                    printr.print(f"press and hold{entry['hold']}: {modifier}",console_only=True)
+                key_module.keyDown(key)
                 time.sleep(entry["hold"])
-                key_module.keyUp(entry["key"])
+                key_module.keyUp(key)
+            elif entry.get("typewrite"):  # added very buggy, as it is keyboard-layout sensitive :(
+                if self.debug:
+                    printr.print(f"typewrite: {entry.get('typewrite')}",console_only=True)
+                key_module.typewrite(entry["typewrite"], interval=0.1)
             else:
-                key_module.press(entry["key"])
+                if self.debug:
+                    printr.print(f'press {key}',console_only=True)
+                key_module.press(key, interval=0.005)
 
             if entry.get("modifier"):
-                key_module.keyUp(entry["modifier"])
+                if self.debug:
+                    printr.print(f'down {entry.get("modifier")}',console_only=True)
+                key_module.keyUp(entry.get("modifier"))
+
+            if len(active_modifiers) > 0:
+                for modifier in active_modifiers:
+                    if self.debug:
+                        printr.print(f"modifier up {modifier}",console_only=True)
+                    key_module.keyUp(modifier)
 
             if entry.get("wait"):
+                if self.debug:
+                    printr.print(f"waiting {entry.get('wait')}",console_only=True)
                 time.sleep(entry["wait"])
+

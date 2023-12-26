@@ -11,6 +11,7 @@ from pedalboard import (
     Reverb,
     Delay,
     Gain,
+    Distortion,
 )
 
 
@@ -18,23 +19,53 @@ from pedalboard import (
 class SoundEffects(Enum):
     ROBOT = Pedalboard(
         [
-            PitchShift(semitones=-1),
-            Delay(delay_seconds=0.01, feedback=0.5, mix=0.2),
-            Chorus(rate_hz=0.5, depth=0.8, mix=0.5, centre_delay_ms=2, feedback=0.3),
-            Reverb(
-                room_size=0.05, dry_level=0.5, wet_level=0.5, freeze_mode=0.5, width=0.3
-            ),
-            Gain(gain_db=8),
+            PitchShift(semitones=-2),  # weniger extreme Tonhöhenänderung
+            Delay(delay_seconds=0.01, feedback=0.3, mix=0.3),  # reduzierter Mix-Wert,
+            Chorus(rate_hz=0.5, depth=0.5, mix=0.4, centre_delay_ms=2, feedback=0.2),
+            Reverb(room_size=0.05, dry_level=0.7, wet_level=0.3, freeze_mode=0.5, width=0.3),
+            Gain(gain_db=6)  # reduzierter Gain-Wert
+            
+            # OLD robot: very robotic
+            # PitchShift(semitones=-3),
+            # Delay(delay_seconds=0.01, feedback=0.5, mix=0.5),
+            # Chorus(
+            #     rate_hz=0.5, depth=0.8, mix=0.7, centre_delay_ms=2, feedback=0.3
+            # ),
+            # Reverb(
+            #     room_size=0.05,
+            #     dry_level=0.5,
+            #     wet_level=0.2,
+            #     freeze_mode=0.5,
+            #     width=0.5,
+            # ),
+            # Gain(gain_db=9),
+            
+            # NEW from main:
+            # PitchShift(semitones=-1),
+            # Delay(delay_seconds=0.01, feedback=0.5, mix=0.2),
+            # Chorus(rate_hz=0.5, depth=0.8, mix=0.5, centre_delay_ms=2, feedback=0.3),
+            # Reverb(
+            #     room_size=0.05, dry_level=0.5, wet_level=0.5, freeze_mode=0.5, width=0.3
+            # ),
+            # Gain(gain_db=8),
         ]
     )
     RADIO = Pedalboard(
         [
-            HighpassFilter(1000),
-            LowpassFilter(5000),
-            Resample(10000),
-            Gain(gain_db=3),
-            Compressor(threshold_db=-21, ratio=3.5, attack_ms=1, release_ms=50),
-            Gain(gain_db=6),
+            HighpassFilter(2000),  # oder höher
+            LowpassFilter(2500),   # oder niedriger
+            Resample(6000),  # oder ein anderer Wert
+            Gain(gain_db=12),  # Erhöhe für mehr Gesamtlautstärke und Rauschen
+            Compressor(threshold_db=-40, ratio=6, attack_ms=1, release_ms=50),
+            Distortion(drive_db=0.3)  # Wert anpassen nach Bedarf
+
+            # New from main: few radio effect
+            # HighpassFilter(1000),
+            # LowpassFilter(5000),
+            # Resample(10000),
+            # Gain(gain_db=3),
+            # Compressor(threshold_db=-21, ratio=3.5, attack_ms=1, release_ms=50),
+            # Gain(gain_db=6),
         ]
     )
     INTERIOR_HELMET = Pedalboard(

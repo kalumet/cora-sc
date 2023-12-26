@@ -1,7 +1,6 @@
-from typing import Dict, List
 from wingmen.star_citizen_services.model.mission_package import MissionPackage
-from wingmen.star_citizen_services.model.mission_action import DeliveryMissionAction
 from wingmen.star_citizen_services.helper.json_serializable import JsonSerializable
+
 
 class DeliveryMission(JsonSerializable):
     """
@@ -68,8 +67,45 @@ class DeliveryMission(JsonSerializable):
                 mission_info += f'  - Package #{package}:\n     Pickup at {pickup["name"]} on {pickup_sat_or_plan}\n     Drop-off at {drop_off["name"]} on {dropoff_sat_or_plan}\n'
 
         return mission_info
+    
+    def to_json(self):
+        # from wingmen.star_citizen_services.uex_api import UEXApi
+        # uex_api = UEXApi()
+
+        # satellites = uex_api.get_data("satellites")
+        # planets = uex_api.get_data("planets")
+        # cities = uex_api.get_data("cities")
+
+        # for package in self.packages:
+        #     pickup_location = self.pickup_locations[package]
+
+        #     satellite = pickup_location["satellite"]
+        #     pickup_location["satellite"] = satellites.get(satellite, {}).get("name", satellite)
+            
+        #     planet = pickup_location["planet"]
+        #     pickup_location["planet"] = planets.get(planet, {}).get("name", planet)
+
+        #     city = pickup_location["city"]
+        #     pickup_location["city"] = cities.get(city, {}).get("name", city)
+
+        #     drop_off_location = self.drop_off_locations[package]
+
+        #     d_satellite = drop_off_location["satellite"]
+        #     drop_off_location["satellite"] = satellites.get(d_satellite, {}).get("name", d_satellite)
+
+        #     d_planet = drop_off_location["planet"]
+        #     drop_off_location["planet"] = planets.get(d_planet, {}).get("name", d_planet)
+
+        #     d_city = drop_off_location["city"]
+        #     drop_off_location["city"] = cities.get(d_city, {}).get("name", d_city)
+        return {
+            "mission_id": self.id,
+            "revenue": self.revenue,
+            "packag_ids" : list(self.packages),
+            # "pickup_locations": self.pickup_locations,
+            # "drop_off_locations": self.drop_off_locations
+        }
 
 
 # Marking attributes to ignore on serialization
 DeliveryMission.ignore_for_json('mission_packages')
-DeliveryMission.ignore_for_json('mission_action_order')

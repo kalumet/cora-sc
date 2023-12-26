@@ -55,10 +55,10 @@ class UEXApi():
             self.name_mapping = {}
             self.data = {}
 
-            #print("Initializing UexApi instance")
+            print_debug("Initializing UexApi instance")
             self.is_initialized = True
-        # else:
-        #     print_debug("UexApi instance already initialized")
+        else:
+            print_debug("UexApi instance already initialized")
     
     @classmethod
     def init(cls, uex_api_key: str):

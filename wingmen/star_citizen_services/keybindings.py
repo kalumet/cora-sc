@@ -15,13 +15,14 @@ def print_debug(to_print):
 class SCKeybindings():
 
     def __init__(self, config: dict[str, any]):
-        self.data_root_path = "star_citizen_data/keybindings"
+        self.config = config
+        
+        self.data_root_path = f'{self.config["data-root-directory"]}{self.config["sc-keybind-mappings"]["keybindings-directory"]}'
         self.json_path = f"{self.data_root_path}/keybindings_existing.json"
         self.json_path_miss = f"{self.data_root_path}/keybindings_missing.json"
         self.json_path_knowledge = f"{self.data_root_path}/keybindings_existing_knowledge.json"
         self.json_path_miss_knowledge = f"{self.data_root_path}/keybindings_missing_knowledge.json"
         self.keybindings: dict = None # will be filled on first access
-        self.config = config
         self.sc_installation_dir = self.config["sc-keybind-mappings"]["sc_installation_dir"]
         self.user_keybinding_file_name = self.config["sc-keybind-mappings"]["user_keybinding_file_name"]
         self.sc_active_channel = self.config["sc-keybind-mappings"]["sc_active_channel"]

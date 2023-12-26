@@ -6,7 +6,7 @@ from elevenlabs import generate, stream, Voice, voices
 from wingmen.open_ai_wingman import OpenAiWingman
 from wingmen.star_citizen_services.keybindings import SCKeybindings
 from wingmen.star_citizen_services.uex_api import UEXApi
-from wingmen.star_citizen_services.screenshot_ocr import TransportMissionAnalyzer
+from wingmen.star_citizen_services.mission_manager import MissionManager
 from services.printr import Printr
 from services.secret_keeper import SecretKeeper
 
@@ -84,7 +84,8 @@ class StarCitizenWingman(OpenAiWingman):
         self.switch_context_executed = False  # used to identify multiple switch executions that would be incorrect -> Error
         self.sc_keybinding_service: SCKeybindings = SCKeybindings(config)
         self.sc_keybinding_service.parse_and_create_files()
-        self.uex_service = None  # set in validate()
+        self.uex_service: UEXApi = None  # set in validate()
+        self.mission_manager_service: MissionManager = None # initialized in validate()
         self.tdd_voice = "onyx"
         self.config["openai"]["tts_voice"] = self.config["openai"]["contexts"]["cora_voice"]
         self.config["sound"]["play_beep"] = False
@@ -112,6 +113,7 @@ class StarCitizenWingman(OpenAiWingman):
             )
         else:
             self.uex_service = UEXApi.init(uex_api_key)
+            self.mission_manager_service = MissionManager(config=self.config)
 
     def _set_current_context(self, new_context: AIContext, new: bool = False):
         """Set the current context to the specified context name."""
@@ -358,6 +360,10 @@ class StarCitizenWingman(OpenAiWingman):
             function_response = json.dumps(self.uex_service.find_best_selling_location_for_commodity(commodity_name=function_args["commodity_name"]))
             printr.print(f'-> Resultat: {function_response}', tags="info")
 
+        if function_name == "add_new_box_mission":
+            function_response = json.dumps(self.mission_manager_service.get_new_mission())
+            printr.print(f'-> Resultat: {function_response}', tags="info")
+
 
         return function_response, instant_reponse
 
@@ -591,9 +597,21 @@ class StarCitizenWingman(OpenAiWingman):
             }
         return tools
     
+    def _get_box_mission_tool(self):
+        
+        tools = {
+                "type": "function",
+                "function": {
+                    "name": "add_new_box_mission",
+                    "description": "Add a box / delivery mission to the active missions. In your answer provide only the following information: Acknowledge delivery mission, payment amount, number of packages to deliver. Any numbers in your response must be written out. Do not provide any itinerary information."
+                }
+            }
+        return tools
+    
     def _get_cora_tools(self) -> list[dict]:
         tools = []
         tools.append(self._get_keybinding_commands())
+        tools.append(self._get_box_mission_tool())
         tools.append(self._context_switch_tool(current_context=self.AIContext.CORA))
         return tools
     

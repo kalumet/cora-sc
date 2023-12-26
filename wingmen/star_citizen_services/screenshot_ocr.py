@@ -1,31 +1,107 @@
-
+import os
+import datetime
+import time
 import cv2
 import numpy as np
 from PIL import Image
 import pytesseract
+import pygetwindow
+import pyautogui
 
 import wingmen.star_citizen_services.text_analyser as text_analyser
 
-from wingmen.star_citizen_services.mission_manager import MissionManager
-from wingmen.star_citizen_services.uex_api import UEXApi
 from wingmen.star_citizen_services.location_name_matching import LocationNameMatching
-from wingmen.star_citizen_services.delivery_manager import PackageDeliveryPlanner
-from wingmen.star_citizen_services.cargo_route_planner import CargoRoutePlanner
-from wingmen.star_citizen_services.model.mission_location_information import MissionLocationInformation
 
 
-DEBUG = False
+DEBUG = True
+TEST = True
 
 
 def print_debug(to_print):
     if DEBUG:
-        print_debug(to_print)
+        print(to_print)
 
-        
+
 class TransportMissionAnalyzer:
-    def __init__(self, payment_template_path, accept_offer_template_path):
-        self.payment_template = cv2.imread(payment_template_path, 0)
-        self.accept_offer_template = cv2.imread(accept_offer_template_path, 0)
+    def __init__(self, upper_left_template, lower_right_template, data_dir_path):
+        self.payment_template = cv2.imread(upper_left_template, 0)
+        self.accept_offer_template = cv2.imread(lower_right_template, 0)
+        self.data_dir_path = data_dir_path
+        self.screenshots_path = f'{self.data_dir_path}/screenshots'
+
+        if not os.path.exists(self.screenshots_path):
+            os.makedirs(self.screenshots_path)
+
+    def identify_mission(self):
+        filename = self.take_screenshot()
+
+        if not filename:
+            return None
+
+        screenshot_text, accept_button_coordinates = self.analyze_screenshot(filename)
+        print_debug(f"screenshot text: {screenshot_text}")
+        delivery_mission = text_analyser.TextAnalyzer.analyze_text(screenshot_text)
+
+        if not delivery_mission or len(delivery_mission.packages) == 0:
+            return None
+        # Usage example
+        LocationNameMatching.validate_location_names(delivery_mission)
+
+        if not TEST:
+            self.accept_mission_click(accept_button_coordinates)
+
+        return delivery_mission
+
+    def accept_mission_click(self, accept_button_coordinates):
+        active_window = pygetwindow.getActiveWindow()
+        if active_window:
+            # Speichere die aktuelle Position der Maus
+            original_mouse_x, original_mouse_y = pyautogui.position()
+
+            # Fensterposition bestimmen
+            window_x, window_y = active_window.left, active_window.top
+
+            # Templategröße ermitteln
+            template_height, template_width = self.accept_offer_template.shape[:2]
+
+            # Berechne die absolute Mitte des Templates
+            absolute_x = window_x + accept_button_coordinates[0] + template_width // 2
+            absolute_y = window_y + accept_button_coordinates[1] + template_height // 2
+
+           # Bewege die Maus langsam zur Zielposition
+            pyautogui.moveTo(absolute_x, absolute_y, duration=0.2)
+
+            # Verzögerung vor dem Klick
+            time.sleep(0.1)
+
+            # Führe den Klick aus mit einer längeren Klickdauer
+            pyautogui.mouseDown()
+            time.sleep(0.1)  # Halte die Maustaste 0.1 Sekunden lang gedrückt
+            pyautogui.mouseUp()
+
+            # Setze die Mausposition auf die ursprüngliche Position zurück
+            pyautogui.moveTo(original_mouse_x, original_mouse_y, duration=0.2)
+    
+    def take_screenshot(self):
+        if TEST:
+            return "star_citizen_data/delivery-missions/examples/mission_level1_2_1.jpg"
+        
+        active_window = pygetwindow.getActiveWindow()
+        if active_window and "Star Citizen" in active_window.title:
+            # Aktuellen Zeitpunkt erfassen
+            now = datetime.datetime.now()
+            timestamp = now.strftime("%Y%m%d_%H%M%S_%f")  # Format: JahrMonatTag_StundeMinuteSekunde_Millisekunden
+
+            # Dateinamen mit Zeitstempel erstellen
+            filename = f'{self.screenshots_path}/screenshot_{timestamp}.png'
+
+            # Fensterposition und -größe bestimmen
+            x, y, width, height = active_window.left, active_window.top, active_window.width, active_window.height
+            # Screenshot des bestimmten Bereichs machen
+            screenshot = pyautogui.screenshot(region=(x, y, width, height))
+            screenshot.save(filename)
+            return filename
+        return None
 
     def preprocess_image(self, image):
         """Preprocess the image for better OCR results."""
@@ -74,34 +150,4 @@ class TransportMissionAnalyzer:
         text = pytesseract.image_to_string(preprocessed_cropped_screenshot_pil)
         # print_debug(text)
         # print_debug("---------------------")
-        return text
-
-    @staticmethod
-    def testScreenshot():
-        print_debug("test")
-        # Initialize the analyzer with the path to the template images
-        analyzer = TransportMissionAnalyzer('star_citizen_data/screenshots/template_payment.jpg', 'star_citizen_data/screenshots/template_accept_offer_2.jpg')
-
-        # Analyze the provided screenshots
-        screenshot_paths = [
-            'star_citizen_data/screenshots/examples/mission_level1_3_2.jpg',
-            'star_citizen_data/screenshots/examples/mission_level1_4_1.jpg'
-        ]
-
-        mission_manager = MissionManager()
-        delivery_manager = PackageDeliveryPlanner()
-
-        for path in screenshot_paths:
-            screenshot_text = analyzer.analyze_screenshot(path)
-            delivery_mission = text_analyser.TextAnalyzer.analyze_text(screenshot_text)
-            # Usage example
-            LocationNameMatching.validate_location_names(delivery_mission)
-            mission_manager.add_mission(delivery_mission)
-            delivery_manager.insert(delivery_mission)
-
-        # ordered_delivery_locations: [MissionLocationInformation] = PackageDeliveryPlanner.sort(mission_manager.missions)
-        
-        # CargoRoutePlanner.finde_routes_for_delivery_missions(ordered_delivery_locations, tradeports_data)
-			
-        # Save the missions to a JSON file
-        mission_manager.save_missions('star_citizen_data/screenshots/examples/missions.json')
+        return text, max_loc_offer

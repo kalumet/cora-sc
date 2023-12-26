@@ -1,0 +1,7 @@
+*missions.json
+*.jpg
+*.png
+
+!template_accept_offer_2.jpg
+!template_payment.jpg
+!examples/*

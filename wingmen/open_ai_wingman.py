@@ -329,6 +329,9 @@ class OpenAiWingman(Wingman):
         Args:
             text (str): The text to play as audio.
         """
+        # avoid playing anything, if the response is OK or if no text is provided
+        if not text or text == "Ok":
+            return
 
         if self.tts_provider == "edge_tts":
             edge_config = self.config["edge_tts"]

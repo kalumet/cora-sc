@@ -14,9 +14,19 @@ class StarHeadWingman(OpenAiWingman):
     """
 
     def __init__(
-        self, name: str, config: dict[str, any], secret_keeper: SecretKeeper
+        self,
+        name: str,
+        config: dict[str, any],
+        secret_keeper: SecretKeeper,
+        app_root_dir: str,
     ) -> None:
-        super().__init__(name, config, secret_keeper)
+        super().__init__(
+            name=name,
+            config=config,
+            secret_keeper=secret_keeper,
+            app_root_dir=app_root_dir,
+        )
+
         # config entry existence not validated yet. Assign later when checked!
         self.star_head_url = ""
         """The base URL of the StarHead API"""
@@ -41,9 +51,14 @@ class StarHeadWingman(OpenAiWingman):
         if not self.config.get("starhead_api_url"):
             errors.append("Missing 'starhead_api_url' in config.yaml")
 
+        try:
+            self._prepare_data()
+        except Exception as e:
+            errors.append(f"Failed to load data from StarHead API: {e}")
+
         return errors
 
-    def prepare(self):
+    def _prepare_data(self):
         # here validate() already ran, so we can safely access the config
         self.star_head_url = self.config.get("starhead_api_url")
 
@@ -136,7 +151,13 @@ class StarHeadWingman(OpenAiWingman):
         """
 
         cargo, qd = self._get_ship_details(ship)
+        if not cargo or not qd:
+            return f"Could not find ship '{ship}' in the StarHead database."
+
         celestial_object_id = self._get_celestial_object_id(position)
+        if not celestial_object_id:
+            return f"Could not find celestial object '{position}' in the StarHead database."
+
         data = {
             "startCelestialObjectId": celestial_object_id,
             "quantumDriveId": qd["id"] if qd else None,

@@ -32,7 +32,7 @@ The project is intended for two different groups of users:
 
 ### Developers
 
-If you're a developer, you can just clone the repository and start building your own Wingmen. We try to keep the codebase as open and hackable as possible, with lots of hooks and extension points. The base classes you'll need are well documented, and we're happy to help you get started. We also provide a [development guide](#set-up-your-development-environment) to help you witht the setup. Wingman is currently 100% written in Python.
+If you're a developer, you can just clone the repository and start building your own Wingmen. We try to keep the codebase as open and hackable as possible, with lots of hooks and extension points. The base classes you'll need are well documented, and we're happy to help you get started. We also provide a [development guide](#develop-with-wingman-ai) to help you witht the setup. Wingman is currently 100% written in Python.
 
 ### Gamers & other interested people
 
@@ -102,11 +102,11 @@ You can ask them anything you want, so just try something like: _"Hey, what can 
 
 ![Alt text](assets/win-smartscreen-2.png)
 
-**If you're a developer**, we always recommend to [run from source](#set-up-your-development-environment). This way you can pull our latest changes and debug the code.
+**If you're a developer**, we always recommend to [run from source](#develop-with-wingman-ai). This way you can pull our latest changes and debug the code.
 
 ### MacOS
 
-Wingman **does** run on MacOS. While we don't have a precompiled package for it yet but you can [run it from source](#set-up-your-development-environment).
+Wingman **does** run on MacOS. While we don't have a precompiled package for it yet but you can [run it from source](#develop-with-wingman-ai).
 
 Also note that we have to rely on [PyAutoGUI](https://github.com/asweigart/pyautogui) for key presses on MacOS, which does not work well in many games. Developing on MacOS is perfectly fine, though.
 
@@ -212,15 +212,19 @@ This list will inevitably remain incomplete. If you miss your name here, please 
 To our greatest supporters we say: `o7` Commanders!
 
 - [**Rodney W. Harper aka Mactavious-Actual**](https://linktr.ee/rwhnc)
+- **JayMatthew aka SawPsyder**
 
 ### Premium Donators
 
+- [The Announcer](https://www.youtube.com/TheAnnouncerLive)
 - [Weyland](https://robertsspaceindustries.com/orgs/corp)
 - Morthius
+- [Grobi](https://www.twitch.tv/grobitalks)
+- Paradox
 
 ### Wingmen
 
-[Ira Robinson aka Serene/BlindDadDoes](http://twitch.tv/BlindDadDoes), Zenith, DiVille, [Hiwada], Hades aka Architeutes, Raziel317, [CptToastey](https://www.twitch.tv/cpttoastey), NeyMR AKA EagleOne (Capt.Epic), a Bit Brutal, AlexeiX, [Dragon Aura](https://robertsspaceindustries.com/citizens/Dragon_Aura), Perry-x-Rhodan, DoublarThackery, SilentCid, Bytebool, Exaust A.K.A Nikoyevitch, Tycoon3000, N.T.G, Jolan97, Greywolfe, [JayMatthew](https://robertsspaceindustries.com/citizens/JayMatthew), [Dayel Ostraco aka BlakeSlate](https://dayelostra.co/), Nielsjuh01, Manasy, Sierra-Noble, Simon says aka Asgard, JillyTheSnail, [Admiral-Chaos aka Darth-Igi], The Don, Tristan Import Error, Munkey the pirate, Norman Pham aka meMidgety, [meenie](https://github.com/meenie), [Tilawan](https://github.com/jlaluces123), Mr. Moo42, Geekdomo, Jenpai, Blitz
+[Ira Robinson aka Serene/BlindDadDoes](http://twitch.tv/BlindDadDoes), Zenith, DiVille, [Hiwada], Hades aka Architeutes, Raziel317, [CptToastey](https://www.twitch.tv/cpttoastey), NeyMR AKA EagleOne (Capt.Epic), a Bit Brutal, AlexeiX, [Dragon Aura](https://robertsspaceindustries.com/citizens/Dragon_Aura), Perry-x-Rhodan, DoublarThackery, SilentCid, Bytebool, Exaust A.K.A Nikoyevitch, Tycoon3000, N.T.G, Jolan97, Greywolfe, [JayMatthew](https://robertsspaceindustries.com/citizens/JayMatthew), [Dayel Ostraco aka BlakeSlate](https://dayelostra.co/), Nielsjuh01, Manasy, Sierra-Noble, Simon says aka Asgard, JillyTheSnail, [Admiral-Chaos aka Darth-Igi], The Don, Tristan Import Error, Munkey the pirate, Norman Pham aka meMidgety, [meenie](https://github.com/meenie), [Tilawan](https://github.com/jlaluces123), Mr. Moo42, Geekdomo, Jenpai, Blitz, [Aaron Sadler](https://github.com/AaronSadler687), [SleeperActual](https://vngd.net/), parawho, [HypeMunkey] https://robertsspaceindustries.com/citizens/HypeMunkey, Huniken, SuperTruck, [NozDog]
 
 ## Open Source Acknowledgements
 
@@ -230,12 +234,13 @@ We would like to thank their creators for their great work and contributions to 
 - [edge-tts](https://github.com/rany2/edge-tts) - GPL-3.0
 - [openai](https://github.com/openai/openai-python) - Apache-2.0
 - [openai-whisper](https://github.com/openai/whisper) - MIT
+- [elevenlabslib](https://github.com/lugia19/elevenlabslib) - MIT, © 2018 The Python Packaging Authority
 - [pydirectinput](https://github.com/learncodebygaming/pydirectinput) - MIT, © 2020 Ben Johnson
 - [PyAutoGUI](https://github.com/asweigart/pyautogui) - BSD 3, © 2014 Al Sweigart
-- [pydub](https://github.com/jiaaro/pydub) - MIT, © 2011 James Robert
-- [scipy](https://github.com/scipy/scipy) - BSD 3, © 2001-2002 Enthought, Inc. 2003-2023, SciPy Developers
-- [numpy](https://github.com/numpy/numpy) - BSD 3, © 2005-2023, NumPy Developers
 - [sounddevice](https://github.com/spatialaudio/python-sounddevice/) - MIT, © 2015-2023 Matthias Geier
 - [soundfile](https://github.com/bastibe/python-soundfile) - BSD 3, © 2013 Bastian Bechtold
+- [scipy](https://github.com/scipy/scipy) - BSD 3, © 2001-2002 Enthought, Inc. 2003-2023, SciPy Developers
+- [numpy](https://github.com/numpy/numpy) - BSD 3, © 2005-2023, NumPy Developers
 - [packaging](https://github.com/pypa/packaging) - Apache/BSD, © Donald Stufft and individual contributors
+- [pyinstaller](https://github.com/pyinstaller/pyinstaller) - extended GPL 2.0, © 2010-2023, PyInstaller Development Team
 - [faqtory](https://github.com/willmcgugan/faqtory) - MIT, © 2022 Will McGugan

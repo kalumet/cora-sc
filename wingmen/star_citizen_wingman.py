@@ -63,8 +63,19 @@ class StarCitizenWingman(OpenAiWingman):
         CORA = "CoraInteractionRequests"
         TDD = "TradeAndDevelopmentDivisionRequests"
 
-    def __init__(self, name: str, config: dict[str, any], secret_keeper: SecretKeeper):
-        super().__init__(name, config, secret_keeper)
+    def __init__(
+        self,
+        name: str,
+        config: dict[str, any],
+        secret_keeper: SecretKeeper,
+        app_root_dir: str,
+    ):
+        super().__init__(
+            name=name,
+            config=config,
+            secret_keeper=secret_keeper,
+            app_root_dir=app_root_dir,
+        )
         
         self.contexts_history = {}  # Dictionary to store the state of different conversion contexts
         self.current_context: self.AIContext = self.AIContext.CORA  # Name of the current context
@@ -75,9 +86,8 @@ class StarCitizenWingman(OpenAiWingman):
         self.uex_service = None  # set in validate()
         self.tdd_voice = "onyx"
         self.config["openai"]["tts_voice"] = self.config["openai"]["contexts"]["cora_voice"]
-        self.config["features"]["play_beep_on_receiving"] = False
-        self.config["features"]["enable_radio_sound_effect"] = False
-        self.config["features"]["enable_robot_sound_effect"] = True
+        self.config["sound"]["play_beep"] = False
+        self.config["sound"]["effects"] = ["INTERIOR_HELMET", "ROBOT"]
         self.config["openai"]["conversation_model"] = self.config["openai"]["contexts"][f"context-{self.AIContext.CORA.name}"]["conversation_model"]
 
         # every conversation starts with the "context" that the user has configured
@@ -372,15 +382,13 @@ class StarCitizenWingman(OpenAiWingman):
         self._switch_context(context_name_to_switch_to)
         if self.current_context == self.AIContext.CORA:
             self.config["openai"]["tts_voice"] = self.config["openai"]["contexts"]["cora_voice"]
-            self.config["features"]["play_beep_on_receiving"] = False
-            self.config["features"]["enable_radio_sound_effect"] = False
-            self.config["features"]["enable_robot_sound_effect"] = True
+            self.config["sound"]["play_beep"] = False
+            self.config["sound"]["effects"] = ["INTERIOR_HELMET", "ROBOT"]
             self.config["openai"]["conversation_model"] = self.config["openai"]["contexts"][f"context-{self.AIContext.CORA.name}"]["conversation_model"]
         elif self.current_context == self.AIContext.TDD:
             self.config["openai"]["tts_voice"] = self.tdd_voice
-            self.config["features"]["play_beep_on_receiving"] = True
-            self.config["features"]["enable_radio_sound_effect"] = True
-            self.config["features"]["enable_robot_sound_effect"] = False
+            self.config["sound"]["play_beep"] = True
+            self.config["sound"]["effects"] = ["RADIO", "INTERIOR_HELMET"]
             self.config["openai"]["conversation_model"] = self.config["openai"]["contexts"][f"context-{self.AIContext.TDD.name}"]["conversation_model"]
         self.messages.extend(context_messages)  # we readd the messages to the switched context.
         # self._add_user_message(self.current_user_request) # we readd the user message to the new context to make the same user request in the new context

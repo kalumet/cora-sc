@@ -1,5 +1,4 @@
 from os import path
-import subprocess
 import sys
 import asyncio
 import threading
@@ -13,50 +12,40 @@ from services.config_manager import ConfigManager
 from gui.root import WingmanUI
 from wingmen.wingman import Wingman
 
-# ─────────────────────────────────── ↓ MONKEY PATCHING ↓ ─────────────────────────────────────────
-# Patch all subprocess calls to hide the console window on Windows
-# Otherwise the console window will pop up every time a subprocess is called, like when playing audio
-# which leads to loosing focus on the game you are playing
-original_call = subprocess.call
-original_popen_init = subprocess.Popen.__init__
-
-# Monkey patch call
-def monkey_patched_call(*args, **kwargs):
-    if 'creationflags' not in kwargs and sys.platform.startswith('win'):
-        kwargs['creationflags'] = subprocess.CREATE_NO_WINDOW
-    return original_call(*args, **kwargs)
-
-# Monkey patch Popen.__init__
-def popen_init(self, *args, **kwargs):
-    if 'creationflags' not in kwargs and sys.platform.startswith('win'):
-        kwargs['creationflags'] = subprocess.CREATE_NO_WINDOW
-    original_popen_init(self, *args, **kwargs)
-
-# Monkey patch Popen and call
-subprocess.Popen.__init__ = popen_init
-subprocess.call = monkey_patched_call
-# ─────────────────────────────────── MONKEY PATCHING ─────────────────────────────────────────
-
 printr = Printr()
+
+
+def get_application_root(is_bundled: bool):
+    if is_bundled:
+        application_path = sys._MEIPASS
+    else:
+        application_path = path.dirname(path.abspath(__file__))
+    return application_path
 
 
 class WingmanAI:
     def __init__(self):
+        # pyinstaller things...
+        self.app_is_bundled = getattr(sys, "frozen", False)
+        self.app_root_dir = get_application_root(self.app_is_bundled)
+
         self.active = False
         self.active_recording = {"key": "", "wingman": None}
         self.tower = None
-        self.audio_recorder = AudioRecorder()
-        self.app_is_bundled = getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS")
-        self.app_root_dir = path.abspath(path.dirname(__file__))
         self.config_manager = ConfigManager(self.app_root_dir, self.app_is_bundled)
         self.secret_keeper = SecretKeeper(self.app_root_dir)
+        self.audio_recorder = AudioRecorder(self.app_root_dir)
 
     def load_context(self, context=""):
         self.active = False
         try:
             if self.config_manager:
                 config = self.config_manager.get_context_config(context)
-                self.tower = Tower(config, self.secret_keeper)
+                self.tower = Tower(
+                    config=config,
+                    secret_keeper=self.secret_keeper,
+                    app_root_dir=self.app_root_dir,
+                )
 
         except FileNotFoundError:
             printr.print_err(f"Could not find context.{context}.yaml", True)

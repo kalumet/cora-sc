@@ -4,6 +4,7 @@ from difflib import SequenceMatcher
 from importlib import import_module
 from typing import Any
 from services.audio_player import AudioPlayer
+from services.file_creator import FileCreator
 from services.printr import Printr
 from services.secret_keeper import SecretKeeper
 
@@ -20,19 +21,28 @@ except AttributeError:
     import pyautogui as key_module
 
 
-class Wingman:
+class Wingman(FileCreator):
     """The "highest" Wingman base class in the chain. It does some very basic things but is meant to be 'virtual', and so are most its methods, so you'll probably never instantiate it directly.
 
     Instead, you'll create a custom wingman that inherits from this (or a another subclass of it) and override its methods if needed.
     """
 
-    def __init__(self, name: str, config: dict[str, Any], secret_keeper: SecretKeeper):
+    def __init__(
+        self,
+        name: str,
+        config: dict[str, Any],
+        secret_keeper: SecretKeeper,
+        app_root_dir: str,
+    ):
         """The constructor of the Wingman class. You can override it in your custom wingman.
 
         Args:
             name (str): The name of the wingman. This is the key you gave it in the config, e.g. "atc"
             config (dict[str, any]): All "general" config entries merged with the specific Wingman config settings. The Wingman takes precedence and overrides the general config. You can just add new keys to the config and they will be available here.
+            app_root_dir (str): The path to the root directory of the app. This is where the Wingman executable lives.
         """
+
+        super().__init__(app_root_dir=app_root_dir, subdir="wingman_data")
 
         self.config = config
         """All "general" config entries merged with the specific Wingman config settings. The Wingman takes precedence and overrides the general config. You can just add new keys to the config and they will be available here."""
@@ -55,6 +65,9 @@ class Wingman:
         self.tts_provider = self.config["features"].get("tts_provider")
         """The name of the TTS provider you configured in the config.yaml"""
 
+        self.app_root_dir = app_root_dir
+        """The path to the root directory of the app. This is where the Wingman executable lives."""
+
     @staticmethod
     def create_dynamically(
         module_path: str,
@@ -62,6 +75,7 @@ class Wingman:
         name: str,
         config: dict[str, Any],
         secret_keeper: SecretKeeper,
+        app_root_dir: str,
         **kwargs,
     ):
         """Dynamically creates a Wingman instance from a module path and class name
@@ -75,7 +89,13 @@ class Wingman:
 
         module = import_module(module_path)
         DerivedWingmanClass = getattr(module, class_name)
-        instance = DerivedWingmanClass(name, config, secret_keeper, **kwargs)
+        instance = DerivedWingmanClass(
+            name=name,
+            config=config,
+            secret_keeper=secret_keeper,
+            app_root_dir=app_root_dir,
+            **kwargs,
+        )
         return instance
 
     def get_record_key(self) -> str:
@@ -271,6 +291,8 @@ class Wingman:
             if command.get("instant_activation")
         ]
 
+        best_command = None
+        best_ratio = 0
         # check if transcript matches any instant activation command. Each command has a list of possible phrases
         for command in instant_activation_commands:
             for phrase in command.get("instant_activation"):
@@ -279,14 +301,20 @@ class Wingman:
                     transcript.lower(),
                     phrase.lower(),
                 ).ratio()
-                if (
-                    ratio > 0.8
-                ):  # if the ratio is higher than 0.8, we assume that the command was spoken
-                    self._execute_command(command)
+                if ratio > 0.8:  # we only accept commands that have a high ration
+                    if ratio > best_ratio: # some command activations might have quite similar values, therefore, we need to check if there are better commands!
+                        best_command = command
+                        best_ratio = ratio
+        
+        self._execute_command(best_command)
 
-                    if command.get("responses"):
-                        return command
-                    return None
+        if best_command:
+            if best_command.get("responses") is False:
+                return "Ok"
+            
+            if len(best_command.get("responses", [])) == 0:
+                return None  # gpt decides how the response should be
+            return self._select_command_response(best_command)  # we want gpt to decide how the response should be
         return None
 
     def _execute_command(self, command: dict) -> str:
@@ -334,19 +362,57 @@ class Wingman:
             command (dict): The command object from the config to execute
         """
 
-        for entry in command.get("keys", []):
-            if entry.get("modifier"):
-                key_module.keyDown(entry["modifier"])
+        modifier_order = ["alt", "ctrl", "shift", "altleft", "ctrlleft", "shiftleft", "altright", "ctrlrigth", "shiftright"]
+        keys = command.get("keys", [])
+        
+        active_modifiers = []
 
+        for entry in keys:
+            if self.debug:
+                printr.print(entry,console_only=True)
+            key = entry["key"]
+            if entry.get("modifier"):
+                if self.debug:
+                    printr.print(f'down {entry.get("modifier")}',console_only=True)
+                key_module.keyDown(entry.get("modifier"))
+            
+            if entry.get("modifiers"):
+                modifiers = entry.get("modifiers").split(",")
+                modifiers = sorted(modifiers, key=lambda x: modifier_order.index(x) if x in modifier_order else len(modifier_order))
+                for modifier in modifiers:
+                    if self.debug:
+                        printr.print(f"modifier down {modifier}",console_only=True)
+                    key_module.keyDown(modifier)
+                    active_modifiers.insert(0, modifier)  # we build a reverse list, as we want to release in the opposite order
+                    
             if entry.get("hold"):
-                key_module.keyDown(entry["key"])
+                if self.debug:
+                    printr.print(f"press and hold{entry['hold']}: {modifier}",console_only=True)
+                key_module.keyDown(key)
                 time.sleep(entry["hold"])
-                key_module.keyUp(entry["key"])
+                key_module.keyUp(key)
+            elif entry.get("typewrite"):  # added very buggy, as it is keyboard-layout sensitive :(
+                if self.debug:
+                    printr.print(f"typewrite: {entry.get('typewrite')}",console_only=True)
+                key_module.typewrite(entry["typewrite"], interval=0.1)
             else:
-                key_module.press(entry["key"])
+                if self.debug:
+                    printr.print(f'press {key}',console_only=True)
+                key_module.press(key, interval=0.005)
 
             if entry.get("modifier"):
-                key_module.keyUp(entry["modifier"])
+                if self.debug:
+                    printr.print(f'down {entry.get("modifier")}',console_only=True)
+                key_module.keyUp(entry.get("modifier"))
+
+            if len(active_modifiers) > 0:
+                for modifier in active_modifiers:
+                    if self.debug:
+                        printr.print(f"modifier up {modifier}",console_only=True)
+                    key_module.keyUp(modifier)
 
             if entry.get("wait"):
+                if self.debug:
+                    printr.print(f"waiting {entry.get('wait')}",console_only=True)
                 time.sleep(entry["wait"])
+

@@ -5,12 +5,12 @@ import requests
 from services.printr import Printr
 
 
-DEBUG = False
+DEBUG = True
 
 
 def print_debug(to_print):
     if DEBUG:
-        print_debug(to_print)
+        print(to_print)
 
         
 printr = Printr()
@@ -247,11 +247,11 @@ class UEXApi():
         max_profit = 0
         for trade1 in trades_system1:
             for trade2 in trades_system2:
-                for commodity_code, commodity in trade1['prices'].items():
+                for commodity_code, commodity in trade1.get('prices', {}).items():
                     if commodity_code not in allowedCommodities:
                         continue  # we are only looking for tradable commodities (that can be bought and sold)
                 
-                    if commodity_code in trade2['prices']:                                       
+                    if commodity_code in trade2.get('prices', {}):                                       
                         commodity2 = trade2['prices'][commodity_code]
 
                         # Check if the commodity is buyable at trade1 and sellable at trade2
@@ -291,7 +291,7 @@ class UEXApi():
             return no_route
 
         for trade in tradeports_data.values():
-            if commodity_code in trade['prices']:
+            if commodity_code in trade.get('prices', {}):
                 details = trade['prices'][commodity_code]
                 buy_price = details.get('price_buy', 0)
                 sell_price = details.get('price_sell', 0)
@@ -334,7 +334,8 @@ class UEXApi():
             return no_route
 
         for trade in tradeports_data.values():
-            if commodity_code in trade['prices']:
+            print_debug(f"checking {trade}")
+            if commodity_code in trade.get('prices', {}):
                 details = trade['prices'][commodity_code]
                 sell_price = details.get('price_sell', 0)
                 if details['operation'] == 'sell' and sell_price and sell_price > max_sell_price:
@@ -368,7 +369,7 @@ class UEXApi():
             return no_route
 
         for trade in tradeports:
-            if commodity_code in trade['prices']:
+            if commodity_code in trade.get('prices', {}):
                 details = trade['prices'][commodity_code]
                 sell_price = details.get('price_sell', 0)
                 if details['operation'] == 'sell' and sell_price and sell_price > max_sell_price:
@@ -399,7 +400,7 @@ class UEXApi():
         max_profit = 0
         # Durchlaufe alle Waren, die am Startort verkauft werden
         for start_trade in start_location_trades:
-            for commodity, details in start_trade['prices'].items():
+            for commodity, details in start_trade.get('prices', {}).items():
                 if commodity not in allowedCommodities:
                     continue
                 if 'buy' in details['operation']:
@@ -414,7 +415,7 @@ class UEXApi():
                     best_sell_price = 0
                     best_sell_location = None
                     for trade in tradeports_data.values():
-                        if commodity in trade['prices'] and 'sell' in trade['prices'][commodity]['operation']:
+                        if commodity in trade.get('prices', {}) and 'sell' in trade['prices'][commodity]['operation']:
                             sell_price = trade['prices'][commodity].get('price_sell', 0)
                             if sell_price > best_sell_price:
                                 best_sell_price = sell_price

@@ -64,8 +64,19 @@ class StarCitizenWingman(OpenAiWingman):
         CORA = "CoraInteractionRequests"
         TDD = "TradeAndDevelopmentDivisionRequests"
 
-    def __init__(self, name: str, config: dict[str, any], secret_keeper: SecretKeeper):
-        super().__init__(name, config, secret_keeper)
+    def __init__(
+        self,
+        name: str,
+        config: dict[str, any],
+        secret_keeper: SecretKeeper,
+        app_root_dir: str,
+    ):
+        super().__init__(
+            name=name,
+            config=config,
+            secret_keeper=secret_keeper,
+            app_root_dir=app_root_dir,
+        )
         
         self.contexts_history = {}  # Dictionary to store the state of different conversion contexts
         self.current_context: self.AIContext = self.AIContext.CORA  # Name of the current context
@@ -76,9 +87,8 @@ class StarCitizenWingman(OpenAiWingman):
         self.uex_service = None  # set in validate()
         self.tdd_voice = "onyx"
         self.config["openai"]["tts_voice"] = self.config["openai"]["contexts"]["cora_voice"]
-        self.config["features"]["play_beep_on_receiving"] = False
-        self.config["features"]["enable_radio_sound_effect"] = False
-        self.config["features"]["enable_robot_sound_effect"] = True
+        self.config["sound"]["play_beep"] = False
+        self.config["sound"]["effects"] = ["INTERIOR_HELMET", "ROBOT"]
         self.config["openai"]["conversation_model"] = self.config["openai"]["contexts"][f"context-{self.AIContext.CORA.name}"]["conversation_model"]
 
         # every conversation starts with the "context" that the user has configured
@@ -169,14 +179,16 @@ class StarCitizenWingman(OpenAiWingman):
             return self._get_tdd_tools()
         else:
             return self._context_switch_tool()
-
-    # transcription stays as specified in OpenAIWingman
-    # async def _transcribe(self, audio_input_wav: str) -> tuple[str | None, str | None]:
        
     async def _get_response_for_transcript(
         self, transcript: str, locale: str | None
     ) -> tuple[str, str]:
         """Overwritten to deal with dynamic context switches.
+
+        Summary: This implementation is an extended version of the original, 
+        specifically adapted to handle dynamic context switches and additional 
+        functionalities related to instant commands and GPT call logic.
+        
         Gets the response for a given transcript.
 
         This function interprets the transcript, runs instant commands if triggered,
@@ -239,10 +251,10 @@ class StarCitizenWingman(OpenAiWingman):
         self.messages.append(response_message)
         return response_message, tool_calls
 
-    # def _add_user_message(self, content: str):
-
     def _cleanup_conversation_history(self):
-        """Cleans up the conversation history by removing messages that are too old.
+        """
+        Overwritten from openai_ai_wingman to deal with context switches, as every context has his own message buffer.
+        Cleans up the conversation history by removing messages that are too old.
         Overwritten with context switch sensitive message buffers"""
         remember_messages = self.messages_buffer
 
@@ -272,131 +284,21 @@ class StarCitizenWingman(OpenAiWingman):
                 tags="warn",
             )
 
-    # def _remove_messages_from_conversation(self, number_messages_to_remove):
-
-    # def reset_conversation_history(self):
-
-    # def _try_instant_activation(self, transcript: str) -> str:
-
-    # def _execute_command(self, command: dict) -> str:
-
-    def _gpt_call(self): 
-        """Overwrites to select the correct tools for the current context
+    def _build_tools(self) -> list[dict]:
+        """
+        Overwritten. We calculate the tools when we switch contexts.
 
         Returns:
-            The GPT completion object or None if the call fails.
+            list[dict]: A list of tool descriptors in OpenAI format.
         """
-        if self.debug:
-            printr.print(
-                f"   Calling GPT with {(len(self.messages) - 1) // 2} message pairs (excluding context)",
-                tags="info",
-            )
-        return self.openai.ask(
-            messages=self.messages,
-            tools=self.current_tools,
-            model=self.config["openai"].get("conversation_model")  # TODO make context sensitive model selection
-        )
-
-    # def _process_completion(self, completion):
-
-    async def _handle_tool_calls(self, tool_calls):
-        """Processes all the tool calls identified in the response message.
-        Overwritten to handle context switches
-
-        Args:
-            tool_calls: The list of tool calls to process.
-
-        Returns:
-            str: The immediate response from processed tool calls or None if there are no immediate responses.
-        """
-        instant_response = None
-        function_response = ""
-
-        for tool_call in tool_calls:
-            function_name = tool_call.function.name
-            function_args = json.loads(tool_call.function.arguments)
-            (
-                function_response,
-                instant_response,
-            ) = await self._execute_command_by_function_call(
-                function_name, function_args
-            )
-
-            msg = {"role": "tool", "content": function_response}
-            if tool_call.id is not None:
-                msg["tool_call_id"] = tool_call.id
-            if function_name is not None:
-                msg["name"] = function_name
-
-            # Don't use self._add_user_message_to_history here because we never want to skip this because of history limitions
-            self.messages.append(msg)
-
-        return instant_response
-
-    async def _play_to_user(self, text: str):
-        """Plays audio to the user using the configured TTS Provider (default: OpenAI TTS).
-        Also adds sound effects if enabled in the configuration.
-
-        Args:
-            text (str): The text to play as audio.
-        """
-        if not text or text == "Ok":
-            return
-        
-        if self.tts_provider == "edge_tts":
-            edge_config = self.config["edge_tts"]
-            tts_voice = edge_config.get("tts_voice")
-            gender = edge_config.get("gender")
-            detect_language = edge_config.get("detect_language")
-
-            if detect_language:
-                tts_voice = await self.edge_tts.get_same_random_voice_for_language(
-                    gender, self.last_transcript_locale
-                )
-
-            await self.edge_tts.generate_speech(
-                text, filename="audio_output/edge_tts.mp3", voice=tts_voice
-            )
-
-            if self.config.get("features", {}).get("enable_robot_sound_effect"):
-                self.audio_player.effect_audio("audio_output/edge_tts.mp3")
-
-            self.audio_player.play("audio_output/edge_tts.mp3")
-        elif self.tts_provider == "elevenlabs":
-            elevenlabs_config = self.config["elevenlabs"]
-            voice = elevenlabs_config.get("voice")
-            if not isinstance(voice, str):
-                voice = Voice(voice_id=voice.get("id"))
-            else:
-                voice = next((v for v in voices() if v.name == voice), None)
-
-            voice_setting = self._get_elevenlabs_settings(elevenlabs_config)
-            if voice_setting:
-                voice.settings = voice_setting
-
-            response = generate(
-                text,
-                voice=voice,
-                model=elevenlabs_config.get("model"),
-                stream=True,
-                api_key=self.elevenlabs_api_key,
-                latency=elevenlabs_config.get("latency", 3),
-            )
-            stream(response)
-        else:  # OpenAI TTS
-            response = self.openai.speak(text, self.config["openai"].get("tts_voice"))
-            if response is not None:
-                self.audio_player.stream_with_effects(
-                    response.content,
-                    self.config.get("features", {}).get("play_beep_on_receiving"),
-                    self.config.get("features", {}).get("enable_radio_sound_effect"),
-                    self.config.get("features", {}).get("enable_robot_sound_effect"),
-                )
+        return self.current_tools
 
     async def _execute_command_by_function_call(
         self, function_name: str, function_args: dict[str, any]
     ) -> tuple[str, str]:
         """
+        Overwritten to allow in game commands to be executed by command-name reference.
+
         Uses an OpenAI function call to execute a command. If it's an instant activation_command, one if its reponses will be played.
 
         Args:
@@ -421,7 +323,7 @@ class StarCitizenWingman(OpenAiWingman):
             command = self._get_command(function_args["command_name"])
             # execute the command
             if command:
-                function_response = self._execute_star_citizen_command_overwrite(command)
+                function_response = self._execute_command(command)
             else:
                 function_response, instant_reponse = self._execute_star_citizen_keymapping_command(function_args["command_name"])
 
@@ -481,15 +383,13 @@ class StarCitizenWingman(OpenAiWingman):
         self._switch_context(context_name_to_switch_to)
         if self.current_context == self.AIContext.CORA:
             self.config["openai"]["tts_voice"] = self.config["openai"]["contexts"]["cora_voice"]
-            self.config["features"]["play_beep_on_receiving"] = False
-            self.config["features"]["enable_radio_sound_effect"] = False
-            self.config["features"]["enable_robot_sound_effect"] = True
+            self.config["sound"]["play_beep"] = False
+            self.config["sound"]["effects"] = ["INTERIOR_HELMET", "ROBOT"]
             self.config["openai"]["conversation_model"] = self.config["openai"]["contexts"][f"context-{self.AIContext.CORA.name}"]["conversation_model"]
         elif self.current_context == self.AIContext.TDD:
             self.config["openai"]["tts_voice"] = self.tdd_voice
-            self.config["features"]["play_beep_on_receiving"] = True
-            self.config["features"]["enable_radio_sound_effect"] = True
-            self.config["features"]["enable_robot_sound_effect"] = False
+            self.config["sound"]["play_beep"] = True
+            self.config["sound"]["effects"] = ["RADIO", "INTERIOR_HELMET"]
             self.config["openai"]["conversation_model"] = self.config["openai"]["contexts"][f"context-{self.AIContext.TDD.name}"]["conversation_model"]
         self.messages.extend(context_messages)  # we readd the messages to the switched context.
         # self._add_user_message(self.current_user_request) # we readd the user message to the new context to make the same user request in the new context
@@ -599,52 +499,8 @@ class StarCitizenWingman(OpenAiWingman):
             # Genereller Fehlerfang
             print_debug(f"Ein Fehler ist aufgetreten: {e.__class__.__name__}, {e}")
             return json.dumps({"success": "False", "error": f"{e}"}), None
-    
-    def _execute_instant_activation_command(self, transcript: str) -> dict | None:
-        """Overwrites wingman.py: Uses a fuzzy string matching algorithm to match the transcript to a configured instant_activation command and executes it immediately.
-
-        Args:
-            transcript (text): What the user said, transcripted to text. Needs to be similar to one of the defined instant_activation phrases to work.
-
-        Returns:
-            {} | None: The executed instant_activation command.
-        """
-    
-        TransportMissionAnalyzer.testScreenshot()
-        
-        instant_activation_commands = [
-            command
-            for command in self.config.get("commands", [])
-            if command.get("instant_activation")
-        ]
-
-        best_command = None
-        best_ratio = 0
-        # check if transcript matches any instant activation command. Each command has a list of possible phrases
-        for command in instant_activation_commands:
-            for phrase in command.get("instant_activation"):
-                ratio = SequenceMatcher(
-                    None,
-                    transcript.lower(),
-                    phrase.lower(),
-                ).ratio()
-                if ratio > 0.8:  # we only accept commands that have a high ration
-                    if ratio > best_ratio: # some command activations might have quite similar values, therefore, we need to check if there are better commands!
-                        best_command = command
-                        best_ratio = ratio
-        
-        self._execute_star_citizen_command_overwrite(best_command)
-
-        if best_command:
-            if best_command.get("responses") is False:
-                return "Ok"
-            
-            if len(best_command.get("responses", [])) == 0:
-                return None  # gpt decides how the response should be
-            return self._select_command_response(best_command)  # we want gpt to decide how the response should be
-        return None
       
-    def _execute_star_citizen_command_overwrite(self, command: dict):
+    def _execute_command(self, command: dict):
         """Triggers the execution of a command. This implementation executes the defined star citizen commands.
 
         Args:
@@ -673,103 +529,11 @@ class StarCitizenWingman(OpenAiWingman):
                 response = self._select_command_response(command)
 
         if len(command.get("sc_commands", [])) == 0:  # is a default configuration
-            return self._execute_command(command)
+            return super()._execute_command(command)
 
         if not response:
             response = json.dumps({"success": True, "instruction": "Don't make any function call!"})
         return response
-
-    # def _build_tools(self) -> list[dict]:
-    
-    def _execute_command(self, command: dict) -> str:
-        """needs overwrite. no changes. 
-        
-        Triggers the execution of a command. This base implementation executes the keypresses defined in the command.
-
-        Args:
-            command (dict): The command object from the config to execute
-
-        Returns:
-            str: the selected response from the command's responses list in the config. "Ok" if there are none.
-        """
-
-        if not command:
-            return "Command not found"
-
-        if self.debug:
-            printr.print(
-                "Skipping actual keypress execution in debug_mode...", tags="warn"
-            )
-
-        if len(command.get("keys", [])) > 0 and not self.debug:
-            self.execute_keypress(command)
-        # TODO: we could do mouse_events here, too...
-
-        # handle the global special commands:
-        if command.get("name", None) == "ResetConversationHistory":
-            self.reset_conversation_history()
-
-        if not self.debug:
-            # in debug mode we already printed the separate execution times
-            self.print_execution_time()
-
-        return self._select_command_response(command) or "Ok"
-    
-    def execute_keypress(self, command: dict):
-        """Executes the keypresses defined in the command in order.
-
-        pydirectinput uses SIGEVENTS to send keypresses to the OS. This lib seems to be the only way to send keypresses to games reliably.
-
-        It only works on Windows. For MacOS, we fall back to PyAutoGUI (which has the exact same API as pydirectinput is built on top of it).
-
-        Args:
-            command (dict): The command object from the config to execute
-        """
-
-        modifier_order = ["alt", "ctrl", "shift", "altleft", "ctrlleft", "shiftleft", "altright", "ctrlrigth", "shiftright"]
-        keys = command.get("keys", [])
-        
-        active_modifiers = []
-
-        for entry in keys:
-            print_debug(entry)
-            key = entry["key"]
-            if entry.get("modifier"):
-                print_debug(f'down {entry.get("modifier")}')
-                key_module.keyDown(entry.get("modifier"))
-            
-            if entry.get("modifiers"):
-                modifiers = entry.get("modifiers").split(",")
-                modifiers = sorted(modifiers, key=lambda x: modifier_order.index(x) if x in modifier_order else len(modifier_order))
-                for modifier in modifiers:
-                    print_debug(f"modifier down {modifier}")
-                    key_module.keyDown(modifier)
-                    active_modifiers.insert(0, modifier)  # we build a reverse list, as we want to release in the opposite order
-                    
-            if entry.get("hold"):
-                print_debug(f"press and hold{entry['hold']}: {modifier}")
-                key_module.keyDown(key)
-                time.sleep(entry["hold"])
-                key_module.keyUp(key)
-            elif entry.get("typewrite"):  # added very buggy, as it is keyboard-layout sensitive :(
-                print_debug(f"typewrite: {entry.get('typewrite')}")
-                key_module.typewrite(entry["typewrite"], interval=0.1)
-            else:
-                print_debug(f'press {key}')
-                key_module.press(key, interval=0.005)
-
-            if entry.get("modifier"):
-                print_debug(f'down {entry.get("modifier")}')
-                key_module.keyUp(entry.get("modifier"))
-
-            if len(active_modifiers) > 0:
-                for modifier in active_modifiers:
-                    print_debug(f"modifier up {modifier}")
-                    key_module.keyUp(modifier)
-
-            if entry.get("wait"):
-                print_debug(f"waiting {entry.get('wait')}")
-                time.sleep(entry["wait"])
 
     def _context_switch_tool(self, current_context: AIContext = None) -> list[dict]:
         ai_context_values = [context.value for context in self.AIContext if context != current_context]
@@ -986,4 +750,3 @@ class StarCitizenWingman(OpenAiWingman):
         tools.append(self._context_switch_tool(current_context=self.AIContext.TDD))
         return tools
 
-    # def __ask_gpt_for_locale(self, language: str) -> str:

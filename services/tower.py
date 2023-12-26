@@ -1,5 +1,5 @@
 import traceback
-
+import copy
 from exceptions import MissingApiKeyException
 from wingmen.open_ai_wingman import OpenAiWingman
 from wingmen.wingman import Wingman
@@ -11,8 +11,9 @@ printr = Printr()
 
 
 class Tower:
-    def __init__(self, config: dict[str, any], secret_keeper: SecretKeeper):  # type: ignore
+    def __init__(self, config: dict[str, any], secret_keeper: SecretKeeper, app_root_dir: str):  # type: ignore
         self.config = config
+        self.app_root_dir = app_root_dir
         self.secret_keeper = secret_keeper
         self.key_wingman_dict: dict[str, Wingman] = {}
         self.broken_wingmen = []
@@ -29,11 +30,13 @@ class Tower:
                 continue
 
             global_config = {
+                "sound": self.config.get("sound", {}),
                 "openai": self.config.get("openai", {}),
                 "features": self.config.get("features", {}),
                 "edge_tts": self.config.get("edge_tts", {}),
                 "commands": self.config.get("commands", {}),
                 "elevenlabs": self.config.get("elevenlabs", {}),
+                "azure": self.config.get("azure", {}),
             }
             merged_config = self.__merge_configs(global_config, wingman_config)
             class_config = merged_config.get("class")
@@ -49,11 +52,15 @@ class Tower:
                         secret_keeper=self.secret_keeper,
                         module_path=class_config.get("module"),
                         class_name=class_config.get("name"),
+                        app_root_dir=self.app_root_dir,
                         **kwargs
                     )
                 else:
                     wingman = OpenAiWingman(
-                        wingman_name, merged_config, self.secret_keeper
+                        name=wingman_name,
+                        config=merged_config,
+                        secret_keeper=self.secret_keeper,
+                        app_root_dir=self.app_root_dir,
                     )
             except MissingApiKeyException:
                 self.broken_wingmen.append(
@@ -124,10 +131,11 @@ class Tower:
         # Start with a copy of the wingman's specific config to keep it intact.
         merged = wingman.copy()
         # Update 'openai', 'features', and 'edge_tts' sections from general config into wingman's config.
-        for key in ["openai", "features", "edge_tts", "elevenlabs"]:
+        for key in ["sound", "openai", "features", "edge_tts", "elevenlabs", "azure"]:
             if key in general:
+                # Use copy.deepcopy to ensure a full deep copy is made and original is untouched.
                 merged[key] = self.__deep_merge(
-                    general[key].copy(), wingman.get(key, {})
+                    copy.deepcopy(general[key]), wingman.get(key, {})
                 )
 
         # Special handling for merging the commands lists

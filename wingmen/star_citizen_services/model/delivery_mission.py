@@ -68,42 +68,50 @@ class DeliveryMission(JsonSerializable):
 
         return mission_info
     
-    def to_json(self):
-        # from wingmen.star_citizen_services.uex_api import UEXApi
-        # uex_api = UEXApi()
-
-        # satellites = uex_api.get_data("satellites")
-        # planets = uex_api.get_data("planets")
-        # cities = uex_api.get_data("cities")
-
-        # for package in self.packages:
-        #     pickup_location = self.pickup_locations[package]
-
-        #     satellite = pickup_location["satellite"]
-        #     pickup_location["satellite"] = satellites.get(satellite, {}).get("name", satellite)
+    def to_json(self, short=True):
+        if short:
+            return {
+                "mission_id": self.id,
+                "revenue": self.revenue,
+                "currency": "alpha UEC",
+                "package_count": len(self.packages),
+            }
             
-        #     planet = pickup_location["planet"]
-        #     pickup_location["planet"] = planets.get(planet, {}).get("name", planet)
+        from wingmen.star_citizen_services.uex_api import UEXApi
+        uex_api = UEXApi()
 
-        #     city = pickup_location["city"]
-        #     pickup_location["city"] = cities.get(city, {}).get("name", city)
+        satellites = uex_api.get_data("satellites")
+        planets = uex_api.get_data("planets")
+        cities = uex_api.get_data("cities")
 
-        #     drop_off_location = self.drop_off_locations[package]
+        for package in self.packages:
+            pickup_location = self.pickup_locations[package]
 
-        #     d_satellite = drop_off_location["satellite"]
-        #     drop_off_location["satellite"] = satellites.get(d_satellite, {}).get("name", d_satellite)
+            satellite = pickup_location["satellite"]
+            pickup_location["satellite"] = satellites.get(satellite, {}).get("name", satellite)
+            
+            planet = pickup_location["planet"]
+            pickup_location["planet"] = planets.get(planet, {}).get("name", planet)
 
-        #     d_planet = drop_off_location["planet"]
-        #     drop_off_location["planet"] = planets.get(d_planet, {}).get("name", d_planet)
+            city = pickup_location["city"]
+            pickup_location["city"] = cities.get(city, {}).get("name", city)
 
-        #     d_city = drop_off_location["city"]
-        #     drop_off_location["city"] = cities.get(d_city, {}).get("name", d_city)
+            drop_off_location = self.drop_off_locations[package]
+
+            d_satellite = drop_off_location["satellite"]
+            drop_off_location["satellite"] = satellites.get(d_satellite, {}).get("name", d_satellite)
+
+            d_planet = drop_off_location["planet"]
+            drop_off_location["planet"] = planets.get(d_planet, {}).get("name", d_planet)
+
+            d_city = drop_off_location["city"]
+            drop_off_location["city"] = cities.get(d_city, {}).get("name", d_city)
         return {
             "mission_id": self.id,
             "revenue": self.revenue,
             "packag_ids" : list(self.packages),
-            # "pickup_locations": self.pickup_locations,
-            # "drop_off_locations": self.drop_off_locations
+            "pickup_locations": self.pickup_locations,
+            "drop_off_locations": self.drop_off_locations
         }
 
 

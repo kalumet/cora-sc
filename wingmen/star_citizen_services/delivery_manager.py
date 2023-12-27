@@ -13,7 +13,7 @@ DEBUG = False
 
 def print_debug(to_print):
     if DEBUG:
-        print_debug(to_print)
+        print(to_print)
 
 
 class PackageDeliveryPlanner:
@@ -21,13 +21,10 @@ class PackageDeliveryPlanner:
     def __init__(self):
 
         self.debug = False
-        self.all_delivery_missions = [] 
         self.mission_actions_list = []
-        self.combined_start_action: DeliveryMissionAction = None  # the first action of all actions
-        self.combined_end_action: DeliveryMissionAction = None  # the last action of all actions
         self.uex_service: UEXApi = UEXApi()
 
-    def insert(self, delivery_mission: DeliveryMission) -> [DeliveryMissionAction]:
+    def calculate_delivery_route(self, missions: [DeliveryMission]) -> [DeliveryMissionAction]:
         """
         Sorts package missions to determine the optimal order of locations for package pickup and dropoff.
 
@@ -37,32 +34,31 @@ class PackageDeliveryPlanner:
         Returns:
             List[LocationPackageManager]: Ordered list of locations for efficient package management.
         """
-        print_debug(delivery_mission)
-
-        self.all_delivery_missions.append(delivery_mission)
-        
+       
         # Step 1: build a correct, but inefficient action order
-        self.mission_actions_list = self.build_delivery_mission_actions(self.all_delivery_missions)
-                 
+        self.mission_actions_list = self.build_delivery_mission_actions(missions)
+
+        # Step 2  
         self.prioritize(self.mission_actions_list)
 
-        print_debug("===RAW===")
-        for mission_action in self.mission_actions_list:
-            mission_action: DeliveryMissionAction
-            print_debug(
-                f"mission: {mission_action.mission_ref.id}, "
-                f"{mission_action}") 
+        if DEBUG:
+            print_debug("===RAW===")
+            for mission_action in self.mission_actions_list:
+                mission_action: DeliveryMissionAction
+                print_debug(
+                    f"mission: {mission_action.mission_ref.id}, "
+                    f"{mission_action}") 
 
-        delivery_route = self.plan_delivery_route(self.mission_actions_list)
+        # Step 3
+        self.mission_actions_list =  self.plan_delivery_route(self.mission_actions_list)
 
-        self.mission_actions_list = delivery_route
-
-        print_debug("===SORTED===")
-        for mission_action in self.mission_actions_list:
-            mission_action: DeliveryMissionAction
-            print_debug(
-                f"mission: {mission_action.mission_ref.id}, "
-                f"{mission_action}")
+        if DEBUG:
+            print_debug("===SORTED===")
+            for mission_action in self.mission_actions_list:
+                mission_action: DeliveryMissionAction
+                print_debug(
+                    f"mission: {mission_action.mission_ref.id}, "
+                    f"{mission_action}")
 
         return self.mission_actions_list
 
@@ -73,7 +69,7 @@ class PackageDeliveryPlanner:
         first = None
         last = None
 
-        for delivery_mission in delivery_missions:
+        for delivery_mission in delivery_missions.values():
             delivery_mission: DeliveryMission
 
             for mission_package in delivery_mission.mission_packages:
@@ -93,7 +89,7 @@ class PackageDeliveryPlanner:
                 pickup_action.action = "pickup"
                 pickup_action.mission_ref = delivery_mission
                 pickup_action.partner_action = dropoff_action
-                pickup_action.mission_package = mission_package
+                # pickup_action.mission_package = mission_package
 
                 actions_list.append(pickup_action)
                 
@@ -104,7 +100,7 @@ class PackageDeliveryPlanner:
                 dropoff_action.action = "dropoff"
                 dropoff_action.mission_ref = delivery_mission
                 dropoff_action.partner_action = pickup_action
-                dropoff_action.mission_package = mission_package
+                # dropoff_action.mission_package = mission_package
                 
                 actions_list.append(dropoff_action)
 
@@ -121,6 +117,7 @@ class PackageDeliveryPlanner:
         last_action = None
         picked_up = set()
         postponed_actions = []
+        index = 0
 
         print_debug("\n##### PLANNING ROUTE #####")
         while actions_list:
@@ -136,7 +133,9 @@ class PackageDeliveryPlanner:
                 postponed_actions.append(current_action)  # dropoff action before corresponding pickup
                 continue
             
+            current_action.index = index
             route.append(current_action)
+            index += 1
 
             # Zusätzliche Schleife, um alle verfügbaren Pakete am aktuellen Ort zu sammeln
             collect_more = True
@@ -150,7 +149,11 @@ class PackageDeliveryPlanner:
                         self.check_postpone_dropoff_or_add_pickup(picked_up, action)
                         # Entferne das gefundene Element aus dem Heap
                         actions_list.pop(i)
+
+                        action.index = index
                         route.append(action)
+                        index += 1
+
                         removed_action = action
                         collect_more = True
                         break  # wir müssen die "action_list neu initialisieren, da sie jetzt kürzer ist"
@@ -170,7 +173,11 @@ class PackageDeliveryPlanner:
                         
                         if drop: # Entferne das gefundene Element aus dem Heap
                             actions_list.pop(i)
+                            
+                            action.index = index
                             route.append(action)
+                            index += 1
+
                             removed_action = action
                             drop_more = True
                             break  # wir müssen die "action_list neu initialisieren, da sie jetzt kürzer ist"

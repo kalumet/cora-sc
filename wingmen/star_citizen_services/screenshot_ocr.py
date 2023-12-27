@@ -1,6 +1,7 @@
 import os
 import datetime
 import time
+import random
 import cv2
 import numpy as np
 from PIL import Image
@@ -44,12 +45,13 @@ class TransportMissionAnalyzer:
 
         if not delivery_mission or len(delivery_mission.packages) == 0:
             return None
-        # Usage example
+
         LocationNameMatching.validate_location_names(delivery_mission)
 
         if not TEST:
             self.accept_mission_click(accept_button_coordinates)
 
+        print_debug(delivery_mission)
         return delivery_mission
 
     def accept_mission_click(self, accept_button_coordinates):
@@ -84,7 +86,7 @@ class TransportMissionAnalyzer:
     
     def take_screenshot(self):
         if TEST:
-            return "star_citizen_data/delivery-missions/examples/mission_level1_2_1.jpg"
+            return self.random_image_from_directory()
         
         active_window = pygetwindow.getActiveWindow()
         if active_window and "Star Citizen" in active_window.title:
@@ -103,6 +105,31 @@ class TransportMissionAnalyzer:
             return filename
         return None
 
+    def random_image_from_directory(self):
+        """
+        Selects a random image from a specified directory.
+
+        Args:
+        directory (str): Path to the directory containing images.
+        image_extensions (list, optional): List of acceptable image file extensions.
+
+        Returns:
+        str: Path to a randomly selected image.
+        """
+        image_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp']
+        directory = f'{self.data_dir_path}/examples'
+        # List all files in the directory
+        files = os.listdir(directory)
+
+        # Filter files to get only those with the specified extensions
+        images = [file for file in files if any(file.endswith(ext) for ext in image_extensions)]
+
+        if not images:
+            return None  # No images found
+
+        # Randomly select an image
+        return os.path.join(directory, random.choice(images))
+    
     def preprocess_image(self, image):
         """Preprocess the image for better OCR results."""
         # Apply color range filtering for grayscale image

@@ -1,10 +1,7 @@
 class DeliveryMissionAction:
-    """
-    Bidirectional ordered linked hash map entry representing a delivery mission action.
-    """
 
-    def __init__(self, location_ref=None, package_id=None, mission_ref=None, 
-                 action=None, buy=False, sell=False, commodity_code=None, 
+    def __init__(self, index=None, location_ref=None, package_id=None, mission_ref=None, 
+                 action=None, buy=False, sell=False, buy_commodity_code=None, sell_commodity_code=None, 
                  partner_action=None, state="TODO", action_priority=0):
         """
         Initialize a new DeliveryMissionAction object.
@@ -20,20 +17,22 @@ class DeliveryMissionAction:
         :param partner_action: Direct reference to this package's partner action (dropoff or pickup action).
         :param state: State of this action (TODO | DONE).
         """
+        self.index = None  # will be the index in the list of the delivery route
         self.location_ref = location_ref  ## we need the ref, because derelict outposts cannot be found in the uex_api
         self.mission_ref = mission_ref
         self.package_id = package_id
         self.action = action  # pickup | dropoff
         self.buy = buy
         self.sell = sell
-        self.commodity_code = commodity_code  # commodity information for this action
-        self.partner_action = partner_action  # direct reference to this package partner action (dropoff or pickup action)
+        self.buy_commodity_code = buy_commodity_code  # commodity information for this action
+        self.sell_commodity_code = sell_commodity_code  # commodity information for this action
+        self.partner_action = partner_action  # direct reference to this package partner action (dropoff or pickup action) 
         self.state = state  # state of this action: TODO | DONE
         self.action_priority = action_priority
         self.danger = False  # if outlaw and or armistice 
 
-        from wingmen.star_citizen_services.model.mission_package import MissionPackage
-        self.mission_package: MissionPackage
+        # from wingmen.star_citizen_services.model.mission_package import MissionPackage
+        # self.mission_package: MissionPackage
 
     def reduce_priority_if_required(self, compare_action):  
         """
@@ -77,12 +76,6 @@ class DeliveryMissionAction:
         """
         return self.action_priority > other.action_priority
     
-    def __iter__(self):
-        return DeliveryMissionIterator(self)
-
-    def reverse_iter(self):
-        return DeliveryMissionIterator(self, reverse=True)
-    
     def __eq__(self, other):
         if not isinstance(other, DeliveryMissionAction):
             return False
@@ -102,35 +95,93 @@ class DeliveryMissionAction:
         hash_str = "_".join([str(self.mission_ref.id), str(self.package_id), str(self.action)])
         return hash(hash_str)
     
-class DeliveryMissionIterator:
-    def __init__(self, start_action, reverse=False):
-        """
-        Initialize the iterator.
+    def to_GPT_json(self): 
+        from wingmen.star_citizen_services.uex_api import UEXApi
+        uex_api = UEXApi()
+
+        satellites = uex_api.get_data("satellites")
+        planets = uex_api.get_data("planets")
+        cities = uex_api.get_data("cities")
+        commodities = uex_api.get_data("commodities")
+        tradeports = uex_api.get_tradeports()
+
+        tradeport = self.location_ref["code"]
+        satellite = self.location_ref["satellite"]
+        planet = self.location_ref["planet"]
+        city = self.location_ref["city"]
         
-        :param start_action: The starting action for the iteration.
-        :param reverse: Flag to indicate reverse iteration.
+        tradeport_json = f'"tradeport": {tradeports.get(tradeport,{}).get("name", tradeport)},'
+        
+        location_json = ""
+        if satellite:
+            location_json = f'"satellite": {satellites.get(satellite,{}).get("name", satellite)},'
+        elif city:
+            location_json = (
+                f'"planet": {planets.get(planet, {}).get("name", planet)},\n'
+                f'"city": {cities.get(city, {}).get("name", city)},'
+            )
+        else:
+            location_json = f'"planet": {planets.get(planet, {}).get("name", planet)},'
+ 
+        buy_json = ""
+        buy_commodity = ""
+        if self.buy:
+            buy_json = f'"buy": {self.buy},'
+            buy_commodity = f'"buy_commodity": {commodities.get(self.buy_commodity_code, {}).get("name", self.buy_commodity_code)},'  # commodity information for this action
 
-        HowTo:
-            # Assuming head_action is the first action in your linked list
-            head_action = DeliveryMissionAction(...)  # Initialize with appropriate parameters
+        sell_json = ""
+        sell_commodity = ""
+        if self.sell:
+            sell_json = f'"buy": {self.sell},'
+            sell_commodity = f'"sell_commodity": {commodities.get(self.sell_commodity_code, {}).get("name", self.sell_commodity_code)},'  # commodity information for this action
 
-            # Forward iteration
-            for action in head_action:
-                print(action.action, action.location_id)
+        return {
+            f'"mission_id" : {self.mission_ref.id}'
+            f"{tradeport_json}"  # we need the ref, because derelict outposts cannot be found in the uex_api
+            f"{location_json}"
+            "package_id": self.package_id,
+            "action": self.action,  # pickup | dropoff
+            f"{buy_json}"
+            f"{sell_json}"
+            f"{buy_commodity}"
+            f"{sell_commodity}"
+            "danger": self.danger,  # if outlaw and or armistice 
+        }
 
-            # Reverse iteration
-            for action in head_action.reverse_iter():
-                print(action.action, action.location_id)
-        """
-        self.current_action = start_action
-        self.reverse = reverse
+    def to_json(self):
+        
+        return {
+            "index": self.index,
+            "location_ref": self.location_ref,  # we need the ref, because derelict outposts cannot be found in the uex_api
+            "mission_ref": self.mission_ref.id,  # we need only the id to identify the mission
+            "package_id": self.package_id,
+            "action": self.action,  # pickup | dropoff
+            "buy": self.buy,
+            "sell": self.sell,
+            "buy_commodity_code": self.buy_commodity_code,  # commodity information for this action
+            "sell_commodity_code": self.sell_commodity_code,  # commodity information for this action
+            "partner_action": self.partner_action.index,  # we cannot save the reference, so we only save the index of the partner within route (list of mission action)
+            "state": self.state, # state of this action: TODO | DONE
+            "action_priority": self.action_priority,
+            "danger": self.danger,  # if outlaw and or armistice 
+        }
+    
+    @staticmethod
+    def from_json(missions, delivery_action_json, index):
+        action: DeliveryMissionAction = DeliveryMissionAction()
+        action.index = index  # will be the index in the list of the delivery route
+        action.location_ref = delivery_action_json["location_ref"]  ## we need the ref, because derelict outposts cannot be found in the uex_api
+        action.mission_ref = missions[delivery_action_json["mission_ref"]]
+        action.package_id = delivery_action_json["package_id"]
+        action.action = delivery_action_json["action"]  # pickup | dropoff
+        action.buy = delivery_action_json["buy"]
+        action.sell = delivery_action_json["sell"]
+        action.buy_commodity_code = delivery_action_json["buy_commodity_code"]  # commodity information for this action
+        action.sell_commodity_code = delivery_action_json["sell_commodity_code"]  # commodity information for this action
+        action.partner_action = delivery_action_json["partner_action"]  # direct reference to this package partner action (dropoff or pickup action)
+        action.state = delivery_action_json["state"]  # state of this action: TODO | DONE
+        action.action_priority = delivery_action_json["action_priority"]
+        action.danger = delivery_action_json["danger"]  # if outlaw and or armistice 
 
-    def __iter__(self):
-        return self
+        return action
 
-    def __next__(self):
-        if self.current_action is None:
-            raise StopIteration
-        current = self.current_action
-        self.current_action = self.current_action.previous_action if self.reverse else self.current_action.next_action
-        return current

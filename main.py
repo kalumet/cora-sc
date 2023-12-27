@@ -120,6 +120,7 @@ class WingmanAI:
 
 # ─────────────────────────────────── ↓ START ↓ ─────────────────────────────────────────
 if __name__ == "__main__":
+    # allow access to main ui thread
     core = WingmanAI()
 
     # NOTE this is the only possibility to use `pynput` and `tkinter` in parallel
@@ -132,7 +133,9 @@ if __name__ == "__main__":
     mouseListener.start()
     mouseListener.wait()
 
-    ui = WingmanUI(core)
+    # create a singelton instance of the ui
+    ui = WingmanUI.get_instance(core)
+    ui.process_tkinter_queue()
     ui.mainloop()
 
     listener.stop()

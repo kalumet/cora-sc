@@ -3,6 +3,8 @@ from sys import platform
 import tkinter as tk
 from typing import Literal
 import customtkinter as ctk
+import queue
+from threading import Thread
 from gui.components.notification_banner import NotificationBanner
 from gui.sections.header import Header
 from gui.views.context_view import ContextView
@@ -11,10 +13,34 @@ from gui.views.about_view import AboutView
 
 
 class WingmanUI(ctk.CTk):
+    #  make a singleton object of the window such that other modules can access and modify or enhance it
+    _instance = None
+    #  we need a possibility to work on the main ui thread from other modules, otherwise, we get errors
+    _tkinter_queue = queue.Queue()
+
     VIEWS = Literal["context", "settings", "about"]
     _views: dict[VIEWS, ctk.CTkFrame | None] = dict(
         context=None, settings=None, about=None
     )
+    
+    @classmethod
+    def get_instance(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = cls(*args, **kwargs)
+        return cls._instance
+    
+    @classmethod
+    def enqueue_tkinter_command(cls, command):
+        cls._tkinter_queue.put(command)
+
+    def process_tkinter_queue(self):
+        while True:
+            try:
+                command = self._tkinter_queue.get_nowait()
+                command()
+            except queue.Empty:
+                break
+        self.after(100, self.process_tkinter_queue) 
 
     def __init__(self, core):
         super().__init__()

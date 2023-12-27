@@ -91,9 +91,6 @@ class StarCitizenWingman(OpenAiWingman):
         self.config["sound"]["play_beep"] = False
         self.config["sound"]["effects"] = ["INTERIOR_HELMET", "ROBOT"]
         self.config["openai"]["conversation_model"] = self.config["openai"]["contexts"][f"context-{self.AIContext.CORA.name}"]["conversation_model"]
-
-        # every conversation starts with the "context" that the user has configured
-        self._set_current_context(self.AIContext.CORA, new=True)
         
         # init the configuration dynamically based on current star citizen settings.
         # the config is dynamically expanded for all mapped keybinds.
@@ -112,8 +109,12 @@ class StarCitizenWingman(OpenAiWingman):
                 "Missing 'uex' API key. Please provide a valid key in the settings."
             )
         else:
+             # every conversation starts with the "context" that the user has configured
             self.uex_service = UEXApi.init(uex_api_key)
             self.mission_manager_service = MissionManager(config=self.config)
+            self._set_current_context(self.AIContext.CORA, new=True)
+
+            # self.mission_manager_service.get_new_mission()  # TODO nur ein Test
 
     def _set_current_context(self, new_context: AIContext, new: bool = False):
         """Set the current context to the specified context name."""
@@ -142,6 +143,7 @@ class StarCitizenWingman(OpenAiWingman):
 
         if new_context == self.AIContext.CORA:
             self.messages_buffer = 10 # making player Actions does not require much historical buffer
+            self.current_tools = self._get_context_tools(current_context=new_context)  # recalculate tools
         elif new_context == self.AIContext.TDD:
             self.messages_buffer = 20 # dealing on the journey of the player to trade might require more context-information in the conversation
         
@@ -360,10 +362,11 @@ class StarCitizenWingman(OpenAiWingman):
             function_response = json.dumps(self.uex_service.find_best_selling_location_for_commodity(commodity_name=function_args["commodity_name"]))
             printr.print(f'-> Resultat: {function_response}', tags="info")
 
-        if function_name == "add_new_box_mission":
-            function_response = json.dumps(self.mission_manager_service.get_new_mission())
+        if function_name == "box_delivery_mission_management":
+            mission_id = function_args.get("mission_id", None)
+            function_response = json.dumps(self.mission_manager_service.manage_missions(type=function_args["type"], mission_id=mission_id))
             printr.print(f'-> Resultat: {function_response}', tags="info")
-
+            self.current_tools = self._get_cora_tools()  # recalculate, as with every box mission, we have new information for the function call
 
         return function_response, instant_reponse
 
@@ -599,13 +602,48 @@ class StarCitizenWingman(OpenAiWingman):
     
     def _get_box_mission_tool(self):
         
-        tools = {
+        mission_ids = self.mission_manager_service.get_mission_ids()
+        if len(mission_ids) > 0:
+            tools = {
                 "type": "function",
                 "function": {
-                    "name": "add_new_box_mission",
-                    "description": "Add a box / delivery mission to the active missions. In your answer provide only the following information: Acknowledge delivery mission, payment amount, number of packages to deliver. Any numbers in your response must be written out. Do not provide any itinerary information."
+                    "name": "box_delivery_mission_management",
+                    "description": "Allows the player to add a new box mission, to delete a specific mission, to delete all missions or to get information about the next location he has to travel to",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "type": {
+                                "type": "string",
+                                "description": "The type of operation that the player wants to execute",
+                                "enum": ["new", "delete_all", "delete_mission_id", "next_location"]
+                            },
+                            "mission_id": {
+                                "type": "string",
+                                "description": "The id of the mission, the player wants to delete",
+                                "enum": mission_ids
+                            }
+                        }
+                    }
                 }
             }
+        else:
+            tools = {
+                    "type": "function",
+                    "function": {
+                        "name": "box_delivery_mission_management",
+                        "description": "Allows the player to add a new box mission, to delete a specific mission or to delete all missions",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "type": {
+                                    "type": "string",
+                                    "description": "The type of operation that the player wants to execute",
+                                    "enum": ["new"]
+                                }
+                            }
+                        }
+                    }
+                }
         return tools
     
     def _get_cora_tools(self) -> list[dict]:

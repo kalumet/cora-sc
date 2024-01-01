@@ -5,7 +5,7 @@ import requests
 from services.printr import Printr
 
 
-DEBUG = True
+DEBUG = False
 
 
 def print_debug(to_print):

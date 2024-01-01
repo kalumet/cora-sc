@@ -23,6 +23,12 @@ class StarCitizenOverlay:
         self.overlay_label = None
         self.new_text = True
 
+        # Erstelle ein temporäres Fenster, um Bildschirmabmessungen zu erhalten
+        temp_root = Tk()
+        self.screen_width = temp_root.winfo_screenwidth()
+        self.screen_height = temp_root.winfo_screenheight()
+        temp_root.destroy()
+
         if TEST:
             # self.display_overlay_text("Test 1: kurz")
             # time.sleep(8)
@@ -72,7 +78,7 @@ class StarCitizenOverlay:
         draw.text((text_x, text_y), text, text_color_rgb, font=font, stroke_width=0, spacing=5)
         return text_image
 
-    def display_overlay_text(self, text):
+    def display_overlay_text(self, text, vertical_position_ratio=4):
         self.new_text = True
 
         def create_overlay():
@@ -97,12 +103,17 @@ class StarCitizenOverlay:
 
             overlay_label = Label(overlay_root, image=photo, bg=transparent_color)
             overlay_label.pack()
+          
+            # Fenstergröße
+            window_width = overlay_root.winfo_width()
+            window_height = overlay_root.winfo_height()
 
-            # Get the active window
-            active_window = root.focus_get()
+            # Berechne die Position
+            x_position = (self.screen_width - window_width) // 2
+            y_position = self.screen_height // vertical_position_ratio - window_height // 2
 
             # Center the overlay horizontally
-            overlay_root.geometry("+{}+{}".format(int(active_window.winfo_screenwidth() / 2) - int(overlay_root.winfo_width() / 2), int(active_window.winfo_screenheight() / 4)))
+            overlay_root.geometry(f"+{x_position}+{y_position}")
             overlay_root.after(7000, lambda: close_overlay(overlay_root))
 
             self.overlay_root = overlay_root

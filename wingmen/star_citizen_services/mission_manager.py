@@ -52,7 +52,8 @@ class MissionManager:
         self.load_missions()
         self.load_delivery_route()
 
-        self.get_next_actions()
+        self.mission_started = False
+        self.current_delivery_location = None
 
     def get_next_actions(self, current_index=0):
         print_debug(f"get_next_actions start at {current_index}")
@@ -62,24 +63,27 @@ class MissionManager:
         index = current_index
         start_index = None
         end_index = 0
-        if index < len(self.delivery_actions):
-            current_location = self.delivery_actions[index].location_ref
+        current_location = None
         pick_up_count = 0
         dropoff_count = 0
         
         while index < len(self.delivery_actions):
             action: DeliveryMissionAction = self.delivery_actions[index]
             if action.state == "DONE":
-                print_debug(f"skipping as done: {action}")
+                self.mission_started = True
+                print_debug(f"skipping index {index} as done: {action}")
+
             if action.state == "TODO":
                 if start_index is None: # we find the first "TODO" action in the list, which is our start index for the next location
+                    print_debug(f"found start at index: {index}")
                     start_index = index
+                    current_location = self.delivery_actions[index].location_ref
 
-                end_index = index
-                
                 if current_location and action.location_ref.get("code") != current_location.get("code"):
                     print_debug("changed location, finished")
                     break
+
+                end_index = index
 
                 if action.action == "pickup":
                     pick_up_count += 1
@@ -89,7 +93,7 @@ class MissionManager:
             index += 1
 
         self.current_delivery_action_index = start_index
-        self.current_delivery_action_location_end_index = end_index + 1
+        self.current_delivery_action_location_end_index = end_index
         self.current_delivery_location = current_location
 
         print_debug(f"identified next location: {self.current_delivery_location}, same location actions indexes: {self.current_delivery_action_index}->{self.current_delivery_action_location_end_index}")
@@ -107,14 +111,14 @@ class MissionManager:
                 "instructions": "There are no delivery missions active"
             }
         
-        if self.current_delivery_action_location_end_index == 0:
+        if self.mission_started is False:
             print_debug("no actions done yet")
             return True, None
         
         index = self.current_delivery_action_index
         end_index = self.current_delivery_action_location_end_index
 
-        while index < len(self.delivery_actions) and index < end_index:
+        while index < len(self.delivery_actions) and index <= end_index:
             print_debug(f"box action done index: {self.delivery_actions[index].index}")
             self.delivery_actions[index].state = "DONE"
             index += 1
@@ -147,7 +151,7 @@ class MissionManager:
         planetary_system_changes = 0
         locations = set()
         moons_and_planets = set()
-        for mission in self.missions:
+        for mission in self.missions.values():
             mission: DeliveryMission
             print_debug(mission)
             mission_count += 1
@@ -179,7 +183,7 @@ class MissionManager:
 
         success, message = self.update_last_location()
         
-        if not success:
+        if success is False:
             return message
         
         pickup_count, dropoff_count = self.get_next_actions(self.current_delivery_action_index)
@@ -211,10 +215,12 @@ class MissionManager:
             index += 1
 
         self.overlay.display_overlay_text(
-            f'Next location: {next_location.get("name")}  '
-            f'on  {moon_or_planet}  '
-            f'pickup:  {pickup_packages}  '
-            f'dropoff:  {dropoff_packages}'
+            (
+                f'Next location: {next_location.get("name")}  '
+                f'on  {moon_or_planet}  '
+                f'pickup:  {pickup_packages}  '
+                f'dropoff:  {dropoff_packages}'
+            )
         )
         
         return {
@@ -245,9 +251,12 @@ class MissionManager:
         mission_count, package_count, revenue_sum, location_count, planetary_system_changes = self.get_missions_information()
 
         self.overlay.display_overlay_text(
-            f"Total missions: #{mission_count}  "
-            f"for {revenue_sum} αUEC   "
-            f"packages: {package_count}."
+            (
+                f"Total missions: #{mission_count}  "
+                f"for {revenue_sum} αUEC   "
+                f"packages: {package_count}."
+            ),
+            vertical_position_ratio=8
         )
 
         # 3 return new mission and active missions + instructions for ai
@@ -316,6 +325,7 @@ class MissionManager:
         number = len(self.missions)
         self.missions.clear()
         self.delivery_actions.clear()
+        self.mission_started = False
 
         self.overlay.display_overlay_text(
             "Discarded all mission, reject them ingame."
@@ -324,6 +334,7 @@ class MissionManager:
         self.save_missions()
         self.save_delivery_route()
         self.current_delivery_action_index = 0
+        self.current_delivery_action_location_end_index = 0
 
         return {"success": "True", 
                 "instructions": "Provide only the following information: Acknowledge the deletion of the number of missions. Any numbers in your response must be written out. Do not provide any further information.",

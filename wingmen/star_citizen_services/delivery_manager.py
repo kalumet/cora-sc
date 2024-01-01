@@ -38,11 +38,19 @@ class PackageDeliveryPlanner:
         # Step 1: build a correct, but inefficient action order
         self.mission_actions_list = self.build_delivery_mission_actions(missions)
 
+        if DEBUG:
+            print_debug("===DELIVERY ACTIONS===")
+            for mission_action in self.mission_actions_list:
+                mission_action: DeliveryMissionAction
+                print_debug(
+                    f"mission: {mission_action.mission_ref.id}, "
+                    f"{mission_action}") 
+
         # Step 2  
         self.prioritize(self.mission_actions_list)
 
         if DEBUG:
-            print_debug("===RAW===")
+            print_debug("===PRIORITIES===")
             for mission_action in self.mission_actions_list:
                 mission_action: DeliveryMissionAction
                 print_debug(
@@ -115,13 +123,14 @@ class PackageDeliveryPlanner:
         heapq.heapify(actions_list)
         route = []
         last_action = None
-        picked_up = set()
-        postponed_actions = []
+        picked_up_packages = set()
+        postponed_dropoffs = []
         index = 0
 
         print_debug("\n##### PLANNING ROUTE #####")
         while actions_list:
             current_action = heapq.heappop(actions_list)  # entfernt wird die aktion mit der derzeitig höchsten Priorität, in der ersten iteration eine pickup action
+            current_location = current_action.location_ref
 
             # da wir ein paket abgeholt haben, aktualisieren wir jetzt die Prioritäten, da wir, sofern sinnvoll, Pakete auf dem gleichen Mond bevorzugen
             # allerdings wollen wir riskante Orte dadurch nicht zu stark nach hinten schieben, daher ist dieser faktor immer kleiner als gefährliche aktionen
@@ -132,10 +141,12 @@ class PackageDeliveryPlanner:
             print_debug(f"planning action {current_action}")
 
             # wir dürfen ein paket erst abliefern, wenn es auch schon aufgehoben wurde, was hier geprüft wird
-            skip = self.check_postpone_dropoff_or_add_pickup(picked_up, current_action)
+            # manchmal kann es durch die Priorisierung dazu kommen, dass ein paket abgeliefert werden soll, obwohl es noch nicht
+            # aufgehoben wurde
+            skip = self.add_pickup_or_postpone_drop_off_check(picked_up_packages, current_action, current_location, actions_list)
             if skip:
                 print_debug(f"    postponing: {current_action}")
-                postponed_actions.append(current_action)  # dropoff action before corresponding pickup
+                postponed_dropoffs.append(current_action)  # dropoff action before corresponding pickup
                 continue
             
             location_route = []
@@ -149,8 +160,9 @@ class PackageDeliveryPlanner:
                 # Erstelle eine Kopie der actions_list für die Iteration
                 for i, action in enumerate(list(actions_list)):
                     if action.location_ref["code"] == current_action.location_ref["code"] and action.action == 'pickup':
-                        print_debug("    found same location for pickup.")
-                        self.check_postpone_dropoff_or_add_pickup(picked_up, action)
+                        print_debug(f"    pickup {action} as on same location.")
+                        picked_up_packages.add(action.package_id)
+                        
                         # Entferne das gefundene Element aus dem Heap
                         actions_list.pop(i)
 
@@ -172,9 +184,9 @@ class PackageDeliveryPlanner:
                 for i, action in enumerate(list(actions_list)):
                     if action.location_ref["code"] == current_action.location_ref["code"] and action.action == 'dropoff':
                         print_debug("    found same location for dropoff.")
-                        drop = not self.check_postpone_dropoff_or_add_pickup(picked_up, action)
+                        can_drop = self.check_drop_off_at_location(picked_up_packages, action)
                         
-                        if drop: # Entferne das gefundene Element aus dem Heap
+                        if can_drop: # Entferne das gefundene Element aus dem Heap
                             actions_list.pop(i)
                             
                             location_route.insert(0, action)  # wenn wir am gleichen Ort pakete abliefern können, bevorzugen wir das als erste aktion, also setzen wir das am anfang
@@ -194,17 +206,16 @@ class PackageDeliveryPlanner:
                 index += 1
                 route.append(action)
 
-            if len(postponed_actions) > 0:  # we processed all lists, but we postponed dropoff-actions ...
+            if len(postponed_dropoffs) > 0:  # we processed all lists, but we postponed dropoff-actions ...
                 retry_delivery = set()
-                for action in postponed_actions:
+                for action in postponed_dropoffs:
                     # check if a package has been picked up already. if yes, this package can be retried for delivery
-                    package_can_be_dropped = not self.check_postpone_dropoff_or_add_pickup(picked_up, action, keep=True)
+                    package_can_be_dropped = self.can_postponed_package_be_retried(picked_up_packages, action, current_location, actions_list)
                     if package_can_be_dropped:
-                        print_debug(f"    retry: dropoff action can be executed {action}")
                         retry_delivery.add(action)
 
                 # we remove all retry actions from the postponed actions
-                postponed_actions = [action for action in postponed_actions if action not in retry_delivery]
+                postponed_dropoffs = [action for action in postponed_dropoffs if action not in retry_delivery]
 
                 # we add the retry elements to our action_list
                 actions_list.extend(retry_delivery)
@@ -220,17 +231,72 @@ class PackageDeliveryPlanner:
 
         return route
 
-    def check_postpone_dropoff_or_add_pickup(self, pickups, action, keep=False) -> bool:
-        """returns true if action is dropoff and pickup of actions was made"""
-        if action.action == "dropoff" and action.package_id in pickups:
-            if not keep:
-                pickups.remove(action.package_id)
-                print_debug(f"    dropped {action}")
-            return False
-        elif action.action == "dropoff":
-            print_debug(f"    no drop of {action}")
+    def can_postponed_package_be_retried(self, pickups, action: DeliveryMissionAction, current_location, actions_list):
+        # we want to see, if the current-package can be retried now.
+        # we decide this depending on 
+        # if the current location corresponds to the postponed package -> drop it if already picked up
+        # if this postponed package is not on the same location, check if other packages at the same location wait for action
+        # in this case, we want to postpone further
+        if action.location_ref.get("code") == current_location.get("code"):
+            return True
+
+        # are there other actions with the same location in our list? -> no retry yet
+        for tmp_action in actions_list:
+            tmp_action: DeliveryMissionAction
+            if tmp_action.location_ref.get("code") == action.location_ref.get("code"):
+                # we found another package to be dropped / picked up at the same location, so we don't wont to retry yet
+                print_debug(f'not retrying postponed package yet {action}')
+                return False
+            
+        # ok, no other same location found so we requeue this dropped package, if it is already picked up:
+        if action.package_id in pickups:
+            print_debug(f'drop off now possible: retry {action}')
             return True
         
+        print_debug(f'still waiting for pickup: {action}')
+        return False
+
+    def check_drop_off_at_location(self, pickups, action):
+        action: DeliveryMissionAction
+
+        if action.action == "dropoff":            
+            if action.package_id in pickups:
+                pickups.remove(action.package_id)
+                print_debug(f"    dropped {action}")
+                return True
+
+            print_debug(f"    no drop of {action} because not picked up yet")
+            return False
+
+    def add_pickup_or_postpone_drop_off_check(self, pickups, action, current_location, actions_list) -> bool:
+        """ returns true > postpone action
+                if dropoff, but not yet picked up
+                if dropoff possible, but a later visit is possible
+            return false > execute action
+                if pickup location
+                if dropoff possible and no other action on same location
+        """
+        action: DeliveryMissionAction
+        pickups: set
+
+        if action.action == "dropoff":            
+            if action.package_id in pickups:
+                # package could be dropped, but we check first, if other actions on the same location are still on the itinerary
+                for tmp_action in actions_list:
+                    tmp_action: DeliveryMissionAction
+
+                    if tmp_action.location_ref.get("code") == current_location.get("code"):
+                        # we found an action, so we postpone this dropoff for later
+                        print_debug(f'   postponing {action} as later visit possible')
+                        return True
+
+                pickups.remove(action.package_id)
+                print_debug(f"    dropped {action}")
+                return False
+
+            print_debug(f"    no drop of {action} because not picked up yet")
+            return True
+                
         print_debug(f"    picked up {action}")
         pickups.add(action.package_id)
         return False

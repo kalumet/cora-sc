@@ -140,7 +140,7 @@ class UEXApi():
         category = CATEGORY_TRADEPORTS
         if self._needs_refresh(category):
             tradeports_data, tradeports_age = self._fetch_from_file_or_api(category, self.tradeports_max_age, f"tradeports/system/{self.system_code}/")
-            self._write_code_mapping_to_file(data=tradeports_data, category=category, api_value_field='name_short', export_value_field_name='name', export_code_field_name='code')
+            self._write_code_mapping_to_file(data=tradeports_data, category=category, api_value_field='name', export_value_field_name='name', export_code_field_name='code')
             self.data[category] = {"data": tradeports_data, "age": tradeports_age}
 
         category = CATEGORY_PLANETS
@@ -271,10 +271,10 @@ class UEXApi():
                                 max_profit = profit
                                 best_trade = {
                                     "commodity": self.code_mapping.get(CATEGORY_COMMODITIES, {}).get(commodity_code, ''),
-                                    "buy_at": trade1.get("name_short", ''),
+                                    "buy_at": trade1.get("name", ''),
                                     "buy_satellite": self.code_mapping.get(CATEGORY_SATELLITES, {}).get(trade1.get("satellite", ''), ''),
                                     "buy_planet": self.code_mapping.get(CATEGORY_PLANETS, {}).get(trade1.get("planet", ''), ''),
-                                    "sell_at": trade2.get("name_short", ''),
+                                    "sell_at": trade2.get("name", ''),
                                     "sell_satellite": self.code_mapping.get(CATEGORY_SATELLITES, {}).get(trade2.get("satellite", ''), ''),
                                     "sell_planet": self.code_mapping.get(CATEGORY_PLANETS, {}).get(trade2.get("planet", ''), ''),
                                     "buy_price": buy_price,
@@ -317,10 +317,10 @@ class UEXApi():
         
         return {
             "commodity": self.code_mapping.get(CATEGORY_COMMODITIES, {}).get(commodity_code, ''),
-            "buy_at": best_buy.get("name_short", ''),
+            "buy_at": best_buy.get("name", ''),
             "buy_satellite": self.code_mapping.get(CATEGORY_SATELLITES, {}).get(best_buy.get("satellite", ''), ''),
             "buy_planet": self.code_mapping.get(CATEGORY_PLANETS, {}).get(best_buy.get("planet", ''), ''),
-            "sell_at": best_sell.get("name_short", ''),
+            "sell_at": best_sell.get("name", ''),
             "sell_satellite": self.code_mapping.get(CATEGORY_SATELLITES, {}).get(best_sell.get("satellite", ''), ''),
             "sell_planet": self.code_mapping.get(CATEGORY_PLANETS, {}).get(best_sell.get("planet", ''), ''),
             "buy_price": min_buy_price,
@@ -354,7 +354,7 @@ class UEXApi():
         
         return {
             "commodity": self.code_mapping.get(CATEGORY_COMMODITIES, {}).get(commodity_code, ''),
-            "sell_at": best_sell.get("name_short", ''),
+            "sell_at": best_sell.get("name", ''),
             "sell_satellite": self.code_mapping.get(CATEGORY_SATELLITES, {}).get(best_sell.get("satellite", ''), ''),
             "sell_planet": self.code_mapping.get(CATEGORY_PLANETS, {}).get(best_sell.get("planet", ''), ''),
             "sell_price": max_sell_price
@@ -388,7 +388,7 @@ class UEXApi():
         
         return {
             "commodity": self.code_mapping.get(CATEGORY_COMMODITIES, {}).get(commodity_code, ''),
-            "sell_at": best_sell.get("name_short", ''),
+            "sell_at": best_sell.get("name", ''),
             "sell_satellite": self.code_mapping.get(CATEGORY_SATELLITES, {}).get(best_sell.get("satellite", ''), ''),
             "sell_planet": self.code_mapping.get(CATEGORY_PLANETS, {}).get(best_sell.get("planet", ''), ''),
             "sell_price": max_sell_price
@@ -434,10 +434,10 @@ class UEXApi():
                         max_profit = profit
                         best_trade = {
                             "commodity": self.code_mapping.get(CATEGORY_COMMODITIES, {}).get(commodity, ''),
-                            "buy_at": start_trade.get('name_short', ''),
+                            "buy_at": start_trade.get('name', ''),
                             "buy_satellite": self.code_mapping.get(CATEGORY_SATELLITES, {}).get(start_trade.get('satellite', ''), ''),
                             "buy_planet": self.code_mapping.get(CATEGORY_PLANETS, {}).get(start_trade.get('planet', ''), ''),
-                            "sell_at": best_sell_location.get('name_short', ''),
+                            "sell_at": best_sell_location.get('name', ''),
                             "sell_satellite": self.code_mapping.get(CATEGORY_SATELLITES, {}).get(best_sell_location.get('satellite', ''), ''),
                             "sell_planet": self.code_mapping.get(CATEGORY_PLANETS, {}).get(best_sell_location.get('planet', ''), ''),
                             "buy_price": start_trade.get('prices', {}).get(commodity, {}).get('price_buy', 0),

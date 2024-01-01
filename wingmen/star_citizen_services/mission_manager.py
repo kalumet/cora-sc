@@ -1,17 +1,15 @@
 import json
 import os
 import traceback
-from tkinter import Tk, Label, Toplevel
-from PIL import Image, ImageTk, ImageDraw, ImageFont, ImageColor
-import pygetwindow as gw
 
-from gui.root import WingmanUI
 from wingmen.star_citizen_services.model.delivery_mission import DeliveryMission, MissionPackage
 from wingmen.star_citizen_services.screenshot_ocr import TransportMissionAnalyzer
-from wingmen.star_citizen_services.delivery_manager import PackageDeliveryPlanner, DeliveryMissionAction
+from wingmen.star_citizen_services.delivery_manager import PackageDeliveryPlanner, DeliveryMissionAction, UEXApi
+from wingmen.star_citizen_services.overlay import StarCitizenOverlay
 
 
 DEBUG = True
+TEST = False
 
 
 def print_debug(to_print):
@@ -28,8 +26,11 @@ class MissionManager:
     
     """
     def __init__(self, config=None):
+
         self.missions: dict(int, DeliveryMission) = {}
         self.delivery_actions: list(DeliveryMissionAction) = []
+        self.current_delivery_action_index: int = 0
+        self.current_delivery_action_location_end_index = 0
 
         self.config = config
         self.mission_data_path = f'{self.config["data-root-directory"]}{self.config["box-mission-configs"]["mission-data-dir"]}'
@@ -38,6 +39,7 @@ class MissionManager:
         self.mission_screen_upper_left_template = f'{self.mission_data_path}/{self.config["box-mission-configs"]["upper-left-region-template"]}'
         self.mission_screen_lower_right_template = f'{self.mission_data_path}/{self.config["box-mission-configs"]["lower-right-region-template"]}'
 
+        self.overlay = StarCitizenOverlay()
         self.delivery_manager = PackageDeliveryPlanner()
         self.mission_recognition_service = TransportMissionAnalyzer(
             upper_left_template=self.mission_screen_upper_left_template, 
@@ -50,75 +52,216 @@ class MissionManager:
         self.load_missions()
         self.load_delivery_route()
 
-        index = 0
-        for index, action in enumerate(self.delivery_actions):
-            action: DeliveryMissionAction
+        self.get_next_actions()
+
+    def get_next_actions(self, current_index=0):
+        print_debug(f"get_next_actions start at {current_index}")
+        if not self.delivery_actions or not self.missions:
+            return None, None
+        
+        index = current_index
+        start_index = None
+        end_index = 0
+        if index < len(self.delivery_actions):
+            current_location = self.delivery_actions[index].location_ref
+        pick_up_count = 0
+        dropoff_count = 0
+        
+        while index < len(self.delivery_actions):
+            action: DeliveryMissionAction = self.delivery_actions[index]
             if action.state == "DONE":
-                continue
+                print_debug(f"skipping as done: {action}")
             if action.state == "TODO":
-                break
-        self.current_delivery_action_index = index
+                if start_index is None: # we find the first "TODO" action in the list, which is our start index for the next location
+                    start_index = index
+
+                end_index = index
+                
+                if current_location and action.location_ref.get("code") != current_location.get("code"):
+                    print_debug("changed location, finished")
+                    break
+
+                if action.action == "pickup":
+                    pick_up_count += 1
+                else:
+                    dropoff_count += 1
+
+            index += 1
+
+        self.current_delivery_action_index = start_index
+        self.current_delivery_action_location_end_index = end_index + 1
+        self.current_delivery_location = current_location
+
+        print_debug(f"identified next location: {self.current_delivery_location}, same location actions indexes: {self.current_delivery_action_index}->{self.current_delivery_action_location_end_index}")
+        
+        if start_index is None:  # we have reached the end of the delivery route
+            return None, None
+        
+        return pick_up_count, dropoff_count
+    
+    def update_last_location(self):
+        """Updates all actions between current_delivery_action_index and current_delivery_action_location_end_index to state 'DONE', saves and returns the next index or None, if the end has been reached"""
+        if len(self.delivery_actions) == 0:
+            return False, {
+                "success": "False", 
+                "instructions": "There are no delivery missions active"
+            }
+        
+        if self.current_delivery_action_location_end_index == 0:
+            print_debug("no actions done yet")
+            return True, None
+        
+        index = self.current_delivery_action_index
+        end_index = self.current_delivery_action_location_end_index
+
+        while index < len(self.delivery_actions) and index < end_index:
+            print_debug(f"box action done index: {self.delivery_actions[index].index}")
+            self.delivery_actions[index].state = "DONE"
+            index += 1
+
+        self.current_delivery_action_index = self.current_delivery_action_location_end_index
+        if self.current_delivery_action_index >= len(self.delivery_actions):
+            self.discard_all_missions()
+            return False, {"success": "False", 
+            "instructions": "The player has completed all delivery missions. No active missions available."}
+                    
+        self.save_delivery_route()
+ 
+        return True, None
            
     def manage_missions(self, type="new", mission_id=None):
-        if type == "new":
+        if type == "new_delivery_mission":
             return self.get_new_mission()
-        if type == "delete_all":
+        if type == "delete_or_discard_all_missions":
             return self.discard_all_missions()
-        if type == "delete_mission_id":
+        if type == "delete_or_discard_one_mission_with_id":
             return self.discard_mission(mission_id)
-        if type == "next_location":
+        if type == "get_first_or_next_location_on_delivery_route":
             return self.get_next_location()
-    
+        
+    def get_missions_information(self):
+        mission_count = 0
+        package_count = 0
+        revenue_sum = 0
+        location_count = 0
+        planetary_system_changes = 0
+        locations = set()
+        moons_and_planets = set()
+        for mission in self.missions:
+            mission: DeliveryMission
+            print_debug(mission)
+            mission_count += 1
+            revenue_sum += mission.revenue
+            package_count += len(mission.packages)
+
+            for location_info in mission.mission_packages:
+                location_info: MissionPackage
+
+                locations.add(location_info.pickup_location_ref.get("code"))
+                locations.add(location_info.drop_off_location_ref.get("code"))
+                
+                moon = location_info.pickup_location_ref.get("satellite")
+                planet = location_info.pickup_location_ref.get("planet")
+
+                if moon:
+                    moons_and_planets.add(moon)
+                else:
+                    moons_and_planets.add(planet)
+
+        location_count = len(locations)
+        planetary_system_changes = len(moons_and_planets)
+
+        return mission_count, package_count, revenue_sum, location_count, planetary_system_changes
+
     def get_next_location(self):
         
-        if len(self.delivery_actions) == 0:
-            return {"success": "False", 
-                "instructions": "There are no delivery missions active"}
-            
-        if self.current_delivery_action_index < len(self.delivery_actions):
-            self.delivery_actions[self.current_delivery_action_index].state = "DONE"
-            
-            self.current_delivery_action_index += 1
-            if self.current_delivery_action_index == len(self.delivery_actions):
-                self.discard_all_missions()
-                return {"success": "False", 
-                "instructions": "The player has completed all delivery missions. No active missions available."}
-            
-            self.save_delivery_route()
+        uexApi = UEXApi()
 
-            next_action: DeliveryMissionAction = self.delivery_actions[self.current_delivery_action_index]
-            return {"success": "True", 
-                "instructions": "Indicate the mission ID that is related to the next action. Whenever you provide a specific package ID, detail its ID by separating each digit with a space. Inform about the pickup location and the corresponding satellite. Conclude with a cautionary note about potential dangers at the location, such as piracy or other risks, if any. Be creativ how to provide these informations, but make short answers. Most important is the Location Name and the package id.",
-                "next_location": json.dumps(next_action.to_GPT_json())}
+        success, message = self.update_last_location()
+        
+        if not success:
+            return message
+        
+        pickup_count, dropoff_count = self.get_next_actions(self.current_delivery_action_index)
+
+        print_debug(f"next action: {self.current_delivery_location} pickup #{pickup_count}, dropoff #{dropoff_count}")
+        if pickup_count == 0 and dropoff_count == 0:
+            # shouldn't happen
+            print_debug("ERROR - no next location")
+            return {"success": False, "message": "Error"}
+        
+        next_action: DeliveryMissionAction = self.delivery_actions[self.current_delivery_action_index]
+        next_location = self.current_delivery_location
+        moon_or_planet = ""
+        if next_location.get("satellite"):
+            moon_or_planet = uexApi.get_satellite_name(next_location.get("satellite"))
         else:
-            self.discard_all_missions()
-            return {"success": "False", 
-                "instructions": "The player has completed all delivery missions. No active missions available."}
+            moon_or_planet = uexApi.get_planet_name(next_location.get("planet"))
+
+        index = self.current_delivery_action_index
+        pickup_packages = []
+        dropoff_packages = []
+        while index < len(self.delivery_actions) and index <= self.current_delivery_action_location_end_index:
+            action: DeliveryMissionAction = self.delivery_actions[index]
+            if action.action == "pickup":
+                pickup_packages.append(action.package_id)
+            else: 
+                dropoff_packages.append(action.package_id)
             
+            index += 1
+
+        self.overlay.display_overlay_text(
+            f'Next location: {next_location.get("name")}  '
+            f'on  {moon_or_planet}  '
+            f'pickup:  {pickup_packages}  '
+            f'dropoff:  {dropoff_packages}'
+        )
+        
+        return {
+            "success": True, 
+            "instructions": "Provide the user with all provided information based on your calculation of the best delivery route considering risk, and least possible location-switches. Do not provide any information, if there is no value or 0.",
+            "next_location": next_location.get("name"),
+            "on_moon": uexApi.get_satellite_name(next_location.get("satellite")),
+            "on_planet": uexApi.get_planet_name(next_location.get("planet")),
+            "in_city": uexApi.get_city_name(next_location.get("city")),
+            "possible_threads": next_action.danger,
+            "number_of_packages_to_pickup": pickup_count,
+            "number_of_packages_to_dropoff": dropoff_count,
+            "sell_commodity": uexApi.get_commodity_name(next_action.sell_commodity_code),
+            "buy_commodity": uexApi.get_commodity_name(next_action.buy_commodity_code)
+        }
+    
     def get_mission_ids(self):
         return [mission for mission in self.missions.keys()]
     
     def get_new_mission(self):
+
         delivery_mission: DeliveryMission = self.mission_recognition_service.identify_mission()
         self.missions[delivery_mission.id] = delivery_mission
-        print_debug(delivery_mission.to_json())
+        print_debug(f"new mission: {delivery_mission.to_json()}")
         
-        self.calculate_missions()
+        self.calculate_delivery_route()
+        
+        mission_count, package_count, revenue_sum, location_count, planetary_system_changes = self.get_missions_information()
 
-        self.display_overlay_text(
-            f"New Mission #{delivery_mission.id}:   "
-            f"{delivery_mission.revenue} αUEC   "
-            f"packages: {len(delivery_mission.packages)}"
+        self.overlay.display_overlay_text(
+            f"Total missions: #{mission_count}  "
+            f"for {revenue_sum} αUEC   "
+            f"packages: {package_count}."
         )
 
         # 3 return new mission and active missions + instructions for ai
-        return {"success": "True", 
-                "instructions": "Announce the addition of a new mission by stating its ID. Specify the expected revenue in alpha UEC by writing out the number. Indicate, that you have calculated the best delivery route. Whenever you provide a specific package ID, detail its ID by separating each digit with a space. Inform about the pickup location and the corresponding satellite. Conclude with a cautionary note about potential dangers at the location, such as piracy or other risks, if any. Be creativ how to provide these informations, but make short answers. Most important is the Location Name and the package id.",
-                "missions_count": len(self.missions),
-                "new_mission": json.dumps(delivery_mission.to_json()),
-                "first_location": json.dumps(self.delivery_actions[0].to_GPT_json())}
+        return {
+            "success": "True", 
+            "instructions": "Provide the user with all provided information based on your calculation of the best delivery route considering risk, and least possible location-switches. Do not provide any information, if there is no value or 0.",
+            "missions_count": mission_count,
+            "total_revenue": revenue_sum,
+            "total_packages_to_deliver": package_count,
+            "number_of_locations_to_visit": location_count,
+            "number_of_moons_or_planets_to_visit": planetary_system_changes,
+        }
 
-    def calculate_missions(self):
+    def calculate_delivery_route(self):
         self.delivery_actions = self.delivery_manager.calculate_delivery_route(self.missions)
          
         # CargoRoutePlanner.finde_routes_for_delivery_missions(ordered_delivery_locations, tradeports_data)
@@ -130,25 +273,53 @@ class MissionManager:
        
     def discard_mission(self, mission_id):
         """Discard a specific mission by its ID."""
+        uexApi = UEXApi()
+        
         self.missions.pop(mission_id, None)
         
-        self.calculate_missions()
+        self.calculate_delivery_route()
 
-        self.display_overlay_text(
-            f"Discarded Mission #{mission_id}"
+        pickup_count, dropoff_count = self.get_next_actions()
+        next_action: DeliveryMissionAction = self.delivery_actions[self.current_delivery_action_index]
+        next_location = self.current_delivery_location
+        
+        mission_count, package_count, revenue_sum, location_count, planetary_system_changes = self.get_missions_information()
+
+        self.overlay.display_overlay_text(
+            f"Discarded Mission #{mission_id}   "
+            f"Total missions: #{mission_count}  "
+            f"for {revenue_sum} αUEC   "
+            f"packages: {package_count}. Next Location: {self.delivery_actions[0].location_ref.get('name')}"
         )
         
-        return {"success": "True", 
-                "instructions": "Announce the removal of the given mission. Indicate, that you have recalculated the best delivery route. Whenever you provide a specific package ID, detail its ID by separating each digit with a space. Inform about the pickup location and the corresponding satellite. Conclude with a cautionary note about potential dangers at the location, such as piracy or other risks, if any. Be creativ how to provide these informations, but make short answers. Most important is the Location Name and the package id.",
-                "missions_count": len(self.missions),
-                "deleted_mission_id": mission_id,
-                "first_location": json.dumps(self.delivery_actions[0].to_GPT_json())}
+        return {
+            "success": "True", 
+            "instructions": "Provide the user with all provided information based on your calculation of the best delivery route considering risk, and least possible location-switches. Do not provide any information, if there is no value or 0.",
+            "missions_count": mission_count,
+            "total_revenue": revenue_sum,
+            "total_packages_to_deliver": package_count,
+            "number_of_locations_to_visit": location_count,
+            "number_of_moons_or_planets_to_visit": planetary_system_changes,
+            "next_location": next_location.get("name"),
+            "on_moon": next_location.get("satellite"),
+            "on_planet": next_location.get("planet"),
+            "in_city": next_location.get("city"),
+            "possible_threads": next_action.danger,
+            "number_of_packages_to_pickup": pickup_count,
+            "number_of_packages_to_dropoff": dropoff_count,
+            "sell_commodity": uexApi.get_commodity_name(next_action.sell_commodity_code),
+            "buy_commodity": uexApi.get_commodity_name(next_action.buy_commodity_code)
+        }
 
     def discard_all_missions(self):
         """Discard all missions."""
         number = len(self.missions)
         self.missions.clear()
         self.delivery_actions.clear()
+
+        self.overlay.display_overlay_text(
+            "Discarded all mission, reject them ingame."
+        )
 
         self.save_missions()
         self.save_delivery_route()
@@ -183,6 +354,7 @@ class MissionManager:
                 with open(filename, 'r') as file:
                     data = json.load(file)
                     for mid, mission_data in data.items():
+                        print_debug(f"loading mission: {mission_data}")
                         mission = DeliveryMission()
 
                         # Grundlegende Attribute aktualisieren
@@ -206,6 +378,7 @@ class MissionManager:
                             mission.mission_packages.append(mission_package)
 
                         self.missions[mission.id] = mission  
+                        print_debug(f"loaded mission: {mission.to_json()}")
         except Exception as e:
             print(f"Error loading missions: {e}")
             traceback.print_exc()
@@ -244,109 +417,15 @@ class MissionManager:
 
                             me.partner_action = partner
                             partner.partner_action = me
+                    print_debug("loaded delivery route")
+            else:
+                self.delivery_actions = self.delivery_manager.calculate_delivery_route(self.missions)
+                self.save_delivery_route()
+                print_debug("loading failed: calculated delivery route")
 
         except Exception:
             traceback.print_exc()
-
-    # def create_text_image(self, text, font_path='arial.ttf', font_size=20, text_color='white', glow_color='grey'):
-    #     """Erstellt ein Bild mit Text und Glow-Effekt."""
-    #     font = ImageFont.truetype(font_path, font_size)
-
-    #     # Dummy-Image für Textgröße
-    #     dummy_image = Image.new('RGB', (1, 1))
-    #     draw_dummy = ImageDraw.Draw(dummy_image)
-    #     text_width, text_height = int(draw_dummy.textlength(text, font=font)), font_size
-
-    #     # Erstelle ein neues Image mit transparentem Hintergrund
-    #     text_image = Image.new('RGBA', (text_width + 20, text_height + 20), (255, 255, 255, 0))
-    #     draw = ImageDraw.Draw(text_image)
-
-    #     # Glow-Effekt
-    #     x, y = 10, 10
-    #     for i in range(1, 5):  # Glow-Intensität
-    #         draw.text((x - i, y), text, font=font, fill=(0, 0, 0, 60))  # Links oben
-    #         draw.text((x + i, y), text, font=font, fill=(0, 0, 0, 60))  # Rechts oben
-    #         draw.text((x, y - i), text, font=font, fill=(0, 0, 0, 60))  # Links unten
-    #         draw.text((x, y + i), text, font=font, fill=(0, 0, 0, 60))  # Rechts unten
-
-    #     # Text zeichnen
-    #     draw.text((x, y), text, font=font, fill=text_color)
-
-    #     return text_image
     
-    def create_glow_text_image(self, text, font_path='arial.ttf', font_size=20, transparent_color="gray", text_color='white', glow_color="black"):
-        """Erstellt ein Bild mit Text und Glow-Effekt."""
-        # Erstelle ein Font-Objekt
-        font = ImageFont.truetype(font_path, font_size)
-        
-        # Convert color string to RGB values
-        glow_color_rgb = ImageColor.getrgb(glow_color)
-        glow_color_rgba = (glow_color_rgb[0], glow_color_rgb[1], glow_color_rgb[2], 0)
-
-        # Convert color string to RGB values
-        transparent_color_rgb = ImageColor.getrgb(transparent_color)
-        transparent_color_rgba = (transparent_color_rgb[0], transparent_color_rgb[1], transparent_color_rgb[2], 0)
-
-        # Convert color string to RGB values
-        text_color_rgb = ImageColor.getrgb(text_color)
-        text_color_rgba = (text_color_rgb[0], text_color_rgb[1], text_color_rgb[2], 0)
-
-
-        # Erstelle ein Dummy-Image, um die Textgröße zu bekommen
-        dummy_image = Image.new('RGB', (1, 1))
-        draw_dummy = ImageDraw.Draw(dummy_image)
-        text_width, text_height = int(draw_dummy.textlength(text, font=font)), font_size
-
-        # Erstelle ein neues Image mit transparentem Hintergrund (weiß wird transparent)
-        # colored_bg = Image.new('RGBA', (text_width + 2, text_height + 2), transparent_color_rgba)
-        text_image = Image.new('RGBA', (text_width + 2, text_height + 2), text_color_rgba)
-        
-        # find starting coordinates of the text position
-        text_x = (text_image.width - text_width) / 2
-        text_y = (text_image.height - text_height) / 2
-        
-        draw = ImageDraw.Draw(text_image)
-        
-        
-        # transparency values of text frames
-        transparency_values = [255, 230, 200]
-
-        for i, value in enumerate(transparency_values):
-            glow_color_rgba = (glow_color_rgb[0], glow_color_rgb[1], glow_color_rgb[2], value)
-            draw.text((text_x, text_y), text, glow_color_rgba, font=font, stroke_width=i, spacing=5)
- 
-        draw.text((text_x, text_y), text, text_color_rgb, font=font, stroke_width=0, spacing=5)
-        return text_image
-    
-    def close_window(self, root):
-        """Schließt das Tkinter-Fenster."""
-        root.destroy()
-
-    def display_overlay_text(self, text):
-        active_window = gw.getActiveWindow()
-        if active_window and 'Wingman AI' in active_window.title:
-
-            def create_overlay():
-                transparent_color = "gray"
-                overlay_root = Toplevel(WingmanUI.get_instance())
-                overlay_root.overrideredirect(True)
-                overlay_root.attributes('-topmost', True)
-                overlay_root.attributes("-transparentcolor", transparent_color)
-
-                text_image = self.create_glow_text_image(text=text, transparent_color=transparent_color)
-                photo = ImageTk.PhotoImage(text_image)
-
-                overlay_root.image = photo
-
-                label = Label(overlay_root, image=photo, bg=transparent_color)
-                label.pack()
-
-                overlay_root.geometry("+750+600")
-
-                overlay_root.after(5000, lambda: overlay_root.destroy())
-
-            WingmanUI.enqueue_tkinter_command(create_overlay)
-
     def __str__(self):
         """Return a string representation of all missions."""
         return "\n".join(str(mission) for mission in self.missions.values())

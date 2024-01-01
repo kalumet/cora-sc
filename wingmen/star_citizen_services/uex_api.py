@@ -15,6 +15,13 @@ def print_debug(to_print):
         
 printr = Printr()
 
+CATEGORY_SHIPS = "ships"
+CATEGORY_CITIES = "cities"
+CATEGORY_COMMODITIES = "commodities"
+CATEGORY_TRADEPORTS = "tradeports"
+CATEGORY_PLANETS = "planets"
+CATEGORY_SATELLITES = "satellites"
+
 
 class UEXApi():
 
@@ -40,12 +47,12 @@ class UEXApi():
             self.satellites_max_age = 864000  # 10 days
 
             self.max_ages = {
-                "ships": self.ship_max_age,
-                "cities": self.cities_max_age,
-                "commodities": self.commodities_max_age,
-                "tradeports": self.tradeports_max_age,
-                "planets": self.planets_max_age,
-                "satellites": self.satellites_max_age
+                CATEGORY_SHIPS: self.ship_max_age,
+                CATEGORY_CITIES: self.cities_max_age,
+                CATEGORY_COMMODITIES: self.commodities_max_age,
+                CATEGORY_TRADEPORTS: self.tradeports_max_age,
+                CATEGORY_PLANETS: self.planets_max_age,
+                CATEGORY_SATELLITES: self.satellites_max_age
             }
 
             # Beispiel-Systemcode
@@ -112,37 +119,37 @@ class UEXApi():
         :return: Data either from the file or the API
         """
 
-        category = "ships"
+        category = CATEGORY_SHIPS
         if self._needs_refresh(category):
             ship_data, ship_age = self._fetch_from_file_or_api(category, self.ship_max_age, "ships/")
             self._write_code_mapping_to_file(data=ship_data, category=category, api_value_field='name', export_value_field_name="name", export_code_field_name="code")
             self.data[category] = {"data": ship_data, "age": ship_age}
 
-        category = "cities"
+        category = CATEGORY_CITIES
         if self._needs_refresh(category):
             cities_data, cities_age = self._fetch_from_file_or_api(category, self.cities_max_age, f"cities/system/{self.system_code}/")
             self._write_code_mapping_to_file(data=cities_data, category=category, api_value_field='name', export_value_field_name='name', export_code_field_name='code')
             self.data[category] = {"data": cities_data, "age": cities_age}
 
-        category = "commodities"
+        category = CATEGORY_COMMODITIES
         if self._needs_refresh(category):
             commodities_data, commoties_age = self._fetch_from_file_or_api(category, self.commodities_max_age, "commodities/")
             self._write_code_mapping_to_file(data=commodities_data, category=category, api_value_field='name', export_value_field_name='name', export_code_field_name='code')
             self.data[category] = {"data": commodities_data, "age": commoties_age}
 
-        category = "tradeports"
+        category = CATEGORY_TRADEPORTS
         if self._needs_refresh(category):
             tradeports_data, tradeports_age = self._fetch_from_file_or_api(category, self.tradeports_max_age, f"tradeports/system/{self.system_code}/")
             self._write_code_mapping_to_file(data=tradeports_data, category=category, api_value_field='name_short', export_value_field_name='name', export_code_field_name='code')
             self.data[category] = {"data": tradeports_data, "age": tradeports_age}
 
-        category = "planets"
+        category = CATEGORY_PLANETS
         if self._needs_refresh(category):
             planets_data, planets_age = self._fetch_from_file_or_api(category, self.planets_max_age, f"planets/system/{self.system_code}/")
             self._write_code_mapping_to_file(data=planets_data, category=category, api_value_field='name', export_value_field_name='name', export_code_field_name='code')
             self.data[category] = {"data": planets_data, "age": planets_age}
         
-        category = "satellites"
+        category = CATEGORY_SATELLITES
         if self._needs_refresh(category):
             satellites_data, sattelites_age = self._fetch_from_file_or_api(category, self.satellites_max_age, f"satellites/system/{self.system_code}/")
             self._write_code_mapping_to_file(data=satellites_data, category=category, api_value_field='name', export_value_field_name='name', export_code_field_name='code')
@@ -150,12 +157,12 @@ class UEXApi():
 
         # # Kombinieren aller Daten in einem Dictionary
         # data = {
-        #     "ships": {"data": ship_data, "age": ship_age},
-        #     "cities": {"data": cities_data, "age": cities_age},
-        #     "commodities": {"data": commodities_data, "age": commoties_age},
-        #     "tradeports": {"data": tradeports_data, "age": tradeports_age},
-        #     "planets": {"data": planets_data, "age": planets_age},
-        #     "satellites": {"data": satellites_data, "age": sattelites_age}
+        #     CATEGORY_SHIPS: {"data": ship_data, "age": ship_age},
+        #     CATEGORY_CITIES: {"data": cities_data, "age": cities_age},
+        #     CATEGORY_COMMODITIES: {"data": commodities_data, "age": commoties_age},
+        #     CATEGORY_TRADEPORTS: {"data": tradeports_data, "age": tradeports_age},
+        #     CATEGORY_PLANETS: {"data": planets_data, "age": planets_age},
+        #     CATEGORY_SATELLITES: {"data": satellites_data, "age": sattelites_age}
         # }
 
     def _needs_refresh(self, category):
@@ -263,13 +270,13 @@ class UEXApi():
                             if profit > max_profit:
                                 max_profit = profit
                                 best_trade = {
-                                    "commodity": self.code_mapping.get("commodities", {}).get(commodity_code, ''),
+                                    "commodity": self.code_mapping.get(CATEGORY_COMMODITIES, {}).get(commodity_code, ''),
                                     "buy_at": trade1.get("name_short", ''),
-                                    "buy_satellite": self.code_mapping.get("satellites", {}).get(trade1.get("satellite", ''), ''),
-                                    "buy_planet": self.code_mapping.get("planets", {}).get(trade1.get("planet", ''), ''),
+                                    "buy_satellite": self.code_mapping.get(CATEGORY_SATELLITES, {}).get(trade1.get("satellite", ''), ''),
+                                    "buy_planet": self.code_mapping.get(CATEGORY_PLANETS, {}).get(trade1.get("planet", ''), ''),
                                     "sell_at": trade2.get("name_short", ''),
-                                    "sell_satellite": self.code_mapping.get("satellites", {}).get(trade2.get("satellite", ''), ''),
-                                    "sell_planet": self.code_mapping.get("planets", {}).get(trade2.get("planet", ''), ''),
+                                    "sell_satellite": self.code_mapping.get(CATEGORY_SATELLITES, {}).get(trade2.get("satellite", ''), ''),
+                                    "sell_planet": self.code_mapping.get(CATEGORY_PLANETS, {}).get(trade2.get("planet", ''), ''),
                                     "buy_price": buy_price,
                                     "sell_price": sell_price,
                                     "profit": profit
@@ -309,13 +316,13 @@ class UEXApi():
             return no_route
         
         return {
-            "commodity": self.code_mapping.get("commodities", {}).get(commodity_code, ''),
+            "commodity": self.code_mapping.get(CATEGORY_COMMODITIES, {}).get(commodity_code, ''),
             "buy_at": best_buy.get("name_short", ''),
-            "buy_satellite": self.code_mapping.get("satellites", {}).get(best_buy.get("satellite", ''), ''),
-            "buy_planet": self.code_mapping.get("planets", {}).get(best_buy.get("planet", ''), ''),
+            "buy_satellite": self.code_mapping.get(CATEGORY_SATELLITES, {}).get(best_buy.get("satellite", ''), ''),
+            "buy_planet": self.code_mapping.get(CATEGORY_PLANETS, {}).get(best_buy.get("planet", ''), ''),
             "sell_at": best_sell.get("name_short", ''),
-            "sell_satellite": self.code_mapping.get("satellites", {}).get(best_sell.get("satellite", ''), ''),
-            "sell_planet": self.code_mapping.get("planets", {}).get(best_sell.get("planet", ''), ''),
+            "sell_satellite": self.code_mapping.get(CATEGORY_SATELLITES, {}).get(best_sell.get("satellite", ''), ''),
+            "sell_planet": self.code_mapping.get(CATEGORY_PLANETS, {}).get(best_sell.get("planet", ''), ''),
             "buy_price": min_buy_price,
             "sell_price": max_sell_price,
             "profit": max_sell_price - min_buy_price
@@ -346,10 +353,10 @@ class UEXApi():
             return no_route
         
         return {
-            "commodity": self.code_mapping.get("commodities", {}).get(commodity_code, ''),
+            "commodity": self.code_mapping.get(CATEGORY_COMMODITIES, {}).get(commodity_code, ''),
             "sell_at": best_sell.get("name_short", ''),
-            "sell_satellite": self.code_mapping.get("satellites", {}).get(best_sell.get("satellite", ''), ''),
-            "sell_planet": self.code_mapping.get("planets", {}).get(best_sell.get("planet", ''), ''),
+            "sell_satellite": self.code_mapping.get(CATEGORY_SATELLITES, {}).get(best_sell.get("satellite", ''), ''),
+            "sell_planet": self.code_mapping.get(CATEGORY_PLANETS, {}).get(best_sell.get("planet", ''), ''),
             "sell_price": max_sell_price
         }
 
@@ -380,10 +387,10 @@ class UEXApi():
             return no_route
         
         return {
-            "commodity": self.code_mapping.get("commodities", {}).get(commodity_code, ''),
+            "commodity": self.code_mapping.get(CATEGORY_COMMODITIES, {}).get(commodity_code, ''),
             "sell_at": best_sell.get("name_short", ''),
-            "sell_satellite": self.code_mapping.get("satellites", {}).get(best_sell.get("satellite", ''), ''),
-            "sell_planet": self.code_mapping.get("planets", {}).get(best_sell.get("planet", ''), ''),
+            "sell_satellite": self.code_mapping.get(CATEGORY_SATELLITES, {}).get(best_sell.get("satellite", ''), ''),
+            "sell_planet": self.code_mapping.get(CATEGORY_PLANETS, {}).get(best_sell.get("planet", ''), ''),
             "sell_price": max_sell_price
         }
 
@@ -426,13 +433,13 @@ class UEXApi():
                     if profit > max_profit:
                         max_profit = profit
                         best_trade = {
-                            "commodity": self.code_mapping.get("commodities", {}).get(commodity, ''),
+                            "commodity": self.code_mapping.get(CATEGORY_COMMODITIES, {}).get(commodity, ''),
                             "buy_at": start_trade.get('name_short', ''),
-                            "buy_satellite": self.code_mapping.get("satellites", {}).get(start_trade.get('satellite', ''), ''),
-                            "buy_planet": self.code_mapping.get("planets", {}).get(start_trade.get('planet', ''), ''),
+                            "buy_satellite": self.code_mapping.get(CATEGORY_SATELLITES, {}).get(start_trade.get('satellite', ''), ''),
+                            "buy_planet": self.code_mapping.get(CATEGORY_PLANETS, {}).get(start_trade.get('planet', ''), ''),
                             "sell_at": best_sell_location.get('name_short', ''),
-                            "sell_satellite": self.code_mapping.get("satellites", {}).get(best_sell_location.get('satellite', ''), ''),
-                            "sell_planet": self.code_mapping.get("planets", {}).get(best_sell_location.get('planet', ''), ''),
+                            "sell_satellite": self.code_mapping.get(CATEGORY_SATELLITES, {}).get(best_sell_location.get('satellite', ''), ''),
+                            "sell_planet": self.code_mapping.get(CATEGORY_PLANETS, {}).get(best_sell_location.get('planet', ''), ''),
                             "buy_price": start_trade.get('prices', {}).get(commodity, {}).get('price_buy', 0),
                             "sell_price": best_sell_location.get('prices', {}).get(commodity, {}).get('price_sell', 0),
                             "profit": profit
@@ -442,21 +449,21 @@ class UEXApi():
 
     def _find_location_code(self, location_name) -> str:
         
-        if (location_name in self.name_mapping["planets"]):
-            return self.name_mapping["planets"].get(location_name)
-        if (location_name in self.name_mapping["satellites"]):
-            return self.name_mapping["satellites"].get(location_name)
-        if (location_name in self.name_mapping["cities"]):
-            return self.name_mapping["cities"].get(location_name)
-        if (location_name in self.name_mapping["tradeports"]):
-            return self.name_mapping["tradeports"].get(location_name)
+        if (location_name in self.name_mapping[CATEGORY_PLANETS]):
+            return self.name_mapping[CATEGORY_PLANETS].get(location_name)
+        if (location_name in self.name_mapping[CATEGORY_SATELLITES]):
+            return self.name_mapping[CATEGORY_SATELLITES].get(location_name)
+        if (location_name in self.name_mapping[CATEGORY_CITIES]):
+            return self.name_mapping[CATEGORY_CITIES].get(location_name)
+        if (location_name in self.name_mapping[CATEGORY_TRADEPORTS]):
+            return self.name_mapping[CATEGORY_TRADEPORTS].get(location_name)
         return None
         
     def _find_commodity_code(self, commodity_name) -> str:
         
-        # print_debug(self.name_mapping["commodities"])
-        if (commodity_name in self.name_mapping["commodities"]):
-            return self.name_mapping["commodities"].get(commodity_name)
+        # print_debug(self.name_mapping[CATEGORY_COMMODITIES])
+        if (commodity_name in self.name_mapping[CATEGORY_COMMODITIES]):
+            return self.name_mapping[CATEGORY_COMMODITIES].get(commodity_name)
         
         return None
 
@@ -502,9 +509,48 @@ class UEXApi():
             return self._find_best_sell_price_at_location(self.data['tradeports'].get("data"), self.data['commodities'].get("data"), commodity_code=commodity_code, location_code=location_code)
         return {"success": "False", "message": f"Could not identify commodity {commodity_name}({commodity_code}) or location {location_name}({location_code})"}
     
+    def get_commodity_name(self, code):
+        self._refresh_data()
+        if code in self.code_mapping.get(CATEGORY_COMMODITIES):
+            return self.code_mapping.get(CATEGORY_COMMODITIES).get(code)
+        
+        return code
+    
+    def get_satellite_name(self, code):
+        self._refresh_data()
+    
+        if code in self.code_mapping.get(CATEGORY_SATELLITES):
+            return self.code_mapping.get(CATEGORY_SATELLITES).get(code)
+        
+        return code
+    
+    def get_planet_name(self, code):
+        self._refresh_data()
+    
+        if code in self.code_mapping.get(CATEGORY_PLANETS):
+            return self.code_mapping.get(CATEGORY_PLANETS).get(code)
+        
+        return code
+    
+    def get_city_name(self, code):
+        self._refresh_data()
+    
+        if code in self.code_mapping.get(CATEGORY_CITIES):
+            return self.code_mapping.get(CATEGORY_CITIES).get(code)
+        
+        return code
+    
+    def get_tradeport_name(self, code):
+        self._refresh_data()
+    
+        if code in self.code_mapping.get(CATEGORY_TRADEPORTS):
+            return self.code_mapping.get(CATEGORY_TRADEPORTS).get(code)
+        
+        return code
+
     def get_tradeports(self):
         self._refresh_data()
-        category = "tradeports"
+        category = CATEGORY_TRADEPORTS
         return self.data[category].get("data", [])
     
     def get_data(self, category):

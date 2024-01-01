@@ -8,7 +8,7 @@ from wingmen.star_citizen_services.model.mission_action import DeliveryMissionAc
 from wingmen.star_citizen_services.model.mission_package import MissionPackage
 
 
-DEBUG = False
+DEBUG = True
 
 
 def print_debug(to_print):
@@ -121,21 +121,25 @@ class PackageDeliveryPlanner:
 
         print_debug("\n##### PLANNING ROUTE #####")
         while actions_list:
-            current_action = heapq.heappop(actions_list)
+            current_action = heapq.heappop(actions_list)  # entfernt wird die aktion mit der derzeitig höchsten Priorität, in der ersten iteration eine pickup action
 
+            # da wir ein paket abgeholt haben, aktualisieren wir jetzt die Prioritäten, da wir, sofern sinnvoll, Pakete auf dem gleichen Mond bevorzugen
+            # allerdings wollen wir riskante Orte dadurch nicht zu stark nach hinten schieben, daher ist dieser faktor immer kleiner als gefährliche aktionen
             self.prioritize_remaining_list(actions_list, current_action, last_action)
+
+            last_action = current_action
 
             print_debug(f"planning action {current_action}")
 
+            # wir dürfen ein paket erst abliefern, wenn es auch schon aufgehoben wurde, was hier geprüft wird
             skip = self.check_postpone_dropoff_or_add_pickup(picked_up, current_action)
             if skip:
                 print_debug(f"    postponing: {current_action}")
                 postponed_actions.append(current_action)  # dropoff action before corresponding pickup
                 continue
             
-            current_action.index = index
-            route.append(current_action)
-            index += 1
+            location_route = []
+            location_route.append(current_action)
 
             # Zusätzliche Schleife, um alle verfügbaren Pakete am aktuellen Ort zu sammeln
             collect_more = True
@@ -150,19 +154,18 @@ class PackageDeliveryPlanner:
                         # Entferne das gefundene Element aus dem Heap
                         actions_list.pop(i)
 
-                        action.index = index
-                        route.append(action)
-                        index += 1
+                        location_route.append(action)
 
                         removed_action = action
                         collect_more = True
-                        break  # wir müssen die "action_list neu initialisieren, da sie jetzt kürzer ist"
-
+                        break  
+                    
+                # wir müssen die "action_list neu initialisieren, da sie jetzt kürzer ist"
                 if removed_action:
                     for action in actions_list:
                         action.reduce_priority_if_required(removed_action)
                     removed_action = None
-            
+
             drop_more = True
             while drop_more:  # check if we can drop packages here independent of priority
                 drop_more = False
@@ -174,9 +177,7 @@ class PackageDeliveryPlanner:
                         if drop: # Entferne das gefundene Element aus dem Heap
                             actions_list.pop(i)
                             
-                            action.index = index
-                            route.append(action)
-                            index += 1
+                            location_route.insert(0, action)  # wenn wir am gleichen Ort pakete abliefern können, bevorzugen wir das als erste aktion, also setzen wir das am anfang
 
                             removed_action = action
                             drop_more = True
@@ -186,8 +187,12 @@ class PackageDeliveryPlanner:
                     for action in actions_list:
                         action.reduce_priority_if_required(removed_action)
                     removed_action = None
-            
-            last_action = current_action
+                        
+            # jetzt müssen wir die aufgebaute liste des ortes in unsere route einbauen und die indizes entsprechen setzen
+            for action in location_route:
+                action.index = index
+                index += 1
+                route.append(action)
 
             if len(postponed_actions) > 0:  # we processed all lists, but we postponed dropoff-actions ...
                 retry_delivery = set()
@@ -283,22 +288,16 @@ class PackageDeliveryPlanner:
                 prio += 75
 
             if dangerous:
-                # make sure, that the partner package becomes the same priority. Both location should be close together to avoid high risk
-                # even if it means to be less efficient in the travel.
-                if mission_action.partner_action.action == "dropoff":
-                    mission_action.partner_action.action_priority = prio - 1
-                else:
+                # our location is dangerous. If we are dropoff action, we want to pickup our package as early as possible:
+                if mission_action.action == "dropoff":
                     mission_action.partner_action.action_priority = prio + 1
-                print_debug(f"overwrite partner {mission_action.partner_action}")
+                    print_debug(f"overwrite partner {mission_action.partner_action}")
                 mission_action.danger = True
-            else:  # we need to check, if our partner is a dangerous location
-                if mission_action.partner_action.danger:
-                    prio = mission_action.partner_action.action_priority
-                    if mission_action.partner_action.action == "pickup":
-                        prio -= 1
-                    else:
-                        mission_action.partner_action.action_priority = prio + 1
-                        print_debug(f"using partner priority {mission_action.partner_action} ")
+            # else:  
+            #     # if our partner is a dropoff action and dangerous, our priority must be higher
+            #     if mission_action.partner_action.danger and mission_action.partner_action.action == "dropoff":
+            #         prio = mission_action.partner_action.action_priority + 1
+            #         print_debug(f"using partner priority {mission_action.partner_action} ")
                 
             mission_action.action_priority = prio
 
@@ -379,22 +378,16 @@ class PackageDeliveryPlanner:
                 prio += 75
 
             if dangerous:
-                # make sure, that the partner package becomes the same priority. Both location should be close together to avoid high risk
-                # even if it means to be less efficient in the travel.
-                if mission_action.partner_action.action == "dropoff":
-                    mission_action.partner_action.action_priority = prio - 1
-                else:
+                # our location is dangerous. If we are dropoff action, we want to pickup our package as early as possible:
+                if mission_action.action == "dropoff":
                     mission_action.partner_action.action_priority = prio + 1
-                print_debug(f"overwrite partner {mission_action.partner_action}")
+                    print_debug(f"overwrite partner {mission_action.partner_action}")
                 mission_action.danger = True
-            else:  # we need to check, if our partner is a dangerous location
-                if mission_action.partner_action.danger:
-                    prio = mission_action.partner_action.action_priority
-                    if mission_action.partner_action.action == "pickup":
-                        prio -= 1
-                    else:
-                        mission_action.partner_action.action_priority = prio + 1
-                        print_debug(f"using partner priority {mission_action.partner_action} ")
+            # else:  
+            #     # if our partner is a dropoff action and dangerous, our priority must be higher
+            #     if mission_action.partner_action.danger and mission_action.partner_action.action == "dropoff":
+            #         prio = mission_action.partner_action.action_priority + 1
+            #         print_debug(f"using partner priority {mission_action.partner_action} ")
                 
             print_debug(f"action: {mission_action} -> new prio = {prio}")
             mission_action.action_priority = prio

@@ -1,22 +1,24 @@
 import json
 from enum import Enum
 import time
+import traceback
 from difflib import SequenceMatcher
 from elevenlabs import generate, stream, Voice, voices
-from wingmen.open_ai_wingman import OpenAiWingman
-from wingmen.star_citizen_services.keybindings import SCKeybindings
-from wingmen.star_citizen_services.uex_api import UEXApi
-from wingmen.star_citizen_services.mission_manager import MissionManager
 from services.printr import Printr
 from services.secret_keeper import SecretKeeper
+from wingmen.open_ai_wingman import OpenAiWingman
 
+from wingmen.star_citizen_services.keybindings import SCKeybindings
+from wingmen.star_citizen_services.uex_api import UEXApi
+from wingmen.star_citizen_services.mission_manager import MissionManager  
+from wingmen.star_citizen_services.overlay import StarCitizenOverlay
 
 DEBUG = False
 
 
 def print_debug(to_print):
     if DEBUG:
-        print_debug(to_print)
+        print(to_print)
 
 
 printr = Printr()
@@ -87,10 +89,13 @@ class StarCitizenWingman(OpenAiWingman):
         self.uex_service: UEXApi = None  # set in validate()
         self.mission_manager_service: MissionManager = None # initialized in validate()
         self.tdd_voice = "onyx"
+        self.messages_buffer = 10
+        self.current_tools = self._get_context_tools(self.current_context)
         self.config["openai"]["tts_voice"] = self.config["openai"]["contexts"]["cora_voice"]
         self.config["sound"]["play_beep"] = False
         self.config["sound"]["effects"] = ["INTERIOR_HELMET", "ROBOT"]
         self.config["openai"]["conversation_model"] = self.config["openai"]["contexts"][f"context-{self.AIContext.CORA.name}"]["conversation_model"]
+        self.overlay = StarCitizenOverlay()
         
         # init the configuration dynamically based on current star citizen settings.
         # the config is dynamically expanded for all mapped keybinds.
@@ -109,12 +114,17 @@ class StarCitizenWingman(OpenAiWingman):
                 "Missing 'uex' API key. Please provide a valid key in the settings."
             )
         else:
-             # every conversation starts with the "context" that the user has configured
-            self.uex_service = UEXApi.init(uex_api_key)
-            self.mission_manager_service = MissionManager(config=self.config)
-            self._set_current_context(self.AIContext.CORA, new=True)
+            try:
+                # every conversation starts with the "context" that the user has configured
+                self.uex_service = UEXApi.init(uex_api_key)
+                self.mission_manager_service = MissionManager(config=self.config)
+                self._set_current_context(self.AIContext.CORA, new=True)
 
-            # self.mission_manager_service.get_new_mission()  # TODO nur ein Test
+                # self.mission_manager_service.get_new_mission()  # TODO nur ein Test
+            except Exception as e:
+                print(e)
+                traceback.print_exc()
+                errors.append(f"Initialisation Error: {e}. Check console for more information")
 
     def _set_current_context(self, new_context: AIContext, new: bool = False):
         """Set the current context to the specified context name."""
@@ -127,13 +137,25 @@ class StarCitizenWingman(OpenAiWingman):
             context_prompt = f'{self.config["openai"]["contexts"].get(f"context-{new_context.name}")}'
             context_switch_prompt = ""
             if new_context == self.AIContext.CORA:
-                context_prompt += f' The character you are supporting is named "{self.config["openai"]["player_name"]}". His title is {self.config["openai"]["player_title"]}. His ship call id is {self.config["openai"]["ship_name"]}. He wants you to respond in {self.config["sc-keybind-mappings"]["player_language"]}'
-                context_switch_prompt += " If the current user request does not fit the current context, switch to an appropriate context by calling the switch_context function. Do not switch, if the player adresses you by 'Cora'. Only switch context, if the request is trading related."
+                context_prompt += (
+                    f' The character you are supporting is named "{self.config["openai"]["player_name"]}". '
+                    f'His title is {self.config["openai"]["player_title"]}. His ship call id is {self.config["openai"]["ship_name"]}. '
+                    f'He wants you to respond in {self.config["sc-keybind-mappings"]["player_language"]}'
+                )
+                
+                context_switch_prompt += f" Only switch to context {self.AIContext.TDD}, if the request is calling a specific Trading Devion, like 'Hurston Trading Division, this is Delta 7, Over'."
 
             if new_context == self.AIContext.TDD:
-                context_switch_prompt += " Whenever the player adresses a new Trading Devision Location, switch the employee by calling the function switch_tdd_employee and select a different employee_id. If the current user request does not fit the current context, switch to an appropriate context by calling the switch_context function. Do switch, if the requests adresses 'Cora' or using words like 'computer' or demanding an action."
+                context_switch_prompt += (
+                    f" Whenever the player adresses a new Trading Devision Location, switch the employee "
+                    f"by calling the function switch_tdd_employee and select a different employee_id. "
+                    f"If the current user request does not fit the current context, switch to an appropriate context "
+                    f"by calling the switch_context function. Do switch to context {self.AIContext.CORA}, "
+                    f"if the requests adresses 'Cora' or using words like 'computer' or demanding a specific player or ship action or mission related actions. "
+                    f'He wants you to respond in {self.config["sc-keybind-mappings"]["player_language"]}'
+                )
 
-            self.messages = [{"role": "system", "content": f'{context_prompt}. On a request of the Player you will identify the context of his request. Valid contexts are: Player or Ship Actions executed by the AI companion ({self.AIContext.CORA.value}), for all requests related to player actions to be executed for the player. Trade and Development Division ({self.AIContext.TDD.value}) personel, for all requests related to Trading. The current context is: {new_context.value}. {context_switch_prompt}'}]
+            self.messages = [{"role": "system", "content": f'{context_prompt}. On a request of the Player you will identify the context of his request. The current context is: {new_context.value}. You can switch context to: {context_switch_prompt}'}]
         else:
             # get the saved context history
             tmp_new_context_history = self.contexts_history[new_context]
@@ -142,7 +164,7 @@ class StarCitizenWingman(OpenAiWingman):
             self.current_context = new_context
 
         if new_context == self.AIContext.CORA:
-            self.messages_buffer = 10 # making player Actions does not require much historical buffer
+            self.messages_buffer = 10 # we don't need much memory for a given action
             self.current_tools = self._get_context_tools(current_context=new_context)  # recalculate tools
         elif new_context == self.AIContext.TDD:
             self.messages_buffer = 20 # dealing on the journey of the player to trade might require more context-information in the conversation
@@ -343,28 +365,88 @@ class StarCitizenWingman(OpenAiWingman):
             return json.dumps({"success":"True"}), None
         
         if function_name == "find_best_trade_route_from_location":
-            function_response = json.dumps(self.uex_service.find_best_trade_from_location(location_name=function_args["location_name"]))
+            function_response = self.uex_service.find_best_trade_from_location(location_name=function_args["location_name"])
+            # best_trade = {
+            #                 "commodity": self.code_mapping.get(CATEGORY_COMMODITIES, {}).get(commodity, ''),
+            #                 "buy_at": start_trade.get('name_short', ''),
+            #                 "buy_satellite": self.code_mapping.get(CATEGORY_SATELLITES, {}).get(start_trade.get('satellite', ''), ''),
+            #                 "buy_planet": self.code_mapping.get(CATEGORY_PLANETS, {}).get(start_trade.get('planet', ''), ''),
+            #                 "sell_at": best_sell_location.get('name_short', ''),
+            #                 "sell_satellite": self.code_mapping.get(CATEGORY_SATELLITES, {}).get(best_sell_location.get('satellite', ''), ''),
+            #                 "sell_planet": self.code_mapping.get(CATEGORY_PLANETS, {}).get(best_sell_location.get('planet', ''), ''),
+            #                 "buy_price": start_trade.get('prices', {}).get(commodity, {}).get('price_buy', 0),
+            #                 "sell_price": best_sell_location.get('prices', {}).get(commodity, {}).get('price_sell', 0),
+            #                 "profit": profit
+            #             }
+            if not function_response.get("success", None):
+                moon_or_planet_buy = function_response["buy_satellite"] if function_response["buy_satellite"] else function_response["buy_planet"]
+                moon_or_planet_sell = function_response["sell_satellite"] if function_response["sell_satellite"] else function_response["sell_planet"]
+                self.overlay.display_overlay_text(
+                    f'Buy {function_response["commodity"]} at {function_response["buy_at"]} ({moon_or_planet_buy}). '
+                    f'Sell at {function_response["sell_at"]} ({moon_or_planet_sell}).'    
+                )
+            function_response = json.dumps(function_response)
             printr.print(f'-> Resultat: {function_response}', tags="info") 
 
         if function_name == "find_best_trade_route_between_locations":
-            function_response = json.dumps(self.uex_service.find_best_trade_between_locations(location_name1=function_args["location_name_from"], location_name2=function_args["location_name_to"]))
+            function_response = self.uex_service.find_best_trade_between_locations(location_name1=function_args["location_name_from"], location_name2=function_args["location_name_to"])
+            if not function_response.get("success", None):
+                moon_or_planet_buy = function_response["buy_satellite"] if function_response["buy_satellite"] else function_response["buy_planet"]
+                moon_or_planet_sell = function_response["sell_satellite"] if function_response["sell_satellite"] else function_response["sell_planet"]
+                self.overlay.display_overlay_text(
+                    f'Buy {function_response["commodity"]} at {function_response["buy_at"]} ({moon_or_planet_buy}). '
+                    f'Sell at {function_response["sell_at"]} ({moon_or_planet_sell}).'    
+                )
+            function_response = json.dumps(function_response)
             printr.print(f'-> Resultat: {function_response}', tags="info")
 
         if function_name == "find_best_sell_price_for_commodity_at_location":
-            function_response = json.dumps(self.uex_service.find_best_sell_price_at_location(location_name=function_args["location_name_to"], commodity_name=function_args["commodity_name"]))
+            function_response = self.uex_service.find_best_sell_price_at_location(location_name=function_args["location_name_to"], commodity_name=function_args["commodity_name"])
+            # "commodity": self.code_mapping.get(CATEGORY_COMMODITIES, {}).get(commodity_code, ''),
+            # "sell_at": best_sell.get("name_short", ''),
+            # "sell_satellite": self.code_mapping.get(CATEGORY_SATELLITES, {}).get(best_sell.get("satellite", ''), ''),
+            # "sell_planet": self.code_mapping.get(CATEGORY_PLANETS, {}).get(best_sell.get("planet", ''), ''),
+            # "sell_price": max_sell_price
+            if not function_response.get("success", None):
+                moon_or_planet_sell = function_response["sell_satellite"] if function_response["sell_satellite"] else function_response["sell_planet"]
+                self.overlay.display_overlay_text(
+                    f'Sell {function_response["commodity"]} at {function_response["sell_at"]} ({moon_or_planet_sell}) for {function_response["sell_price"]} aUEC.'    
+                )
+            function_response = json.dumps(function_response)
             printr.print(f'-> Resultat: {function_response}', tags="info")
 
         if function_name == "find_best_trade_route_for_commodity":
-            function_response = json.dumps(self.uex_service.find_best_trade_for_commodity(commodity_name=function_args["commodity_name"]))
+            function_response = self.uex_service.find_best_trade_for_commodity(commodity_name=function_args["commodity_name"])
+            if not function_response.get("success", None):
+                moon_or_planet_buy = function_response["buy_satellite"] if function_response["buy_satellite"] else function_response["buy_planet"]
+                moon_or_planet_sell = function_response["sell_satellite"] if function_response["sell_satellite"] else function_response["sell_planet"]
+                self.overlay.display_overlay_text(
+                    f'Buy {function_response["commodity"]} at {function_response["buy_at"]} ({moon_or_planet_buy}). '
+                    f'Sell at {function_response["sell_at"]} ({moon_or_planet_sell}).'    
+                )
+            function_response = json.dumps(function_response)
             printr.print(f'-> Resultat: {function_response}', tags="info")
 
         if function_name == "find_best_selling_location_for_commodity":
-            function_response = json.dumps(self.uex_service.find_best_selling_location_for_commodity(commodity_name=function_args["commodity_name"]))
+            function_response = self.uex_service.find_best_selling_location_for_commodity(commodity_name=function_args["commodity_name"])
+            if not function_response.get("success", None):
+                moon_or_planet_sell = function_response["sell_satellite"] if function_response["sell_satellite"] else function_response["sell_planet"]
+                self.overlay.display_overlay_text(
+                    f'Sell {function_response["commodity"]} at {function_response["sell_at"]} ({moon_or_planet_sell}) for {function_response["sell_price"]} aUEC.'    
+                )
+            function_response = json.dumps(function_response)
             printr.print(f'-> Resultat: {function_response}', tags="info")
 
         if function_name == "box_delivery_mission_management":
             mission_id = function_args.get("mission_id", None)
+            printr.print(f'-> Box Function: {function_args["type"]}', tags="info")
             function_response = json.dumps(self.mission_manager_service.manage_missions(type=function_args["type"], mission_id=mission_id))
+            printr.print(f'-> Resultat: {function_response}', tags="info")
+            self.current_tools = self._get_cora_tools()  # recalculate, as with every box mission, we have new information for the function call
+
+        if function_name == "next_location_on_delivery_route_for_box_or_delivery_missions":
+            printr.print('-> Command: get next delivery route location')
+            function_response = json.dumps(self.mission_manager_service.manage_missions(type="get_first_or_next_location_on_delivery_route"))
             printr.print(f'-> Resultat: {function_response}', tags="info")
             self.current_tools = self._get_cora_tools()  # recalculate, as with every box mission, we have new information for the function call
 
@@ -601,33 +683,50 @@ class StarCitizenWingman(OpenAiWingman):
         return tools
     
     def _get_box_mission_tool(self):
+
+        if self.mission_manager_service is None:
+            print_debug("not yet initialised")
+            return []
         
         mission_ids = self.mission_manager_service.get_mission_ids()
         if len(mission_ids) > 0:
-            tools = {
-                "type": "function",
-                "function": {
-                    "name": "box_delivery_mission_management",
-                    "description": "Allows the player to add a new box mission, to delete a specific mission, to delete all missions or to get information about the next location he has to travel to",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "type": {
-                                "type": "string",
-                                "description": "The type of operation that the player wants to execute",
-                                "enum": ["new", "delete_all", "delete_mission_id", "next_location"]
-                            },
-                            "mission_id": {
-                                "type": "string",
-                                "description": "The id of the mission, the player wants to delete",
-                                "enum": mission_ids
+            tools = [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "box_delivery_mission_management",
+                        "description": "Allows the player to add a new box mission, to delete a specific mission, to delete all missions or to get information about the next location he has to travel to",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "type": {
+                                    "type": "string",
+                                    "description": "The type of operation that the player wants to execute",
+                                    "enum": ["new_delivery_mission", "delete_or_discard_all_missions", "delete_or_discard_one_mission_with_id"]
+                                },
+                                "mission_id": {
+                                    "type": "string",
+                                    "description": "The id of the mission, the player wants to delete",
+                                    "enum": mission_ids
+                                }
                             }
                         }
                     }
-                }
-            }
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "next_location_on_delivery_route_for_box_or_delivery_missions",
+                        "description": (
+                            "Identifies the next location where to pickup or drop boxes according to the calculated delivery route for the active delivery missions. "
+                            "Always execute this function, if the user ask to get the next location. Do not call this function, if the user want's to have details about the current location."
+                        ),
+                    }
+                },
+            ]
         else:
-            tools = {
+            tools = [
+                {
                     "type": "function",
                     "function": {
                         "name": "box_delivery_mission_management",
@@ -638,18 +737,19 @@ class StarCitizenWingman(OpenAiWingman):
                                 "type": {
                                     "type": "string",
                                     "description": "The type of operation that the player wants to execute",
-                                    "enum": ["new"]
+                                    "enum": ["new_delivery_mission"]
                                 }
                             }
                         }
                     }
                 }
+            ]
         return tools
     
     def _get_cora_tools(self) -> list[dict]:
         tools = []
         tools.append(self._get_keybinding_commands())
-        tools.append(self._get_box_mission_tool())
+        tools.extend(self._get_box_mission_tool())
         tools.append(self._context_switch_tool(current_context=self.AIContext.CORA))
         return tools
     

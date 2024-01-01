@@ -14,8 +14,8 @@ import wingmen.star_citizen_services.text_analyser as text_analyser
 from wingmen.star_citizen_services.location_name_matching import LocationNameMatching
 
 
-DEBUG = True
-TEST = True
+DEBUG = False
+TEST = False
 
 
 def print_debug(to_print):

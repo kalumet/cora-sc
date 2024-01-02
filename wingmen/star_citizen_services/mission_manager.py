@@ -78,6 +78,7 @@ class MissionManager:
                     print_debug(f"found start at index: {index}")
                     start_index = index
                     current_location = self.delivery_actions[index].location_ref
+                    self.mission_started = True
 
                 if current_location and action.location_ref.get("code") != current_location.get("code"):
                     print_debug("changed location, finished")

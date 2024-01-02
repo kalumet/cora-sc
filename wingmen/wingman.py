@@ -20,6 +20,8 @@ except AttributeError:
     # )
     import pyautogui as key_module
 
+DEBUG = True
+
 
 class Wingman(FileCreator):
     """The "highest" Wingman base class in the chain. It does some very basic things but is meant to be 'virtual', and so are most its methods, so you'll probably never instantiate it directly.
@@ -368,11 +370,11 @@ class Wingman(FileCreator):
         active_modifiers = []
 
         for entry in keys:
-            if self.debug:
+            if self.debug or DEBUG:
                 printr.print(entry,console_only=True)
             key = entry["key"]
             if entry.get("modifier"):
-                if self.debug:
+                if self.debug or DEBUG:
                     printr.print(f'down {entry.get("modifier")}',console_only=True)
                 key_module.keyDown(entry.get("modifier"))
             
@@ -380,39 +382,39 @@ class Wingman(FileCreator):
                 modifiers = entry.get("modifiers").split(",")
                 modifiers = sorted(modifiers, key=lambda x: modifier_order.index(x) if x in modifier_order else len(modifier_order))
                 for modifier in modifiers:
-                    if self.debug:
+                    if self.debug or DEBUG:
                         printr.print(f"modifier down {modifier}",console_only=True)
                     key_module.keyDown(modifier)
                     active_modifiers.insert(0, modifier)  # we build a reverse list, as we want to release in the opposite order
                     
             if entry.get("hold"):
-                if self.debug:
+                if self.debug or DEBUG:
                     printr.print(f"press and hold{entry['hold']}: {modifier}",console_only=True)
                 key_module.keyDown(key)
                 time.sleep(entry["hold"])
                 key_module.keyUp(key)
             elif entry.get("typewrite"):  # added very buggy, as it is keyboard-layout sensitive :(
-                if self.debug:
+                if self.debug or DEBUG:
                     printr.print(f"typewrite: {entry.get('typewrite')}",console_only=True)
-                key_module.typewrite(entry["typewrite"], interval=0.1)
+                key_module.typewrite(entry["typewrite"], interval=0.01)
             else:
-                if self.debug:
+                if self.debug or DEBUG:
                     printr.print(f'press {key}',console_only=True)
                 key_module.press(key, interval=0.005)
 
             if entry.get("modifier"):
-                if self.debug:
+                if self.debug or DEBUG:
                     printr.print(f'down {entry.get("modifier")}',console_only=True)
                 key_module.keyUp(entry.get("modifier"))
 
             if len(active_modifiers) > 0:
                 for modifier in active_modifiers:
-                    if self.debug:
+                    if self.debug or DEBUG:
                         printr.print(f"modifier up {modifier}",console_only=True)
                     key_module.keyUp(modifier)
 
             if entry.get("wait"):
-                if self.debug:
+                if self.debug or DEBUG:
                     printr.print(f"waiting {entry.get('wait')}",console_only=True)
                 time.sleep(entry["wait"])
 

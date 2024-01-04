@@ -27,11 +27,12 @@ class SCKeybindings():
         self.user_keybinding_file_name = self.config["sc-keybind-mappings"]["user_keybinding_file_name"]
         self.sc_active_channel = self.config["sc-keybind-mappings"]["sc_active_channel"]
         self.sc_channel_version = self.config["sc-keybind-mappings"]["sc_channel_version"]
+        self.en_translation_file = self.config["sc-keybind-mappings"]["en_translation_file"]
         user_keybinding_file_config = f"{self.sc_installation_dir}/{self.sc_active_channel}/USER/Client/0/Controls/Mappings/{self.user_keybinding_file_name}"
         self.user_keybinding_file = user_keybinding_file_config.format(sc_channel_version=self.sc_channel_version)
         self.default_keybinds_file = f'{self.data_root_path}/{self.sc_channel_version}/{self.config["sc-keybind-mappings"]["sc_unp4k_file_default_keybindings_filter"]}'
         self.keybindings_localization_file = f'{self.data_root_path}/{self.sc_channel_version}/{self.config["sc-keybind-mappings"]["sc_unp4k_file_keybinding_localization_filter"]}'
-        self.sc_translations_en = f"{self.data_root_path}/{self.sc_channel_version}/global.ini"
+        self.sc_translations_en = f"{self.data_root_path}/{self.sc_channel_version}/{self.en_translation_file}"
         self.player_language = self.config["sc-keybind-mappings"]["player_language"]
         self.sc_translations_player_language = f"{self.data_root_path}/{self.sc_channel_version}/global_{self.player_language}.ini"
         self.keybind_categories_to_ignore = set(self.config["keybind_categories_to_ignore"])

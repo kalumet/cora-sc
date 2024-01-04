@@ -57,16 +57,17 @@ class StarCitizenOverlay:
         draw_dummy = ImageDraw.Draw(dummy_image)
         text_width, text_height = int(draw_dummy.textlength(text, font=font)), font_size
 
+        print_debug(f'text width: {text_width} height: {text_height}')
+
         # Erstelle ein neues Image mit transparentem Hintergrund (weiß wird transparent)
         # colored_bg = Image.new('RGBA', (text_width + 2, text_height + 2), transparent_color_rgba)
-        text_image = Image.new('RGBA', (text_width + 2, text_height + 2), text_color_rgba)
+        text_image = Image.new('RGBA', (text_width + 5, text_height + 4), text_color_rgba)
         
         # find starting coordinates of the text position
         text_x = (text_image.width - text_width) / 2
         text_y = (text_image.height - text_height) / 2
         
         draw = ImageDraw.Draw(text_image)
-        
         
         # transparency values of text frames
         transparency_values = [255, 230, 200]
@@ -103,18 +104,25 @@ class StarCitizenOverlay:
 
             overlay_label = Label(overlay_root, image=photo, bg=transparent_color)
             overlay_label.pack()
+
+            overlay_root.update()
           
             # Fenstergröße
             window_width = overlay_root.winfo_width()
             window_height = overlay_root.winfo_height()
 
+            print_debug(f'screen width: {self.screen_width} height: {self.screen_height}')
+            print_debug(f'overlay width: {window_width} overlay: {window_height}')
+
             # Berechne die Position
             x_position = (self.screen_width - window_width) // 2
             y_position = self.screen_height // vertical_position_ratio - window_height // 2
 
+            print_debug(f'overlay pos x: {x_position} y: {y_position}')
+
             # Center the overlay horizontally
             overlay_root.geometry(f"+{x_position}+{y_position}")
-            overlay_root.after(7000, lambda: close_overlay(overlay_root))
+            overlay_root.after(15000, lambda: close_overlay(overlay_root))
 
             self.overlay_root = overlay_root
 

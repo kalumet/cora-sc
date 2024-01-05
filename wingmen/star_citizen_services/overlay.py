@@ -1,8 +1,7 @@
 import time
 from tkinter import Tk, Label, Toplevel
 from PIL import Image, ImageTk, ImageDraw, ImageFont, ImageColor
-import pygetwindow as gw
-import threading
+from screeninfo import get_monitors
 
 from gui.root import WingmanUI  
 
@@ -22,13 +21,12 @@ class StarCitizenOverlay:
         self.overlay_root = None
         self.overlay_label = None
         self.new_text = True
+        self.screen_width = None
+        self.screen_height = None
 
         # Erstelle ein temporäres Fenster, um Bildschirmabmessungen zu erhalten
-        temp_root = Tk()
-        self.screen_width = temp_root.winfo_screenwidth()
-        self.screen_height = temp_root.winfo_screenheight()
-        temp_root.destroy()
-
+        self.screen_width, self.screen_height = self.get_primary_monitor_resolution()
+          
         if TEST:
             # self.display_overlay_text("Test 1: kurz")
             # time.sleep(8)
@@ -106,7 +104,7 @@ class StarCitizenOverlay:
             overlay_label.pack()
 
             overlay_root.update()
-          
+
             # Fenstergröße
             window_width = overlay_root.winfo_width()
             window_height = overlay_root.winfo_height()
@@ -132,3 +130,11 @@ class StarCitizenOverlay:
             self.overlay_shown = False
 
         WingmanUI.enqueue_tkinter_command(create_overlay)
+
+    def get_primary_monitor_resolution(self):
+        monitors = get_monitors()
+        if monitors:
+            primary_monitor = monitors[0]  # Erster Monitor in der Liste
+            return primary_monitor.width, primary_monitor.height
+        else:
+            return None

@@ -9,7 +9,7 @@ DEBUG = False
 
 def print_debug(to_print):
     if DEBUG:
-        print_debug(to_print)
+        print(to_print)
 
 
 class SCKeybindings():

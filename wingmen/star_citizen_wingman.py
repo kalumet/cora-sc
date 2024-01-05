@@ -230,11 +230,15 @@ class StarCitizenWingman(OpenAiWingman):
         self.last_transcript_locale = locale
         self.current_user_request = transcript
 
-        instant_response = self._execute_instant_activation_command(transcript)
+        # instant_response = self._execute_instant_activation_command(transcript)
+        # if instant_response:
+        #     return instant_response, instant_response
+        # if instant_response is False:
+        #     return False, False
+
+        instant_response = self._try_instant_activation(transcript)  # we try instant activation, else we let gpt decide
         if instant_response:
             return instant_response, instant_response
-        if instant_response is False:
-            return False, False
 
         self._add_user_message(transcript)
         response_message, tool_calls = self._make_gpt_call()

@@ -10,7 +10,7 @@ import requests
 
 from services.secret_keeper import SecretKeeper
 
-DEBUG = True
+DEBUG = False
 
 
 def print_debug(to_print):

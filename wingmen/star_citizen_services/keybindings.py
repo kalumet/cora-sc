@@ -2,9 +2,15 @@ import xml.etree.ElementTree as ET
 import csv
 import json
 import re
+import json
+import traceback
+import os
+import copy
+import requests
 
+from services.secret_keeper import SecretKeeper
 
-DEBUG = False
+DEBUG = True
 
 
 def print_debug(to_print):
@@ -14,19 +20,19 @@ def print_debug(to_print):
 
 class SCKeybindings():
 
-    def __init__(self, config: dict[str, any]):
+    def __init__(self, config: dict[str, any], secret_keeper: SecretKeeper):
         self.config = config
         
         self.data_root_path = f'{self.config["data-root-directory"]}{self.config["sc-keybind-mappings"]["keybindings-directory"]}'
-        self.json_path = f"{self.data_root_path}/keybindings_existing.json"
-        self.json_path_miss = f"{self.data_root_path}/keybindings_missing.json"
-        self.json_path_knowledge = f"{self.data_root_path}/keybindings_existing_knowledge.json"
-        self.json_path_miss_knowledge = f"{self.data_root_path}/keybindings_missing_knowledge.json"
-        self.keybindings: dict = None # will be filled on first access
         self.sc_installation_dir = self.config["sc-keybind-mappings"]["sc_installation_dir"]
         self.user_keybinding_file_name = self.config["sc-keybind-mappings"]["user_keybinding_file_name"]
         self.sc_active_channel = self.config["sc-keybind-mappings"]["sc_active_channel"]
         self.sc_channel_version = self.config["sc-keybind-mappings"]["sc_channel_version"]
+        self.json_path = f"{self.data_root_path}{self.sc_channel_version}/keybindings_existing.json"
+        self.json_path_miss = f"{self.data_root_path}{self.sc_channel_version}/keybindings_missing.json"
+        self.json_path_knowledge = f"{self.data_root_path}{self.sc_channel_version}/keybindings_existing_knowledge.json"
+        self.json_path_miss_knowledge = f"{self.data_root_path}{self.sc_channel_version}/keybindings_missing_knowledge.json"
+        self.keybindings: dict = None # will be filled on first access
         self.en_translation_file = self.config["sc-keybind-mappings"]["en_translation_file"]
         user_keybinding_file_config = f"{self.sc_installation_dir}/{self.sc_active_channel}/USER/Client/0/Controls/Mappings/{self.user_keybinding_file_name}"
         self.user_keybinding_file = user_keybinding_file_config.format(sc_channel_version=self.sc_channel_version)
@@ -37,7 +43,49 @@ class SCKeybindings():
         self.sc_translations_player_language = f"{self.data_root_path}/{self.sc_channel_version}/global_{self.player_language}.ini"
         self.keybind_categories_to_ignore = set(self.config["keybind_categories_to_ignore"])
         self.keybind_actions_to_include_from_category = set(self.config["include_actions"]) 
+        self.command_phrases_included = False # will be set to true on first update of instant activation commands
+        self.open_api_key = secret_keeper.retrieve(
+            requester="openai",
+            key="openai",
+            friendly_key_name="OpenAI API key",
+            prompt_if_missing=False,
+        )
 
+        self.instant_activation_commands_built = False
+        self.correct_keybinding_activations = False  # set to true, if ai response structure is slightly different and implement corrections method _correct_instant_activation_commands
+
+    def _correct_instant_activation_commands(self):
+
+        if not self.correct_keybinding_activations:
+            return
+        
+        print("correcting instant activations commands")
+        chunk = 4
+        path = f"{self.data_root_path}{self.sc_channel_version}/completion_message_command_phrases_{chunk}.json"
+        try: 
+            response = ""
+            with open(path, "r", encoding="utf-8") as file:
+                response = json.load(file)
+
+            keybindings = self._load_keybindings()
+            
+            updated_keybindings = response["choices"][0]["message"]["content"]["command-phrases"]
+
+            # Da der "content" selbst ein JSON-String ist, müssen Sie diesen parsen
+            updated_keybindings = json.loads(updated_keybindings)
+
+            for key, value in updated_keybindings.items():
+                print_debug(f"updating {key}")
+                if key in keybindings:
+                    command_phrases = value["command-phrases"]
+                    keybindings.get(key)["command-phrases"] = command_phrases
+
+            with open(self.json_path_knowledge, mode="w", encoding="utf-8") as file:
+                json.dump(keybindings, file, indent=4, ensure_ascii=False)
+        except Exception:
+            traceback.print_exc()
+            return
+    
     def get_bound_keybinding_names(self) -> list:
         self._load_keybindings()
 
@@ -52,8 +100,161 @@ class SCKeybindings():
             if keybindingEntry["actionname"] in avoid_commands and not keybindingEntry["category"] in self.keybind_categories_to_ignore:
                 continue
             filtered.append(key)
-                
+
+        if not self.instant_activation_commands_built:
+            self._build_instant_activation_commands(filtered)
+            self.instant_activation_commands_built = True
+               
         return filtered
+    
+    def _build_instant_activation_commands(self, commands_to_consider):
+        try: 
+            custom_commands_list = [
+                command["name"]
+                for command in self.config.get("commands", [])
+            ]
+
+            custom_commands = set(custom_commands_list)  
+            self._load_keybindings()
+
+            for key, keybinding_entry in self.keybindings.items():
+                if key in custom_commands or key not in commands_to_consider:
+                    continue  # we skip actions that have been customized in config or that we don't consider
+                
+                print_debug(f'building instant activation command {key} -> {keybinding_entry["command-phrases"]}')
+                command = {}
+                command["name"] = key
+                
+                sc_commands = []
+                sc_commands.append({"sc_command": key})
+                command["sc_commands"] = sc_commands
+                
+                player_language = "en"
+                instant_activations = []
+                command_phrases = {}
+                if keybinding_entry.get("command-phrases"):
+                    command_phrases = keybinding_entry.get("command-phrases")
+
+                for command_phrase in command_phrases.get(player_language, []):
+                    instant_activations.append(command_phrase)
+
+                if self.player_language and not self.player_language.startswith("en"):
+                    player_language = self.player_language
+
+                    for command_phrase in command_phrases.get(player_language, []):
+                        instant_activations.append(command_phrase)
+                
+                command["instant_activation"] = instant_activations
+
+                command["responses"] = False  # we don't want any AI reaction for player actions
+
+                self.config["commands"].append(command)
+        except Exception:
+            traceback.print_exc()
+
+    def _create_instant_activation_value(self):
+        print("creating command phrases first time, this can take several minutes.")
+
+        keybindings = self._load_keybindings()
+        keybindings_reduce = copy.deepcopy(keybindings)
+
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.open_api_key}",
+        }
+        model = "gpt-4-1106-preview"
+
+        attributes_to_remove = [
+            "actionname",
+            "activationMode",
+            "keyboard-mapping",
+            "keyboard-mapping-en",
+            f"keyboard-mapping-{self.player_language}"
+        ]
+
+        # Entfernen der spezifizierten Attribute aus jedem Eintrag in der JSON-Struktur
+        for item in keybindings_reduce.values():
+            for key in attributes_to_remove:
+                item.pop(key, None)
+
+        chunk_size = 40
+        chunk = 0
+        totalItems = len(list(keybindings_reduce.keys()))
+        items_list = list(keybindings_reduce)
+        print_debug(f"retrieving command phrases for a total of {totalItems} actions")
+        index = 0
+
+        while index < totalItems:
+            keybindings_message_chunk = []
+            chunk += 1
+            print_debug(f"updating chunk {chunk} with index {index}")
+
+            while index < chunk_size * chunk and index < totalItems:
+                item = items_list[index]
+                keybindings_message_chunk.append(item)
+
+                index += 1
+            
+            messages = [
+                {"role": "system", "content": "You are expert in handling json files and translations."},
+                {"role": "user",    "content": (
+                                        "Analyse the following json an fill in for each action the attribute 'command-phrases' which should contain a list of sentences the user can call out as commands. "
+                                        "A command phrase should have at least 2 words and not more then 4. "
+                                        "The command phrases must be intuitive, and be in the style of a command a user would call out to somebody that must execute the action. "
+                                        "Each entry must only contain the command, nothing else, therefore, it should not contain any abbreviations, punctuation marks or any other non alphanumerical characters. "
+                                        "Further, the sentences should be simple, but unique among all actions in the json-file. "
+                                        "Provide at least 3 variations of the command phrase, at most 5. "
+                                        "For each action, provide command phrases in the available languages of the action. "
+                                        "An example for the 'command-phrases' attribute is: 'instant-activation-sentences': {'en': ['Roll left', 'Left roll'], 'de_DE': ['Links rollen', 'Rolle links']}. "
+                                        f"Apart of en, provide {self.player_language} commands as well. "
+                                        "The commands should have as much context information as possible. Example 'Toggles the docking camera.' should not lead to a phrase 'Camera mode'. A good phrase would be 'Change docking view'"
+                                        "The commands should not provide information on how to execute them. Example 'Engage Quantum Drive (Hold)' should not lead to a phrase 'Hold quantum' or 'Quantum standby'. A good phrase would be 'Engage Quantum Drive'. "
+                                        "As response, provide the updated json provided, without altering the structure or providing any adititional information. "
+                                        f"json file: {json.dumps(keybindings_message_chunk)}"
+                                    ) 
+                }
+            ]
+            response = None
+            try:
+                # # client = OpenAI()
+
+                payload = {
+                    "model": model,
+                    "response_format": { "type": "json_object" },
+                    "messages": messages
+                }
+
+                response = requests.post(
+                    "https://api.openai.com/v1/chat/completions", headers=headers, json=payload, timeout=300
+                )
+            
+                print_debug("got response")
+                response_json = response.json()
+                
+                path = f"{self.data_root_path}{self.sc_channel_version}/completion_message_command_phrases_{chunk}.json"
+                with open(path, mode="w", encoding="utf-8") as file:
+                    json.dump(response_json, file, indent=4)
+                
+                if response_json.get("error", False):
+                    print(f'Error during request: {response_json["error"]["type"]} skipping')
+                    continue
+
+                updated_keybindings = response_json["choices"][0]["message"]["content"]
+
+                # Da der "content" selbst ein JSON-String ist, müssen Sie diesen parsen
+                updated_keybindings = json.loads(updated_keybindings)
+
+                for key, value in updated_keybindings.items():
+                    print_debug(f"updating {key}")
+                    if key in keybindings:
+                        command_phrases = value["command-phrases"]
+                        keybindings.get(key)["command-phrases"] = command_phrases
+
+                with open(self.json_path_knowledge, mode="w", encoding="utf-8") as file:
+                    json.dump(keybindings, file, indent=4, ensure_ascii=False)
+            except Exception:
+                traceback.print_exc()
+                return
     
     def get_command(self, command_name: str) -> dict:
         self._load_keybindings()
@@ -199,8 +400,8 @@ class SCKeybindings():
                   
             json_entry = {key: action_details.get(key, "") for key in content_keys}
 
-            json_key = ''.join([char if char.isalnum() else '_' for char in key_value])
-            json_key = re.sub(r'_+', '_', json_key)
+            json_key = ''.join([char if char.isalnum() else '_' for char in key_value])  # replace non alphanumerical values with _
+            json_key = re.sub(r'_+', '_', json_key)  # remove duplicate _
             # Entfernt einen Unterstrich am Ende, falls vorhanden
             if json_key.endswith('_'):
                 json_key = json_key[:-1]
@@ -208,6 +409,7 @@ class SCKeybindings():
             if not json_key:
                 continue  # Leer oder keine gültigen Zeichen, Eintrag überspringen
 
+            
             json_data[json_key] = json_entry
 
         return json_data
@@ -246,6 +448,7 @@ class SCKeybindings():
             f"action-description-{self.player_language}",
             "keyboard-mapping-en",
             f"keyboard-mapping-{self.player_language}",
+            "command-phrases",
         ]
         json_data = self._create_json_data(actions, only_missing, content_keys, "functionname")
 
@@ -271,6 +474,11 @@ class SCKeybindings():
         return "+".join(cleaned_parts)
 
     def parse_and_create_files(self):
+        if os.path.exists(self.json_path_knowledge):
+            print_debug(f"keybind files already exist, delete file for regeneration: {self.json_path_knowledge}")
+            self._correct_instant_activation_commands()
+            return
+        
         # Load the XML file
         file_path = self.default_keybinds_file
         print_debug("loading default keybinds")
@@ -376,6 +584,7 @@ class SCKeybindings():
         self._write_json(actions, self.json_path, only_missing=False)
         self._write_openai_knowledge_json(actions, self.json_path_miss_knowledge, only_missing=True)
         self._write_openai_knowledge_json(actions, self.json_path_knowledge, only_missing=False)
+        self._create_instant_activation_value()
         self.keybindings = None # reset buffer
 
 

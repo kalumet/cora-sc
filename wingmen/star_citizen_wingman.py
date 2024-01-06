@@ -84,18 +84,17 @@ class StarCitizenWingman(OpenAiWingman):
         self.current_context: self.AIContext = self.AIContext.CORA  # Name of the current context
         self.current_user_request: str = None  # saves the current user request
         self.switch_context_executed = False  # used to identify multiple switch executions that would be incorrect -> Error
-        self.sc_keybinding_service: SCKeybindings = SCKeybindings(config)
-        self.sc_keybinding_service.parse_and_create_files()
+        self.sc_keybinding_service: SCKeybindings = None  # initialised in validate
         self.uex_service: UEXApi = None  # set in validate()
         self.mission_manager_service: MissionManager = None # initialized in validate()
         self.tdd_voice = "onyx"
         self.messages_buffer = 10
-        self.current_tools = self._get_context_tools(self.current_context)
+        self.current_tools = None # init in validate
         self.config["openai"]["tts_voice"] = self.config["openai"]["contexts"]["cora_voice"]
         self.config["sound"]["play_beep"] = False
         self.config["sound"]["effects"] = ["INTERIOR_HELMET", "ROBOT"]
         self.config["openai"]["conversation_model"] = self.config["openai"]["contexts"][f"context-{self.AIContext.CORA.name}"]["conversation_model"]
-        self.overlay = StarCitizenOverlay()
+        self.overlay = None # init in validate
         
         # init the configuration dynamically based on current star citizen settings.
         # the config is dynamically expanded for all mapped keybinds.
@@ -103,6 +102,12 @@ class StarCitizenWingman(OpenAiWingman):
 
     def validate(self):
         errors = super().validate()
+        self.sc_keybinding_service = SCKeybindings(self.config, self.secret_keeper)
+        self.sc_keybinding_service.parse_and_create_files()
+
+        self.current_tools = self._get_context_tools(self.current_context)
+        self.overlay = StarCitizenOverlay()
+
         uex_api_key = self.secret_keeper.retrieve(
             requester=self.name,
             key="uex",
@@ -658,7 +663,6 @@ class StarCitizenWingman(OpenAiWingman):
         commands = [
             command["name"]
             for command in self.config.get("commands", [])
-            if not command.get("instant_activation")
         ]
 
         command_set = set(commands)

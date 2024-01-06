@@ -273,7 +273,7 @@ class Wingman(FileCreator):
         """
         command_responses = command.get("responses", None)
         if not command_responses or (len(command_responses) == 0):
-            return None
+            return "Ok"
 
         return random.choice(command_responses)
 
@@ -311,12 +311,7 @@ class Wingman(FileCreator):
         self._execute_command(best_command)
 
         if best_command:
-            if best_command.get("responses") is False:
-                return "Ok"
-            
-            if len(best_command.get("responses", [])) == 0:
-                return None  # gpt decides how the response should be
-            return self._select_command_response(best_command)  # we want gpt to decide how the response should be
+            return best_command
         return None
 
     def _execute_command(self, command: dict) -> str:

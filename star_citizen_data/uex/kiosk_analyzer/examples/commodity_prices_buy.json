@@ -1,0 +1,52 @@
+{
+    "commodity_prices": [
+        {
+            "commodity_name": "ASTATINE",
+            "available_SCU_quantity": 300,
+            "inventory_state": "MAX INVENTORY",
+            "price_per_unit": 7.0,
+            "multiplier": "",
+            "currency": "\u00a2"
+        },
+        {
+            "commodity_name": "IODINE",
+            "available_SCU_quantity": 5760,
+            "inventory_state": "MAX INVENTORY",
+            "price_per_unit": 35,
+            "multiplier": "",
+            "currency": "\u00a2"
+        },
+        {
+            "commodity_name": "FLUORINE",
+            "available_SCU_quantity": 9999,
+            "inventory_state": "MAX INVENTORY",
+            "price_per_unit": 235,
+            "multiplier": "",
+            "currency": "\u00a2"
+        },
+        {
+            "commodity_name": "CHLORINE",
+            "available_SCU_quantity": 5760,
+            "inventory_state": "MAX INVENTORY",
+            "price_per_unit": 130,
+            "multiplier": "",
+            "currency": "\u00a2"
+        },
+        {
+            "commodity_name": "HYDROGEN",
+            "available_SCU_quantity": 5760,
+            "inventory_state": "MAX INVENTORY",
+            "price_per_unit": 109,
+            "multiplier": "",
+            "currency": "\u00a2"
+        },
+        {
+            "commodity_name": "WASTE",
+            "available_SCU_quantity": 75,
+            "inventory_state": "MAX INVENTORY",
+            "price_per_unit": 3,
+            "multiplier": "",
+            "currency": "\u00a2"
+        }
+    ]
+}

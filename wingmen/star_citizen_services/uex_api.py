@@ -6,6 +6,7 @@ from services.printr import Printr
 
 
 DEBUG = False
+TEST = True
 
 
 def print_debug(to_print):
@@ -68,8 +69,9 @@ class UEXApi():
             print_debug("UexApi instance already initialized")
     
     @classmethod
-    def init(cls, uex_api_key: str):
+    def init(cls, uex_api_key: str, uex_access_code: str):
         cls.api_key = uex_api_key
+        cls.uex_access_code = uex_access_code
         # get secret mappings stuff
 
         return cls()
@@ -563,6 +565,27 @@ class UEXApi():
         with open(f"{self.root_data_path}/{category}_mapping.json", 'r', encoding='utf-8') as file:
             data = json.load(file)
             return list(data.keys())
+        
+    def update_tradeport_price(self, tradeport, commodity_update_info, operation):
+        url = f"{self.api_endpoint}/sr/"
+        
+        update_data = {
+            "commodity": commodity_update_info.get("code"),
+            "tradeport": tradeport.get("code"),
+            "operation": operation,
+            "price": commodity_update_info.get("price"),
+            "user_hash": self.uex_access_code,
+        }
+        
+        if not TEST:
+            update_data["production"] = "1"
+
+        response = requests.post(url, headers=self.headers, data=update_data, timeout=30)
+        if response.status_code == 200:
+            return response.json()["data"], True # report id received
+        
+        print_debug(f'Fehler beim updaten von Preis-Daten - reason: {response.json()["status"]}')
+        return response.json()["status"], False # error reason
     
     def test(self):
         self._fetch_data()

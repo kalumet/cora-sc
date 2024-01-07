@@ -1,7 +1,6 @@
-import Levenshtein
 import random
+import Levenshtein
 
-from fuzzywuzzy import process, fuzz
 from wingmen.star_citizen_services.model.delivery_mission import DeliveryMission
 from wingmen.star_citizen_services.uex_api import UEXApi
 
@@ -12,6 +11,7 @@ DEBUG = False
 def print_debug(to_print):
     if DEBUG:
         print_debug(to_print)
+
 
 class LocationNameMatching:
     @staticmethod
@@ -111,6 +111,34 @@ class LocationNameMatching:
             _process_matched_location(
                 dropoff_location, matched_dropoff_location, "dropoff"
             )
+
+    @staticmethod
+    def validate_tradeport_name(location_name):
+        MIN_SIMILARITY_THRESHOLD = 50
+
+        uex_service = UEXApi()
+        tradeports = uex_service.get_data("tradeports")
+        matched_tradeport = None
+        max_location_similarity = 0
+        for tradeport in tradeports.values():
+            validated_name = tradeport["name"]
+
+            # Check for exact match
+            if validated_name == location_name:
+                return validated_name, True
+
+            similarity = _calculate_similarity(
+                location_name.lower(),
+                validated_name.lower(),
+                MIN_SIMILARITY_THRESHOLD,
+            )
+            if similarity > max_location_similarity:
+                matched_tradeport = tradeport
+                max_location_similarity = similarity
+
+        if matched_tradeport:
+            return matched_tradeport, True
+        return f"could not identify tradeport {location_name}", False
 
 
 def _calculate_similarity(str1, str2, threshold):

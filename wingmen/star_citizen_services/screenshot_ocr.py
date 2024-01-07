@@ -41,48 +41,48 @@ class TransportMissionAnalyzer:
 
         screenshot_text, accept_button_coordinates = self.analyze_screenshot(filename)
         print_debug(f"screenshot text: {screenshot_text}")
-        delivery_mission = text_analyser.TextAnalyzer.analyze_text(screenshot_text)
+        # delivery_mission = text_analyser.TextAnalyzer.analyze_text(screenshot_text)
 
-        if not delivery_mission or len(delivery_mission.packages) == 0:
-            return None
+        # if not delivery_mission or len(delivery_mission.packages) == 0:
+        #     return None
 
-        LocationNameMatching.validate_location_names(delivery_mission)
+        # LocationNameMatching.validate_location_names(delivery_mission)
 
-        if not TEST:
-            self.accept_mission_click(accept_button_coordinates)
+        # if not TEST:
+        #     self.accept_mission_click(accept_button_coordinates)
 
-        print_debug(delivery_mission)
-        return delivery_mission
+        # print_debug(delivery_mission)
+        # return delivery_mission
 
-    def accept_mission_click(self, accept_button_coordinates):
-        active_window = pygetwindow.getActiveWindow()
-        if active_window:
-            # Speichere die aktuelle Position der Maus
-            original_mouse_x, original_mouse_y = pyautogui.position()
+    # def accept_mission_click(self, accept_button_coordinates):
+    #     active_window = pygetwindow.getActiveWindow()
+    #     if active_window:
+    #         # Speichere die aktuelle Position der Maus
+    #         original_mouse_x, original_mouse_y = pyautogui.position()
 
-            # Fensterposition bestimmen
-            window_x, window_y = active_window.left, active_window.top
+    #         # Fensterposition bestimmen
+    #         window_x, window_y = active_window.left, active_window.top
 
-            # Templategröße ermitteln
-            template_height, template_width = self.accept_offer_template.shape[:2]
+    #         # Templategröße ermitteln
+    #         template_height, template_width = self.accept_offer_template.shape[:2]
 
-            # Berechne die absolute Mitte des Templates
-            absolute_x = window_x + accept_button_coordinates[0] + template_width // 2
-            absolute_y = window_y + accept_button_coordinates[1] + template_height // 2
+    #         # Berechne die absolute Mitte des Templates
+    #         absolute_x = window_x + accept_button_coordinates[0] + template_width // 2
+    #         absolute_y = window_y + accept_button_coordinates[1] + template_height // 2
 
-           # Bewege die Maus langsam zur Zielposition
-            pyautogui.moveTo(absolute_x, absolute_y, duration=0.2)
+    #        # Bewege die Maus langsam zur Zielposition
+    #         pyautogui.moveTo(absolute_x, absolute_y, duration=0.2)
 
-            # Verzögerung vor dem Klick
-            time.sleep(0.1)
+    #         # Verzögerung vor dem Klick
+    #         time.sleep(0.1)
 
-            # Führe den Klick aus mit einer längeren Klickdauer
-            pyautogui.mouseDown()
-            time.sleep(0.1)  # Halte die Maustaste 0.1 Sekunden lang gedrückt
-            pyautogui.mouseUp()
+    #         # Führe den Klick aus mit einer längeren Klickdauer
+    #         pyautogui.mouseDown()
+    #         time.sleep(0.1)  # Halte die Maustaste 0.1 Sekunden lang gedrückt
+    #         pyautogui.mouseUp()
 
-            # Setze die Mausposition auf die ursprüngliche Position zurück
-            pyautogui.moveTo(original_mouse_x, original_mouse_y, duration=0.2)
+    #         # Setze die Mausposition auf die ursprüngliche Position zurück
+    #         pyautogui.moveTo(original_mouse_x, original_mouse_y, duration=0.2)
     
     def take_screenshot(self):
         if TEST:

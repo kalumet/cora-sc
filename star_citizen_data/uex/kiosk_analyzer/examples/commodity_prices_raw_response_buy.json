@@ -1,0 +1,21 @@
+{
+    "id": "chatcmpl-8eNO9TEmyvvWZZYkJ2SjD5hKwdDGE",
+    "object": "chat.completion",
+    "created": 1704633717,
+    "model": "gpt-4-1106-vision-preview",
+    "usage": {
+        "prompt_tokens": 938,
+        "completion_tokens": 382,
+        "total_tokens": 1320
+    },
+    "choices": [
+        {
+            "message": {
+                "role": "assistant",
+                "content": "```json\n{\n    \"commodity_prices\": [\n        {\n            \"commodity_name\": \"ASTATINE\",\n            \"available_SCU_quantity\": 300,\n            \"inventory_state\": \"MAX INVENTORY\",\n            \"price_per_unit\": 7.00,\n            \"multiplier\": \"\",\n            \"currency\": \"\\u00a2\"\n        },\n        {\n            \"commodity_name\": \"IODINE\",\n            \"available_SCU_quantity\": 5760,\n            \"inventory_state\": \"MAX INVENTORY\",\n            \"price_per_unit\": 35,\n            \"multiplier\": \"\",\n            \"currency\": \"\\u00a2\"\n        },\n        {\n            \"commodity_name\": \"FLUORINE\",\n            \"available_SCU_quantity\": 9999,\n            \"inventory_state\": \"MAX INVENTORY\",\n            \"price_per_unit\": 235,\n            \"multiplier\": \"\",\n            \"currency\": \"\\u00a2\"\n        },\n        {\n            \"commodity_name\": \"CHLORINE\",\n            \"available_SCU_quantity\": 5760,\n            \"inventory_state\": \"MAX INVENTORY\",\n            \"price_per_unit\": 130,\n            \"multiplier\": \"\",\n            \"currency\": \"\\u00a2\"\n        },\n        {\n            \"commodity_name\": \"HYDROGEN\",\n            \"available_SCU_quantity\": 5760,\n            \"inventory_state\": \"MAX INVENTORY\",\n            \"price_per_unit\": 109,\n            \"multiplier\": \"\",\n            \"currency\": \"\\u00a2\"\n        },\n        {\n            \"commodity_name\": \"WASTE\",\n            \"available_SCU_quantity\": 75,\n            \"inventory_state\": \"MAX INVENTORY\",\n            \"price_per_unit\": 3,\n            \"multiplier\": \"\",\n            \"currency\": \"\\u00a2\"\n        }\n    ]\n}\n```"
+            },
+            "finish_reason": "stop",
+            "index": 0
+        }
+    ]
+}

@@ -10,7 +10,8 @@ from wingmen.open_ai_wingman import OpenAiWingman
 
 from wingmen.star_citizen_services.keybindings import SCKeybindings
 from wingmen.star_citizen_services.uex_api import UEXApi
-from wingmen.star_citizen_services.mission_manager import MissionManager  
+from wingmen.star_citizen_services.mission_manager import MissionManager 
+from wingmen.star_citizen_services.uex_update_service.commodity_kiosk_screenshot_ocr import UexCommodityKioskAnalyser  
 from wingmen.star_citizen_services.overlay import StarCitizenOverlay
 
 DEBUG = False
@@ -87,6 +88,7 @@ class StarCitizenWingman(OpenAiWingman):
         self.sc_keybinding_service: SCKeybindings = None  # initialised in validate
         self.uex_service: UEXApi = None  # set in validate()
         self.mission_manager_service: MissionManager = None # initialized in validate()
+        self.kiosk_prices_manager: UexCommodityKioskAnalyser = None # initialized in validate()
         self.tdd_voice = "onyx"
         self.messages_buffer = 10
         self.current_tools = None # init in validate
@@ -118,18 +120,33 @@ class StarCitizenWingman(OpenAiWingman):
             errors.append(
                 "Missing 'uex' API key. Please provide a valid key in the settings."
             )
-        else:
-            try:
-                # every conversation starts with the "context" that the user has configured
-                self.uex_service = UEXApi.init(uex_api_key)
-                self.mission_manager_service = MissionManager(config=self.config)
-                self._set_current_context(self.AIContext.CORA, new=True)
+            return
+        
+        uex_access_code = self.secret_keeper.retrieve(
+            requester=self.name,
+            key="uex_access_code",
+            friendly_key_name="UEX Data Runner access code",
+            prompt_if_missing=True,
+        )
+        if not uex_access_code:
+            errors.append(
+                "Missing 'uex_access_code' Data Runner access code key. Please provide a valid access code in the settings."
+            )
+            return
 
-                # self.mission_manager_service.get_new_mission()  # TODO nur ein Test
-            except Exception as e:
-                print(e)
-                traceback.print_exc()
-                errors.append(f"Initialisation Error: {e}. Check console for more information")
+        try:
+            # every conversation starts with the "context" that the user has configured
+            self.uex_service = UEXApi.init(uex_api_key, uex_access_code)
+            self.mission_manager_service = MissionManager(config=self.config)
+            self.kiosk_prices_manager = UexCommodityKioskAnalyser(f'{self.config["data-root-directory"]}uex', self.openai.api_key)
+            self._set_current_context(self.AIContext.CORA, new=True)
+
+            # self.mission_manager_service.get_new_mission()  # TODO nur ein Test auskommentieren
+            # self.kiosk_prices_manager.identify_kiosk_prices()  # TODO nur ein Test auskommentieren
+        except Exception as e:
+            print(e)
+            traceback.print_exc()
+            errors.append(f"Initialisation Error: {e}. Check console for more information")
 
     def _set_current_context(self, new_context: AIContext, new: bool = False):
         """Set the current context to the specified context name."""
@@ -459,6 +476,11 @@ class StarCitizenWingman(OpenAiWingman):
             printr.print(f'-> Resultat: {function_response}', tags="info")
             self.current_tools = self._get_cora_tools()  # recalculate, as with every box mission, we have new information for the function call
 
+        if function_name == "transmit_commodity_data_to_uex_database":
+            printr.print('-> Command: Transmit commodity prices to uex corp')
+            function_response = json.dumps(self.kiosk_prices_manager.identify_kiosk_prices())
+            printr.print(f'-> Result: {function_response}', tags="info")
+
         return function_response, instant_reponse
 
     def _execute_switch_context_function(self, function_args):
@@ -758,9 +780,25 @@ class StarCitizenWingman(OpenAiWingman):
         tools = []
         tools.append(self._get_keybinding_commands())
         tools.extend(self._get_box_mission_tool())
+        tools.extend(self._get_uex_update_tool())
         tools.append(self._context_switch_tool(current_context=self.AIContext.CORA))
         return tools
     
+    def _get_uex_update_tool(self):
+
+        tools = [
+            {
+                "type": "function",
+                "function": 
+                {
+                    "name": "transmit_commodity_data_to_uex_database",
+                    "description": "Provide updated prices of commodities from the current players location commodity kiosk to the uex corporation.",
+
+                }
+            }
+        ]
+        return tools
+
     def _get_tdd_tools(self) -> list[dict]:
 
         tradeport_names = self.uex_service.get_category_names("tradeports")

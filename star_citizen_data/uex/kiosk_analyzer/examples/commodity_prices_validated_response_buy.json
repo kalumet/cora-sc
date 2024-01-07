@@ -1,0 +1,52 @@
+[
+    {
+        "commodity_name": "Iodine",
+        "available_SCU_quantity": 5760,
+        "inventory_state": "MAX INVENTORY",
+        "price_per_unit": 35,
+        "multiplier": "",
+        "currency": "\u00a2",
+        "code": "IODI",
+        "price": 35
+    },
+    {
+        "commodity_name": "Fluorine",
+        "available_SCU_quantity": 9999,
+        "inventory_state": "MAX INVENTORY",
+        "price_per_unit": 235,
+        "multiplier": "",
+        "currency": "\u00a2",
+        "code": "FLUO",
+        "price": 235
+    },
+    {
+        "commodity_name": "Chlorine",
+        "available_SCU_quantity": 5760,
+        "inventory_state": "MAX INVENTORY",
+        "price_per_unit": 130,
+        "multiplier": "",
+        "currency": "\u00a2",
+        "code": "CHLO",
+        "price": 130
+    },
+    {
+        "commodity_name": "Hydrogen",
+        "available_SCU_quantity": 5760,
+        "inventory_state": "MAX INVENTORY",
+        "price_per_unit": 109,
+        "multiplier": "",
+        "currency": "\u00a2",
+        "code": "HYDR",
+        "price": 109
+    },
+    {
+        "commodity_name": "Waste",
+        "available_SCU_quantity": 75,
+        "inventory_state": "MAX INVENTORY",
+        "price_per_unit": 3,
+        "multiplier": "",
+        "currency": "\u00a2",
+        "code": "WAST",
+        "price": 3
+    }
+]

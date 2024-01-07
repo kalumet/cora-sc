@@ -1,1 +1,6 @@
 *.json
+*.jpg
+*.png
+!template_*.png
+!response_structure_buy.json
+!kiosk_analyzer/examples/*

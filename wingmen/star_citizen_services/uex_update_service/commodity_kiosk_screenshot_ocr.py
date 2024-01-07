@@ -74,13 +74,13 @@ class UexCommodityKioskAnalyser:
             os.makedirs(self.screenshots_path)
 
     def identify_kiosk_prices(self):
-        buy_operation = "buy"
-        filename = self.take_screenshot(buy_operation)
+        operation = "buy"
+        screenshot_file_name = self.take_screenshot(operation)
 
-        if not filename:
+        if not screenshot_file_name:
             return False
 
-        location_name, accept_button_coordinates, success = self.get_location_name(filename)
+        location_name, success = self.get_location_name(screenshot_file_name)
 
         if not success:
             return {"success": False, 
@@ -100,7 +100,66 @@ class UexCommodityKioskAnalyser:
         
         print_debug(f'validated location name: {validated_tradeport["name_short"]}')
 
-        prices_raw, success = self.get_price_information(filename, buy_operation)
+        buy_result = self._analyse_prices_at_tradeport(screenshot_file_name, validated_tradeport, operation)
+
+        if not TEST and not buy_result["success"]:
+            return buy_result
+        
+        operation = "sell"
+        self._click_sell_button(screenshot_file_name)
+
+        sell_screenshot_filename = self.take_screenshot(operation)
+
+        sell_result = self._analyse_prices_at_tradeport(sell_screenshot_filename, validated_tradeport, operation)
+
+        if not sell_result["success"]:
+            buy_result["success"] = False
+            
+        buy_result['message']['sellable_commodities_info'] = sell_result['message']['sellable_commodities_info']
+            
+        return buy_result
+        
+    def _click_sell_button(self, screenshot_file_name):
+        # first, get the coordinates of the sell button in the screen
+        screenshot = cv2.imread(screenshot_file_name)
+        gray_screenshot = cv2.cvtColor(screenshot, cv2.COLOR_BGR2GRAY)
+        
+        # Template matching for accept offer template
+        sell_button_position = cv2.matchTemplate(gray_screenshot, self.template_kiosk_sell_button, cv2.TM_CCOEFF_NORMED)
+        _, _, _, sell_button_coordinates = cv2.minMaxLoc(sell_button_position)
+        
+        active_window = pygetwindow.getActiveWindow()
+        if active_window:
+            # Speichere die aktuelle Position der Maus
+            original_mouse_x, original_mouse_y = pyautogui.position()
+
+            # Fensterposition bestimmen
+            window_x, window_y = active_window.left, active_window.top
+
+            # Templategröße ermitteln
+            template_height, template_width = self.template_kiosk_sell_button.shape[:2]
+
+            # Berechne die absolute Mitte des Templates
+            absolute_x = window_x + sell_button_coordinates[0] + template_width // 2
+            absolute_y = window_y + sell_button_coordinates[1] + template_height // 2
+
+            # Bewege die Maus langsam zur Zielposition
+            pyautogui.moveTo(absolute_x, absolute_y, duration=0.2)
+
+            # Verzögerung vor dem Klick
+            time.sleep(0.1)
+
+            # Führe den Klick aus mit einer längeren Klickdauer
+            pyautogui.mouseDown()
+            time.sleep(0.1)  # Halte die Maustaste 0.1 Sekunden lang gedrückt
+            pyautogui.mouseUp()
+
+            # Setze die Mausposition auf die ursprüngliche Position zurück
+            pyautogui.moveTo(original_mouse_x, original_mouse_y, duration=0.2)
+     
+    def _analyse_prices_at_tradeport(self, screen_shot_path, validated_tradeport, operation):
+        
+        prices_raw, success = self._get_price_information(screen_shot_path, operation)
 
         if not success:
             return {"success": False, 
@@ -112,7 +171,7 @@ class UexCommodityKioskAnalyser:
 
         print_debug(f"extracted {number_of_extracted_prices} price-informations from screenshot")
 
-        validated_prices, success = CommodityPriceValidator.validate_price_information(prices_raw, validated_tradeport, buy_operation)
+        validated_prices, success = CommodityPriceValidator.validate_price_information(prices_raw, validated_tradeport, operation)
 
         if not success:
             return {"success": False, 
@@ -131,15 +190,15 @@ class UexCommodityKioskAnalyser:
                     }
         
         # Write JSON data to a file
-        filename = f'{self.data_dir_path}/debug_data/commodity_prices_validated_response_{buy_operation}.json'
-        with open(filename, 'w') as file:
+        json_file_name = f'{self.data_dir_path}/debug_data/commodity_prices_validated_response_{operation}.json'
+        with open(json_file_name, 'w') as file:
             json.dump(validated_prices, file, indent=4)
         
         updated_commodities = []
         update_errors = []
 
         for validated_price in validated_prices:
-            response, success = self.uex_service.update_tradeport_price(tradeport=validated_tradeport, commodity_update_info=validated_price, operation=buy_operation)
+            response, success = self.uex_service.update_tradeport_price(tradeport=validated_tradeport, commodity_update_info=validated_price, operation=operation)
 
             if not success:
                 print_debug(f'price could not be updated: {response}')
@@ -155,12 +214,16 @@ class UexCommodityKioskAnalyser:
         
         return {
                     "success": success,
-                    "instructions": "You where able to recognize the commodities and tried to transmit the prices to the uex corp.",
-                    "message": (
-                        f'Tradeport: {validated_tradeport["name"]}, identified buyable commodities: {number_of_extracted_prices}, '
-                        f'valid: {number_of_validated_prices}, successfully transmitted to UEX.Corp: {len(updated_commodities)} '
-                        f'transmission errors: {len(update_errors)}.'
-                    )
+                    "instructions": "You where able to recognize the commodities and tried to transmit the prices to the uex corp. Provide a short summary, especially, not all prices could be identified, or if there have been transmission errors. ",
+                    "message": {
+                        "tradeport": validated_tradeport["name"],
+                        f"{operation}able_commodities_info": {
+                            "identified": number_of_extracted_prices,
+                            "valid": number_of_validated_prices,
+                            "transmitted_to_uex": len(updated_commodities),
+                            "transmission_errors": len(update_errors)
+                        }
+                    }
                 }
 
         # filename = self.take_screenshot("sell")
@@ -316,7 +379,7 @@ class UexCommodityKioskAnalyser:
 
             if max_val_label < threshold:
                 print("Erstes Template nicht erkannt.")
-                return "Could not identify location dropdown", None, False
+                return "Could not identify location dropdown", False
 
             location_drop_down_action = cv2.matchTemplate(
                 gray_screenshot,
@@ -327,7 +390,7 @@ class UexCommodityKioskAnalyser:
 
             if max_val_action < threshold:
                 print("Zweites Template nicht erkannt.")
-                return "Could not identify location dropdown", None, False
+                return "Could not identify location dropdown", False
 
             h_loc, w_loc = self.template_kiosk_location_upper_left.shape
             top_left = (max_loc_label[0], max_loc_label[1] + h_loc)
@@ -343,7 +406,7 @@ class UexCommodityKioskAnalyser:
             # Prüfen, ob das zugeschnittene Bild leer ist
             if cropped_screenshot.size == 0:
                 print("Ungültige Region identifiziert.")
-                return "Could not extract location name, invalid region.", None, False
+                return "Could not extract location name, invalid region.", False
 
             # Preprocess the cropped screenshot for better OCR results
             preprocessed_cropped_screenshot = self.preprocess_image(cropped_screenshot)
@@ -357,7 +420,7 @@ class UexCommodityKioskAnalyser:
             text = pytesseract.image_to_string(preprocessed_cropped_screenshot_pil)
             # print_debug(text)
             # print_debug("---------------------")
-            return text, max_loc_action, True
+            return text, True
         except Exception:
             traceback.print_exc()
 
@@ -400,7 +463,7 @@ class UexCommodityKioskAnalyser:
 
         return equalized
 
-    def get_price_information(self, screenshot_path, operation):
+    def _get_price_information(self, screenshot_path, operation):
         """Analyze the screenshot and extract text."""
         # Screenshot laden
         print_debug(f"file: {screenshot_path}")
@@ -410,9 +473,8 @@ class UexCommodityKioskAnalyser:
                 f"Die Bilddatei wurde nicht gefunden: {screenshot_path}"
             )
         gray_screenshot = cv2.cvtColor(screenshot, cv2.COLOR_BGR2GRAY)
-        self.debug_show_screenshot(gray_screenshot)
-
-        # Template Matching für das Buy-Button Template
+        
+        # We always take the buy button to recognize the commodity prices area
         res_buy_button = cv2.matchTemplate(
             gray_screenshot, self.template_kiosk_buy_button, cv2.TM_CCOEFF_NORMED
         )
@@ -430,6 +492,8 @@ class UexCommodityKioskAnalyser:
         y_start = max_loc_button[1] + h_button
 
         cropped_screenshot = gray_screenshot[y_start:, x_start:]
+
+        self.debug_show_screenshot(cropped_screenshot)
 
         # self.debug_show_screenshot(cropped_screenshot)
 

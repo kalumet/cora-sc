@@ -2,11 +2,13 @@ import json
 import os
 import time
 import requests
+import random
 from services.printr import Printr
 
 
 DEBUG = False
 TEST = True
+CALL_UEX_SR_ENDPOINT = False
 
 
 def print_debug(to_print):
@@ -577,6 +579,11 @@ class UEXApi():
             "user_hash": self.uex_access_code,
         }
         
+        if not CALL_UEX_SR_ENDPOINT:
+            possible_strings = ["2423", "1234", "5678", "53249", "5294"]
+            possible_bools = [True, True, True, False]
+            return random.choice(possible_strings), random.choice(possible_bools)
+
         if not TEST:
             update_data["production"] = "1"
 

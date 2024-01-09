@@ -14,7 +14,7 @@ from wingmen.star_citizen_services.mission_manager import MissionManager
 from wingmen.star_citizen_services.uex_update_service.commodity_kiosk_screenshot_ocr import UexCommodityKioskAnalyser  
 from wingmen.star_citizen_services.overlay import StarCitizenOverlay
 
-DEBUG = False
+DEBUG = True
 
 
 def print_debug(to_print):
@@ -104,12 +104,7 @@ class StarCitizenWingman(OpenAiWingman):
 
     def validate(self):
         errors = super().validate()
-        self.sc_keybinding_service = SCKeybindings(self.config, self.secret_keeper)
-        self.sc_keybinding_service.parse_and_create_files()
-
-        self.current_tools = self._get_context_tools(self.current_context)
-        self.overlay = StarCitizenOverlay()
-
+        
         uex_api_key = self.secret_keeper.retrieve(
             requester=self.name,
             key="uex",
@@ -139,6 +134,11 @@ class StarCitizenWingman(OpenAiWingman):
             self.uex_service = UEXApi.init(uex_api_key, uex_access_code)
             self.mission_manager_service = MissionManager(config=self.config)
             self.kiosk_prices_manager = UexCommodityKioskAnalyser(f'{self.config["data-root-directory"]}uex', self.openai.api_key)
+            self.sc_keybinding_service = SCKeybindings(self.config, self.secret_keeper)
+            self.sc_keybinding_service.parse_and_create_files()
+
+            self.current_tools = self._get_context_tools(self.current_context)
+            self.overlay = StarCitizenOverlay()
             self._set_current_context(self.AIContext.CORA, new=True)
 
             # self.mission_manager_service.get_new_mission()  # TODO nur ein Test auskommentieren
@@ -476,9 +476,24 @@ class StarCitizenWingman(OpenAiWingman):
             printr.print(f'-> Resultat: {function_response}', tags="info")
             self.current_tools = self._get_cora_tools()  # recalculate, as with every box mission, we have new information for the function call
 
-        if function_name == "transmit_commodity_data_to_uex_database":
-            printr.print('-> Command: Transmit commodity prices to uex corp')
-            function_response = json.dumps(self.kiosk_prices_manager.identify_kiosk_prices())
+        if function_name == "transmit_commodity_price_data_to_uex":
+            printr.print(f'-> Command: Analysing commodity prices to be sent to uex corp')
+            print_debug(function_args)
+            if not function_args.get("player_provided_tradeport_name"):
+                function_response = json.dumps({"success": False, "instruction": "Ask the player to provide the tradeport name for which he wants the prices to be transmitted"})
+                return function_response, None
+            
+            tradeport = self.uex_service.get_tradeport(function_args["player_provided_tradeport_name"])
+
+            if not tradeport:
+                function_response = json.dumps({"success": False, "instruction": "Invalid tradeport name. Ask the user for the tradeport he is currently at."})
+                return function_response, None
+            
+            if not function_args.get("validated_tradeport_by_user"):
+                function_response = json.dumps({"success": False, "instruction": f"The user has not explicitely confirmed the tradeport. Ask him to confirm the tradeport {tradeport['name']}"})
+                return function_response, None
+            
+            function_response = json.dumps(self.kiosk_prices_manager.identify_kiosk_prices(tradeport, function_args["operation"]))
             printr.print(f'-> Result: {function_response}', tags="info")
 
         return function_response, instant_reponse
@@ -664,7 +679,7 @@ class StarCitizenWingman(OpenAiWingman):
                 "type": "function",
                 "function": {
                     "name": "switch_context",
-                    "description": "The context of the player request",
+                    "description": "Switch to a different context of conversation. Only switch, if the player initiate the context switch.",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -785,18 +800,40 @@ class StarCitizenWingman(OpenAiWingman):
         return tools
     
     def _get_uex_update_tool(self):
+        tradeport_names = self.uex_service.get_category_names("tradeports")
 
         tools = [
             {
                 "type": "function",
                 "function": 
                 {
-                    "name": "transmit_commodity_data_to_uex_database",
-                    "description": "Provide updated prices of commodities from the current players location commodity kiosk to the uex corporation.",
-
+                    "name": "transmit_commodity_price_data_to_uex",
+                    "description": "Transmit commodity prices to UEX. Always ask the user for what tradeport he wants to transmit prices, or ask him for confirmation, if you have selected one.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "player_provided_tradeport_name": {
+                                "type": "string",
+                                "description": "The tradeport name provided by the user. Ask, if he didn't provide a tradeport name.",
+                                "enum": tradeport_names
+                            },
+                            "operation": {
+                                "type": "string",
+                                "description": "What kind of prices the user want to transmit. 'buy' is for buyable commodities at the location, 'sell' are for sellable commodities.",
+                                "enum": ["sell","buy","both"]
+                            }, 
+                            "validated_tradeport_by_user": {
+                                "type": "boolean",
+                                "description": "Set to false, unless the user confirms the tradeport name explicitely.",
+                            }
+                        },
+                        "required": ["validated_tradeport_by_user"]
+                    }
                 }
             }
         ]
+
+        # print_debug(tools)
         return tools
 
     def _get_tdd_tools(self) -> list[dict]:

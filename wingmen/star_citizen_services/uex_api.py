@@ -557,6 +557,13 @@ class UEXApi():
         category = CATEGORY_TRADEPORTS
         return self.data[category].get("data", [])
     
+    def get_tradeport(self, tradeport_mapping_name):
+        code = self.name_mapping[CATEGORY_TRADEPORTS].get(tradeport_mapping_name, None)
+        if not code:
+            return None
+        
+        return self.data[CATEGORY_TRADEPORTS].get("data", []).get(code, None)
+    
     def get_data(self, category):
         self._refresh_data()
         return self.data[category].get("data", [])

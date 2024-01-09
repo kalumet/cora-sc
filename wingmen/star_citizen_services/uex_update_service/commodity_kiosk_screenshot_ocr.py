@@ -73,60 +73,71 @@ class UexCommodityKioskAnalyser:
         if not os.path.exists(self.screenshots_path):
             os.makedirs(self.screenshots_path)
 
-    def identify_kiosk_prices(self):
+    def identify_kiosk_prices(self, tradeport=None, asked_operation="both"):
+        validated_tradeport = tradeport
+
         operation = "buy"
+        if asked_operation == "sell":
+            operation = "sell"
+        
         screenshot_file_name = self.take_screenshot(operation)
 
-        if not screenshot_file_name:
-            return False
+        if not tradeport:  # we try to identify the current tradeport
+            if not screenshot_file_name:
+                return False
 
-        location_name, success = self.get_location_name(screenshot_file_name)
+            location_name, success = self.get_location_name(screenshot_file_name)
 
-        if not success:
-            return {"success": False, 
-                    "instructions": "You cannot analyse the commodity terminal, as something is obstructing your view. The player should reposition himself to avoid bright spots on the terminal and stand in front of the terminal.", 
-                    "message": location_name
-                    }
+            if not success:
+                return {"success": False, 
+                        "instructions": "You cannot analyse the commodity terminal, as something is obstructing your view. The player should reposition himself to avoid bright spots on the terminal and stand in front of the terminal.", 
+                        "message": location_name
+                        }
 
-        print_debug(f"got raw location name: {location_name}")
+            print_debug(f"got raw location name: {location_name}")
 
-        validated_tradeport, success = LocationNameMatching.validate_tradeport_name(location_name)
+            validated_tradeport, success = LocationNameMatching.validate_tradeport_name(location_name)
 
-        if not success:
-            return {"success": False, 
-                    "instructions": "You cannot identify at which tradeport the user is. He must select the tradeport in the commidity terminal and repeat the command.", 
-                    "message": validated_tradeport
-                    }
-        
-        print_debug(f'validated location name: {validated_tradeport["name_short"]}')
-
-        buy_result = self._analyse_prices_at_tradeport(screenshot_file_name, validated_tradeport, operation)
-
-        if not TEST and not buy_result["success"]:
-            return buy_result
-        
-        operation = "sell"
-        self._click_sell_button(screenshot_file_name)
-
-        sell_screenshot_filename = self.take_screenshot(operation)
-
-        sell_result = self._analyse_prices_at_tradeport(sell_screenshot_filename, validated_tradeport, operation)
-
-        if not sell_result["success"]:
-            buy_result["success"] = False
+            if not success:
+                return {"success": False, 
+                        "instructions": "You cannot identify at which tradeport the user is. He must select the tradeport in the commidity terminal and repeat the command.", 
+                        "message": validated_tradeport
+                        }
             
-        buy_result['message']['sellable_commodities_info'] = sell_result['message']['sellable_commodities_info']
-            
-        return buy_result
+            print_debug(f'validated location name: {validated_tradeport["name_short"]}')            
+
+        if operation == "buy":
+            buy_result = self._analyse_prices_at_tradeport(screenshot_file_name, validated_tradeport, operation)
+
+            if not buy_result["success"]:
+                return buy_result
         
-    def _click_sell_button(self, screenshot_file_name):
+        if operation == "sell" or asked_operation == "both":
+            operation = "sell"
+            self._click_button(screenshot_file_name, operation)
+
+            sell_screenshot_filename = self.take_screenshot(operation)
+
+            sell_result = self._analyse_prices_at_tradeport(sell_screenshot_filename, validated_tradeport, operation)
+
+            if asked_operation == "both":
+                buy_result["success"] = buy_result["success"] and sell_result["success"]
+                buy_result['message']['sellable_commodities_info'] = sell_result['message']['sellable_commodities_info']
+                return buy_result
+                
+            return sell_result
+        
+    def _click_button(self, screenshot_file_name, operation):
         # first, get the coordinates of the sell button in the screen
         screenshot = cv2.imread(screenshot_file_name)
         gray_screenshot = cv2.cvtColor(screenshot, cv2.COLOR_BGR2GRAY)
         
         # Template matching for accept offer template
-        sell_button_position = cv2.matchTemplate(gray_screenshot, self.template_kiosk_sell_button, cv2.TM_CCOEFF_NORMED)
-        _, _, _, sell_button_coordinates = cv2.minMaxLoc(sell_button_position)
+        template =  self.template_kiosk_sell_button
+        if operation == "sell":
+            template = self.template_kiosk_sell_button
+        button_position = cv2.matchTemplate(gray_screenshot, template, cv2.TM_CCOEFF_NORMED)
+        _, _, _, button_coordinates = cv2.minMaxLoc(button_position)
         
         active_window = pygetwindow.getActiveWindow()
         if active_window:
@@ -137,11 +148,11 @@ class UexCommodityKioskAnalyser:
             window_x, window_y = active_window.left, active_window.top
 
             # Templategröße ermitteln
-            template_height, template_width = self.template_kiosk_sell_button.shape[:2]
+            template_height, template_width = template.shape[:2]
 
             # Berechne die absolute Mitte des Templates
-            absolute_x = window_x + sell_button_coordinates[0] + template_width // 2
-            absolute_y = window_y + sell_button_coordinates[1] + template_height // 2
+            absolute_x = window_x + button_coordinates[0] + template_width // 2
+            absolute_y = window_y + button_coordinates[1] + template_height // 2
 
             # Bewege die Maus langsam zur Zielposition
             pyautogui.moveTo(absolute_x, absolute_y, duration=0.2)
@@ -249,36 +260,6 @@ class UexCommodityKioskAnalyser:
 
         # print_debug(delivery_mission)
         # return delivery_mission
-
-    def accept_mission_click(self, accept_button_coordinates):
-        active_window = pygetwindow.getActiveWindow()
-        if active_window:
-            # Speichere die aktuelle Position der Maus
-            original_mouse_x, original_mouse_y = pyautogui.position()
-
-            # Fensterposition bestimmen
-            window_x, window_y = active_window.left, active_window.top
-
-            # Templategröße ermitteln
-            template_height, template_width = self.accept_offer_template.shape[:2]
-
-            # Berechne die absolute Mitte des Templates
-            absolute_x = window_x + accept_button_coordinates[0] + template_width // 2
-            absolute_y = window_y + accept_button_coordinates[1] + template_height // 2
-
-            # Bewege die Maus langsam zur Zielposition
-            pyautogui.moveTo(absolute_x, absolute_y, duration=0.2)
-
-            # Verzögerung vor dem Klick
-            time.sleep(0.1)
-
-            # Führe den Klick aus mit einer längeren Klickdauer
-            pyautogui.mouseDown()
-            time.sleep(0.1)  # Halte die Maustaste 0.1 Sekunden lang gedrückt
-            pyautogui.mouseUp()
-
-            # Setze die Mausposition auf die ursprüngliche Position zurück
-            pyautogui.moveTo(original_mouse_x, original_mouse_y, duration=0.2)
 
     def take_screenshot(self, operation):
         if TEST:
@@ -423,6 +404,7 @@ class UexCommodityKioskAnalyser:
             return text, True
         except Exception:
             traceback.print_exc()
+            return "Error during price analysis. Check console", False
 
     def adjust_gamma(self, image, gamma=1.0):
         inv_gamma = 1.0 / gamma
@@ -483,15 +465,31 @@ class UexCommodityKioskAnalyser:
 
         if max_val_button < threshold:
             return "Could not identify buy button. Reposition yourself.", False
+        
+        h_screenshot, w_screenshot = gray_screenshot.shape[:2]
+        h_button, w_button = self.template_kiosk_buy_button.shape[:2]
+        
+        res_bottom_right_corner = cv2.matchTemplate(
+            gray_screenshot, self.template_kiosk_buy_lower_right, cv2.TM_CCOEFF_NORMED
+        )
+        _, max_val_bottom_right, _, max_loc_bottom_right = cv2.minMaxLoc(res_bottom_right_corner)
+
+        h_bottom_right, w_bottom_right = self.template_kiosk_buy_lower_right.shape[:2]
 
         # Breite und Höhe des Buy-Button Templates
-        h_button, w_button = self.template_kiosk_buy_button.shape[:2]
 
         # Berechne den Ausschnitt ab der unteren linken Ecke des gefundenen Templates
-        x_start = max(max_loc_button[0] - 150, 0)
-        y_start = max_loc_button[1] + h_button
+        x_start = max(max_loc_button[0] - 30, 0)
+        x_end = min(max_loc_bottom_right[0] + w_bottom_right, w_screenshot)
+        y_start = min(max_loc_button[1] + h_button, h_screenshot)
+        y_end = min(max_loc_bottom_right[1], h_screenshot)
+
+        self.debug_show_screenshot(gray_screenshot)
+        print_debug(f'cropping at ({x_start},{y_start}) -> ({x_end},{y_end})')
 
         cropped_screenshot = gray_screenshot[y_start:, x_start:]
+        if max_val_bottom_right >= threshold:
+            cropped_screenshot = gray_screenshot[y_start:y_end, x_start:x_end]
 
         self.debug_show_screenshot(cropped_screenshot)
 
@@ -636,12 +634,18 @@ class UexCommodityKioskAnalyser:
     def debug_show_screenshot(self, image):
         if not DEBUG:
             return
-        # Zeige den zugeschnittenen Bereich an
-        cv2.imshow("Cropped Screenshot", image)
-        while True:
-            if cv2.waitKey(0) == 13:  # Warten auf die Eingabetaste (Enter)
-                break
-        cv2.destroyAllWindows()
+        print_debug("displaying image, press Enter to continue")
+        try:
+            # Zeige den zugeschnittenen Bereich an
+            cv2.imshow("Cropped Screenshot", image)
+            while True:
+                if cv2.waitKey(0) == 13:  # Warten auf die Eingabetaste (Enter)
+                    break
+            cv2.destroyAllWindows()
+        except Exception:
+            traceback.print_exc()
+            print_debug("could not display image")
+            return
 
     def _get_screenshot_texts(self, image, operation):
 
@@ -708,8 +712,9 @@ class UexCommodityKioskAnalyser:
                 "max_tokens": 1000,
             }
 
+            print_debug("Calling openai vision for text extraction")
             response = requests.post(
-                "https://api.openai.com/v1/chat/completions", headers=headers, json=payload
+                "https://api.openai.com/v1/chat/completions", headers=headers, json=payload, timeout=300
             )
             
             # Write JSON data to a file

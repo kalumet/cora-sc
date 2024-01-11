@@ -100,17 +100,17 @@ class UexDataRunnerManager(FunctionManager):
     # @abstractmethod
     def register_functions(self, function_register):
         function_register[self.transmit_commodity_prices_for_tradeport.__name__] = self.transmit_commodity_prices_for_tradeport
+        function_register[self.sent_one_price_update_information_to_uex.__name__] = self.sent_one_price_update_information_to_uex
     
     # @abstractmethod
     def get_function_prompt(self):
+        print_debug("function prompt for uex data runner called.")
         return (
-            f"Do only call the function {self.function_name} if the player says something like: "
-            "{examples}"
-            "'Transmit prices to uex corp.' "
-            "'I have new prices to transmit' "
-            "'I have new prices to transmit from tradeport ...' "
-            "{examples}"
-            "Do not confuse this with a switch to context TDD"
+            "You are able to sent price information to the uex corp. To do so, you can call the following functions: "
+            f"- '{self.transmit_commodity_prices_for_tradeport.__name__}' should be called, if the player wants to transmit prices (many prices) and if he requests from you to analyse the prices displayed on the trading terminal. "
+            f"- '{self.sent_one_price_update_information_to_uex.__name__}' should be called, if he wants to transmit a single price, or if he wants you to correct prices from a previous analysis. Follow these instructions: "
+             " Do not make assumption about the values for this function. Only allowed values as specified are allowed. Go through every parameter with the player and ask him for the values. "
+            " These requests should not incure a context switch to TDD. "
         )
     
     # @abstractmethod
@@ -119,13 +119,14 @@ class UexDataRunnerManager(FunctionManager):
         Provides the openai function definition for this manager. 
         """
         tradeport_names = self.uex_service.get_category_names("tradeports")
+        commodity_names = self.uex_service.get_category_names("commodities")
 
         tools = [
             {
                 "type": "function",
                 "function": 
                 {
-                    "name": self.function_name,
+                    "name": self.transmit_commodity_prices_for_tradeport.__name__,
                     "description": "Function to transmit commodity prices to the uex corp. Call this function on phrases like 'New prices for transmission'. ",
                     "parameters": {
                         "type": "object",
@@ -148,10 +149,65 @@ class UexDataRunnerManager(FunctionManager):
                         "required": ["validated_tradeport_by_user"]
                     }
                 }
+            },
+            {
+                "type": "function",
+                "function": 
+                {
+                    "name": self.sent_one_price_update_information_to_uex.__name__,
+                    "description": "Function to transmit one commodity price to uex. ",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "player_provided_tradeport_name": {
+                                "type": "string",
+                                "description": "The tradeport name provided by the user. ",
+                                "enum": tradeport_names
+                            },
+                            "operation": {
+                                "type": "string",
+                                "description": "What kind of prices the user want to transmit. 'buy' is for buyable commodities at the location, 'sell' are for sellable commodities.",
+                                "enum": ["sell","buy"]
+                            },
+                            "commodity_name": {
+                                "type": "string",
+                                "description": "The name of the commodity",
+                                "enum": commodity_names
+                            },
+                            "available_SCU_quantity": {
+                                "type": "number",
+                                "description": "The stock quantity available at this tradeport"
+                            },
+                            "inventory_state": {
+                                "type": "string",
+                                "description": "Indicates the fill level of the inventory for this commodity",
+                                "enum": ["MAX INVENTORY", "MEDIUM INVENTORY", "LOW INVENTORY", "OUT OF STOCK"]
+                            },
+                            "price_per_unit": {
+                                "type": "number",
+                                "description": "The price of this commodity at this tradeport for the given operation"
+                            },
+                            "multiplier": {
+                                "type": "string",
+                                "description": "The multiplier of the price",
+                                "enum": ["M", "k"]
+                            }, 
+                            "values_validated_by_user": {
+                                "type": "boolean",
+                                "description": "Set to false, unless the user confirms all price information explicitely.",
+                            },
+                            "confirm_new_available_trade_commodity": {
+                                "type": "boolean",
+                                "description": "Do not set. Only set to true, if the user confirms, that this commodity should be transmitted to uex."
+                            }
+                        },
+                        "required": ["player_provided_tradeport_name", "commodity_name", "price_per_unit", "values_validated_by_user"]
+                    }
+                }
             }
         ]
 
-        # print_debug(tools)
+        print_debug(tools)
         return tools
 
     # @abstractmethod
@@ -161,8 +217,67 @@ class UexDataRunnerManager(FunctionManager):
         """
         return AIContext.CORA
 
-    def transmit_commodity_prices_for_tradeport(self, function_args):
+    def sent_one_price_update_information_to_uex(self, function_args):
+        printr.print(f'-> Command: Sending price update to uex')
+        print_debug(function_args)
+
+        if not function_args.get("values_validated_by_user"):
+            function_response = {"success": False, "instruction": f"The user has not confirmed price update informations yet. Ask him to do so before calling this function again {json.dumps(function_args)}"}
+            return function_response, None
+
+        tradeport = self.uex_service.get_tradeport(function_args.get("player_provided_tradeport_name", None))
+        if not tradeport:
+            function_response = {"success": False, "instruction": "Invalid tradeport name. Ask the user for the tradeport he is currently at."}
+            return function_response, None
         
+        operation = function_args["operation"]
+
+        new_commodity_confirmed = function_args.get("confirm_new_available_trade_commodity", False)
+        
+        commodity_current_tradeport_price = self.uex_service.get_commodity_for_tradeport(function_args.get("commodity_name", None), tradeport)
+        if not commodity_current_tradeport_price:
+            if not new_commodity_confirmed:
+                function_response = {"success": False, "instruction": f"Commodity is not tradeable at this tradeport. Does the user still want to sent this commodity price update? Provide him the information {json.dumps(function_args)}"}
+                return function_response, None
+            
+            if not operation:
+                function_response = {"success": False, "instruction": f"If the player wants to submit a new tradeable commodity at this tradeport, he has to provide the operation."}
+                return function_response, None
+            
+            commodity_current_tradeport_price = {
+                f"price_{operation}": function_args.get("price_per_unit", None),
+                "operation": operation
+            }
+
+        
+        available_SCU_quantity = function_args.get("available_SCU_quantity", None)
+
+        inventory_state = function_args.get("inventory_state", None)
+
+        price_per_unit = function_args.get("price_per_unit", None)
+
+        multiplier = function_args.get("multiplier", None)
+
+        commodity = self.uex_service.get_commodity(function_args["commodity_name"])
+
+        new_price, success = CommodityPriceValidator._validate_price(validated_commodity=commodity_current_tradeport_price, multiplier=multiplier, operation=commodity_current_tradeport_price["operation"], price_to_check=price_per_unit)
+
+        if not success:
+            return {"success":False, "instructions": "The commodity price provided is not plausible for this tradeport."}
+
+        commodity_update_info = {
+            "code": commodity["code"],
+            "price": new_price
+        }
+
+        message, success = self.uex_service.update_tradeport_price(tradeport=tradeport, commodity_update_info=commodity_update_info, operation=operation)
+
+        if not success:
+            return {"success": False, "instructions": "Request was not accepted by uex."}
+        
+        return {"success": True}
+
+    def transmit_commodity_prices_for_tradeport(self, function_args):
         printr.print(f'-> Command: Analysing commodity prices to be sent to uex corp')
         print_debug(function_args)
         if not function_args.get("player_provided_tradeport_name"):
@@ -315,7 +430,7 @@ class UexDataRunnerManager(FunctionManager):
 
             # Setze die Mausposition auf die ursprüngliche Position zurück
             pyautogui.moveTo(original_mouse_x, original_mouse_y, duration=0.2)
-     
+         
     def _analyse_prices_at_tradeport(self, screen_shot_path, validated_tradeport, operation):
         
         prices_raw, success = self._get_price_information(screen_shot_path, operation)
@@ -331,7 +446,7 @@ class UexDataRunnerManager(FunctionManager):
 
         print_debug(f"extracted {number_of_extracted_prices} price-informations from screenshot")
 
-        validated_prices, success = CommodityPriceValidator.validate_price_information(prices_raw, validated_tradeport, operation)
+        validated_prices, invalid_prices, success = CommodityPriceValidator.validate_price_information(prices_raw, validated_tradeport, operation)
 
         if not success:
             self.overlay.display_overlay_text("Error: could not identify commodities. Check logs.")
@@ -356,8 +471,10 @@ class UexDataRunnerManager(FunctionManager):
         with open(json_file_name, 'w') as file:
             json.dump(validated_prices, file, indent=4)
         
+        updated_commodities_uex_id = []
         updated_commodities = []
-        update_errors = []
+        update_errors_uex_status = []
+        rejected_commodities = []
         # TODO collect valid prices that haven been successfully transmitted
 
         for validated_price in validated_prices:
@@ -365,67 +482,50 @@ class UexDataRunnerManager(FunctionManager):
 
             if not success:
                 print_debug(f'price could not be updated: {response}')
-                update_errors.append(response)
+                update_errors_uex_status.append(response)
+                updated_commodities.append(validated_price)
                 continue
 
             print_debug(f'price successfully updated')
-            updated_commodities.append(response)
+            updated_commodities_uex_id.append(response)
+            rejected_commodities.append(validated_price)
         
+        rejected_commodities.extend(invalid_prices)
 
-        if len(updated_commodities) == 0:
-            self.overlay.display_overlay_text(f"UEX Corp: Thank you, we accepted {len(updated_commodities)} out of {number_of_extracted_prices} price information.", display_duration=30000)
+        if len(updated_commodities_uex_id) == 0:
+            self.overlay.display_overlay_text(f"UEX Corp: Thank you, we accepted {len(updated_commodities_uex_id)} out of {number_of_extracted_prices} price information.", display_duration=30000)
             return {
                         "success": False,
-                        "instructions": "Tell the player in a funny but fair way, that UEX wasn't able to process the price information request.",
+                        "instructions": "Tell the player in a funny but fair way, that UEX wasn't able to process the price information request. Ask him, ask him if he wants to correct these..",
                         "message": {
                             "tradeport": validated_tradeport["name"],
                             f"{operation}able_commodities_info": {
                                 "identified": number_of_extracted_prices,
                                 "valid": number_of_validated_prices,
-                                "accepted_price_data_by_uex": len(updated_commodities),
-                                "rejected_price_data_by_uex": len(update_errors)
+                                "accepted_price_data_by_uex": len(updated_commodities_uex_id),
+                                "rejected_price_data_by_uex": len(update_errors_uex_status),
+                                "rejected_commodity_price_infos": rejected_commodities
                             }
                         }
                     }
         
-        self.overlay.display_overlay_text(f"UEX Corp: Thank you, we accepted {len(updated_commodities)} out of {number_of_extracted_prices} price information.", display_duration=30000)
+        self.overlay.display_overlay_text(f"UEX Corp: Thank you, we accepted {len(updated_commodities_uex_id)} out of {number_of_extracted_prices} price information.", display_duration=30000)
         return {
                     "success": True,
-                    "instructions": "Just say something like 'Prices where transmitted, do you need details?'",
+                    "instructions": "Just say something like 'Prices where transmitted, do you need details?'. If there are rejected prices, ask him if he wants to correct these.",
                     "message": {
                         "tradeport": validated_tradeport["name"],
                         f"{operation}able_commodities_info": {
                             "identified": number_of_extracted_prices,
                             "valid": number_of_validated_prices,
-                            "accepted_price_data_by_uex": len(updated_commodities),
-                            "rejected_price_data_by_uex": len(update_errors)
+                            "accepted_price_data_by_uex": len(updated_commodities_uex_id),
+                            "rejected_price_data_by_uex": len(update_errors_uex_status),
+                            "rejected_commodity_price_infos": rejected_commodities
                         }
                     }
                 }
 
-        # filename = self.take_screenshot("sell")
 
-        # screenshot_text = self.get_price_information(filename)
-
-        # if not screenshot_text:
-        #     return None
-
-        # if DEBUG:
-        #     for text in screenshot_text:
-        #         print(text)
-
-        # delivery_mission = text_analyser.TextAnalyzer.analyze_text(screenshot_text)
-
-        # if not delivery_mission or len(delivery_mission.packages) == 0:
-        #     return None
-
-        # LocationNameMatching.validate_location_names(delivery_mission)
-
-        # if not TEST:
-        #     self.accept_mission_click(accept_button_coordinates)
-
-        # print_debug(delivery_mission)
-        # return delivery_mission
 
     def _take_screenshot(self, operation):
         if TEST:

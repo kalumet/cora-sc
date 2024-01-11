@@ -13,9 +13,10 @@ class CommodityPriceValidator:
     @staticmethod
     def validate_price_information(commodities_price_info_raw, tradeport, operation):
         validated_prices = []
+        invalid_prices = []
 
         if not commodities_price_info_raw.get("commodity_prices", False):
-            return "json structure not as expected", False
+            return "json structure not as expected", None, False
 
         for commodity_price_info_raw in commodities_price_info_raw["commodity_prices"]:
             print_debug(f"checking {commodity_price_info_raw}")
@@ -37,46 +38,60 @@ class CommodityPriceValidator:
             price_raw = commodity_price_info_raw.get("price_per_unit")
             multiplier = commodity_price_info_raw.get("multiplier")
 
-            validated_price, success = CommodityPriceValidator._validate_price(validated_commodity, price_raw, multiplier, operation)
-
-            if not success:
-                print_debug(f"{validated_price} ... skipping")
-                continue
+            new_price, success = CommodityPriceValidator._validate_price(validated_commodity, price_raw, multiplier, operation)
 
             # inject found information 
             commodity_price_info_raw["code"] = validated_commodity_key
             commodity_price_info_raw["commodity_name"] = validated_commodity["name"]
-            commodity_price_info_raw["price"] = validated_price
+            
+            if not success:
+                print_debug(f"{new_price} not plausible ... skipping")
+                invalid_prices.append(commodity_price_info_raw)
+                
+            commodity_price_info_raw["price"] = new_price
 
             validated_prices.append(commodity_price_info_raw)
 
-        return validated_prices, True
+        return validated_prices, invalid_prices, True
 
 
 
     @staticmethod
-    def _validate_price(validated_commodity, price_raw, multiplier, operation):
-        price = validated_commodity[f"price_{operation}"]
+    def _validate_price(validated_commodity, price_to_check, multiplier, operation):
+        uex_price = validated_commodity[f"price_{operation}"]
 
         # we check, if the raw price is within 20% of the current price
-        difference = abs(price - price_raw)
+        difference = abs(uex_price - price_to_check)
 
-        if difference < 0.2 * price:  # as of uex api tolerance for price changes
-            return price, True
+        if difference < 0.2 * uex_price:  # as of uex api tolerance for price changes
+            return price_to_check, True
         
         # we can check, if we would be in range, if we apply the given multiplicator
         if multiplier.lower() == "m":
-            price_raw = price_raw * 1000000
+            price_to_check = price_to_check * 1000000
         
         if multiplier.lower() == "k":
-            price_raw = price_raw * 1000
+            price_to_check = price_to_check * 1000
 
-        difference = abs(price - price_raw)
+        difference = abs(uex_price - price_to_check)
 
-        if difference < 0.2 * price:
-            return price, True
+        if difference < 0.4 * uex_price:  # prices with 20% variance are ok and will be accepted, higher variance is subject to validation at UEX, we accept up to 40% before we reject.
+            return price_to_check, True
         
-        return f"given price {price_raw} is not plausible for current commodity price {price}", False
+        # sometimes, we receive . price. instead of 168 for instance 1.68. we try to multiply in 10 steps 2 times and see if we get a plausible price with low variance, then we accept it
+        index = 1
+        sanitize_price = price_to_check
+        while index <= 2:
+            sanitize_price = sanitize_price * 10
+
+            difference = abs(uex_price - sanitize_price)
+
+            if difference < 0.2 * uex_price:  # prices with 20% variance are ok 
+                return sanitize_price, True
+            
+            index += 1
+
+        return sanitize_price, False
     
 
 

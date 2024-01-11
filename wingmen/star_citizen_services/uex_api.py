@@ -6,8 +6,8 @@ import random
 from services.printr import Printr
 
 
-DEBUG = False
-TEST = False
+DEBUG = True
+TEST = True
 CALL_UEX_SR_ENDPOINT = True
 
 
@@ -586,6 +586,16 @@ class UEXApi():
         
         return None
     
+    def get_commodity_for_tradeport(self, commodity_mapping_name, tradeport):
+        code = self.name_mapping[CATEGORY_COMMODITIES].get(commodity_mapping_name, None)
+        print_debug(f'uex: {commodity_mapping_name}-> {code} @ {tradeport["name_short"]}')
+        if not code:
+            return None
+        
+        prices_dict = tradeport.get("prices", {})
+
+        return prices_dict.get(code, None)
+        
     def get_data(self, category):
         self._refresh_data()
         return self.data[category].get("data", [])

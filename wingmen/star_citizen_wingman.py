@@ -1,18 +1,23 @@
 import json
-from enum import Enum
 import time
 import traceback
+import random
+import asyncio
 from difflib import SequenceMatcher
+from openai import OpenAI
 from elevenlabs import generate, stream, Voice, voices
 from services.printr import Printr
 from services.secret_keeper import SecretKeeper
 from wingmen.open_ai_wingman import OpenAiWingman
 
+from wingmen.star_citizen_services.ai_context_enum import AIContext
 from wingmen.star_citizen_services.keybindings import SCKeybindings
 from wingmen.star_citizen_services.uex_api import UEXApi
 from wingmen.star_citizen_services.mission_manager import MissionManager 
-from wingmen.star_citizen_services.uex_update_service.commodity_kiosk_screenshot_ocr import UexCommodityKioskAnalyser  
+from wingmen.star_citizen_services.uex_update_service.uex_data_runner import UexDataRunnerManager  
 from wingmen.star_citizen_services.overlay import StarCitizenOverlay
+from wingmen.star_citizen_services.tdd_manager import TddManager
+from wingmen.star_citizen_services.function_manager import StarCitizensAiFunctionsManager, FunctionManager
 
 DEBUG = True
 
@@ -60,13 +65,6 @@ class StarCitizenWingman(OpenAiWingman):
     3. TODO Cache-Logic for text-to-speech responses to reduce cost with config parameters to specify the ammount of responses to be cached vs. dropped vs. renewed
     """
 
-    class AIContext(Enum):
-        """
-        used to switch between contexts of my ai
-        """
-        CORA = "CoraInteractionRequests"
-        TDD = "TradeAndDevelopmentDivisionRequests"
-
     def __init__(
         self,
         name: str,
@@ -82,21 +80,22 @@ class StarCitizenWingman(OpenAiWingman):
         )
         
         self.contexts_history = {}  # Dictionary to store the state of different conversion contexts
-        self.current_context: self.AIContext = self.AIContext.CORA  # Name of the current context
+        self.current_context: AIContext = AIContext.CORA  # Name of the current context
         self.current_user_request: str = None  # saves the current user request
         self.switch_context_executed = False  # used to identify multiple switch executions that would be incorrect -> Error
         self.sc_keybinding_service: SCKeybindings = None  # initialised in validate
         self.uex_service: UEXApi = None  # set in validate()
         self.mission_manager_service: MissionManager = None # initialized in validate()
-        self.kiosk_prices_manager: UexCommodityKioskAnalyser = None # initialized in validate()
-        self.tdd_voice = "onyx"
         self.messages_buffer = 10
         self.current_tools = None # init in validate
+        self.tdd_voice = self.config["openai"]["contexts"]["tdd_voice"]
         self.config["openai"]["tts_voice"] = self.config["openai"]["contexts"]["cora_voice"]
         self.config["sound"]["play_beep"] = False
         self.config["sound"]["effects"] = ["INTERIOR_HELMET", "ROBOT"]
-        self.config["openai"]["conversation_model"] = self.config["openai"]["contexts"][f"context-{self.AIContext.CORA.name}"]["conversation_model"]
+        self.config["openai"]["conversation_model"] = self.config["openai"]["contexts"][f"context-{AIContext.CORA.name}"]["conversation_model"]
         self.overlay = None # init in validate
+        self.ai_functions = {} # init in validate
+        self.ai_functions_manager: StarCitizensAiFunctionsManager = None  # init in validate
         
         # init the configuration dynamically based on current star citizen settings.
         # the config is dynamically expanded for all mapped keybinds.
@@ -133,13 +132,14 @@ class StarCitizenWingman(OpenAiWingman):
             # every conversation starts with the "context" that the user has configured
             self.uex_service = UEXApi.init(uex_api_key, uex_access_code)
             self.mission_manager_service = MissionManager(config=self.config)
-            self.kiosk_prices_manager = UexCommodityKioskAnalyser(f'{self.config["data-root-directory"]}uex', self.openai.api_key)
             self.sc_keybinding_service = SCKeybindings(self.config, self.secret_keeper)
             self.sc_keybinding_service.parse_and_create_files()
 
+            self.ai_functions_manager = StarCitizensAiFunctionsManager(self.config, self.secret_keeper)
+
             self.current_tools = self._get_context_tools(self.current_context)
             self.overlay = StarCitizenOverlay()
-            self._set_current_context(self.AIContext.CORA, new=True)
+            self._set_current_context(AIContext.CORA, new=True)
 
             # self.mission_manager_service.get_new_mission()  # TODO nur ein Test auskommentieren
             # self.kiosk_prices_manager.identify_kiosk_prices()  # TODO nur ein Test auskommentieren
@@ -157,27 +157,36 @@ class StarCitizenWingman(OpenAiWingman):
             self.current_tools = self._get_context_tools(current_context=new_context)
             self.current_context = new_context
             context_prompt = f'{self.config["openai"]["contexts"].get(f"context-{new_context.name}")}'
+            functions_prompt = " "
+
             context_switch_prompt = ""
-            if new_context == self.AIContext.CORA:
+            if new_context == AIContext.CORA:
                 context_prompt += (
                     f' The character you are supporting is named "{self.config["openai"]["player_name"]}". '
                     f'His title is {self.config["openai"]["player_title"]}. His ship call id is {self.config["openai"]["ship_name"]}. '
                     f'He wants you to respond in {self.config["sc-keybind-mappings"]["player_language"]}'
                 )
                 
-                context_switch_prompt += f" Only switch to context {self.AIContext.TDD}, if the request is calling a specific Trading Devion, like 'Hurston Trading Division, this is Delta 7, Over'."
+                context_switch_prompt += f" Switch to context {AIContext.TDD}, if the player is calling a specific Trading Division, like 'Hurston Trading Division, this is Delta 7, Over'."
 
-            if new_context == self.AIContext.TDD:
+            if new_context == AIContext.TDD:
                 context_switch_prompt += (
-                    f" Whenever the player adresses a new Trading Devision Location, switch the employee "
+                    f" Whenever the player adresses a new Trading Division Location, switch the employee "
                     f"by calling the function switch_tdd_employee and select a different employee_id. "
                     f"If the current user request does not fit the current context, switch to an appropriate context "
-                    f"by calling the switch_context function. Do switch to context {self.AIContext.CORA}, "
-                    f"if the requests adresses 'Cora' or using words like 'computer' or demanding a specific player or ship action or mission related actions. "
+                    f"by calling the switch_context function. Do switch to context {AIContext.CORA}, "
+                    f"if the player adresses 'Cora' or using words like 'computer' or demanding a specific player or ship action or mission related actions. "
                     f'He wants you to respond in {self.config["sc-keybind-mappings"]["player_language"]}'
                 )
 
-            self.messages = [{"role": "system", "content": f'{context_prompt}. On a request of the Player you will identify the context of his request. The current context is: {new_context.value}. You can switch context to: {context_switch_prompt}'}]
+            # add all additional function prompts of implemented managers for the given context.
+            for ai_function_manager in self.ai_functions_manager.get_managers(new_context):
+                ai_function_manager: FunctionManager
+                functions_prompt += ai_function_manager.get_function_prompt()
+            
+            context_prompt += functions_prompt
+
+            self.messages = [{"role": "system", "content": f'{context_prompt}. On a request of the Player you will identify the context of his request. The current context is: {new_context.value}. Follow these rules to switch context: {context_switch_prompt}'}]
         else:
             # get the saved context history
             tmp_new_context_history = self.contexts_history[new_context]
@@ -185,10 +194,10 @@ class StarCitizenWingman(OpenAiWingman):
             self.messages = tmp_new_context_history.get("messages").copy()
             self.current_context = new_context
 
-        if new_context == self.AIContext.CORA:
+        if new_context == AIContext.CORA:
             self.messages_buffer = 10 # we don't need much memory for a given action
             self.current_tools = self._get_context_tools(current_context=new_context)  # recalculate tools
-        elif new_context == self.AIContext.TDD:
+        elif new_context == AIContext.TDD:
             self.messages_buffer = 20 # dealing on the journey of the player to trade might require more context-information in the conversation
         
     def _save_current_context(self):
@@ -202,7 +211,9 @@ class StarCitizenWingman(OpenAiWingman):
         """Switch to a different context, saving the current one."""
         try:
             # Versuche, den Kontext basierend auf dem Namen zu finden
-            context_to_switch_to = self.AIContext(new_context_name)
+            # context_to_switch_to = AIContext(new_context_name)
+            context_to_switch_to = next(context for context in AIContext if context.value == new_context_name)
+
             # Überprüfe, ob der Kontext im Dictionary existiert
             if context_to_switch_to in self.contexts_history:
                 # Logik für den Fall, dass der Kontext existiert
@@ -221,10 +232,15 @@ class StarCitizenWingman(OpenAiWingman):
             print_debug(f"Kontext {new_context_name} ist kein gültiger Kontext.")
 
     def _get_context_tools(self, current_context: AIContext):
-        if current_context == self.AIContext.CORA:
+        if current_context == AIContext.CORA:
             return self._get_cora_tools()
-        elif current_context == self.AIContext.TDD:
-            return self._get_tdd_tools()
+        elif current_context == AIContext.TDD:
+            tdd_tools = []
+            for ai_function_manager in self.ai_functions_manager.get_managers(current_context):
+                ai_function_manager: FunctionManager
+                tdd_tools.extend(ai_function_manager.get_function_tools())
+            tdd_tools.append(self._context_switch_tool(current_context=AIContext.TDD))
+            return tdd_tools
         else:
             return self._context_switch_tool()
        
@@ -384,85 +400,6 @@ class StarCitizenWingman(OpenAiWingman):
                 instant_reponse = self._select_command_response(command)
                 await self._play_to_user(instant_reponse)
 
-        if function_name == "switch_tdd_employee":
-            self.tdd_voice = function_args["employee_id"]
-            self.config["openai"]["tts_voice"] = self.tdd_voice
-            printr.print(f'Neuer TDD Ansprechpartner: {function_args["employee_id"]}', tags="info")
-            return json.dumps({"success":"True"}), None
-        
-        if function_name == "find_best_trade_route_from_location":
-            function_response = self.uex_service.find_best_trade_from_location(location_name=function_args["location_name"])
-            # best_trade = {
-            #                 "commodity": self.code_mapping.get(CATEGORY_COMMODITIES, {}).get(commodity, ''),
-            #                 "buy_at": start_trade.get('name_short', ''),
-            #                 "buy_satellite": self.code_mapping.get(CATEGORY_SATELLITES, {}).get(start_trade.get('satellite', ''), ''),
-            #                 "buy_planet": self.code_mapping.get(CATEGORY_PLANETS, {}).get(start_trade.get('planet', ''), ''),
-            #                 "sell_at": best_sell_location.get('name_short', ''),
-            #                 "sell_satellite": self.code_mapping.get(CATEGORY_SATELLITES, {}).get(best_sell_location.get('satellite', ''), ''),
-            #                 "sell_planet": self.code_mapping.get(CATEGORY_PLANETS, {}).get(best_sell_location.get('planet', ''), ''),
-            #                 "buy_price": start_trade.get('prices', {}).get(commodity, {}).get('price_buy', 0),
-            #                 "sell_price": best_sell_location.get('prices', {}).get(commodity, {}).get('price_sell', 0),
-            #                 "profit": profit
-            #             }
-            if not function_response.get("success", None):
-                moon_or_planet_buy = function_response["buy_satellite"] if function_response["buy_satellite"] else function_response["buy_planet"]
-                moon_or_planet_sell = function_response["sell_satellite"] if function_response["sell_satellite"] else function_response["sell_planet"]
-                self.overlay.display_overlay_text(
-                    f'Buy {function_response["commodity"]} at {function_response["buy_at"]} ({moon_or_planet_buy}). '
-                    f'Sell at {function_response["sell_at"]} ({moon_or_planet_sell}).'    
-                )
-            function_response = json.dumps(function_response)
-            printr.print(f'-> Resultat: {function_response}', tags="info") 
-
-        if function_name == "find_best_trade_route_between_locations":
-            function_response = self.uex_service.find_best_trade_between_locations(location_name1=function_args["location_name_from"], location_name2=function_args["location_name_to"])
-            if not function_response.get("success", None):
-                moon_or_planet_buy = function_response["buy_satellite"] if function_response["buy_satellite"] else function_response["buy_planet"]
-                moon_or_planet_sell = function_response["sell_satellite"] if function_response["sell_satellite"] else function_response["sell_planet"]
-                self.overlay.display_overlay_text(
-                    f'Buy {function_response["commodity"]} at {function_response["buy_at"]} ({moon_or_planet_buy}). '
-                    f'Sell at {function_response["sell_at"]} ({moon_or_planet_sell}).'    
-                )
-            function_response = json.dumps(function_response)
-            printr.print(f'-> Resultat: {function_response}', tags="info")
-
-        if function_name == "find_best_sell_price_for_commodity_at_location":
-            function_response = self.uex_service.find_best_sell_price_at_location(location_name=function_args["location_name_to"], commodity_name=function_args["commodity_name"])
-            # "commodity": self.code_mapping.get(CATEGORY_COMMODITIES, {}).get(commodity_code, ''),
-            # "sell_at": best_sell.get("name_short", ''),
-            # "sell_satellite": self.code_mapping.get(CATEGORY_SATELLITES, {}).get(best_sell.get("satellite", ''), ''),
-            # "sell_planet": self.code_mapping.get(CATEGORY_PLANETS, {}).get(best_sell.get("planet", ''), ''),
-            # "sell_price": max_sell_price
-            if not function_response.get("success", None):
-                moon_or_planet_sell = function_response["sell_satellite"] if function_response["sell_satellite"] else function_response["sell_planet"]
-                self.overlay.display_overlay_text(
-                    f'Sell {function_response["commodity"]} at {function_response["sell_at"]} ({moon_or_planet_sell}) for {function_response["sell_price"]} aUEC.'    
-                )
-            function_response = json.dumps(function_response)
-            printr.print(f'-> Resultat: {function_response}', tags="info")
-
-        if function_name == "find_best_trade_route_for_commodity":
-            function_response = self.uex_service.find_best_trade_for_commodity(commodity_name=function_args["commodity_name"])
-            if not function_response.get("success", None):
-                moon_or_planet_buy = function_response["buy_satellite"] if function_response["buy_satellite"] else function_response["buy_planet"]
-                moon_or_planet_sell = function_response["sell_satellite"] if function_response["sell_satellite"] else function_response["sell_planet"]
-                self.overlay.display_overlay_text(
-                    f'Buy {function_response["commodity"]} at {function_response["buy_at"]} ({moon_or_planet_buy}). '
-                    f'Sell at {function_response["sell_at"]} ({moon_or_planet_sell}).'    
-                )
-            function_response = json.dumps(function_response)
-            printr.print(f'-> Resultat: {function_response}', tags="info")
-
-        if function_name == "find_best_selling_location_for_commodity":
-            function_response = self.uex_service.find_best_selling_location_for_commodity(commodity_name=function_args["commodity_name"])
-            if not function_response.get("success", None):
-                moon_or_planet_sell = function_response["sell_satellite"] if function_response["sell_satellite"] else function_response["sell_planet"]
-                self.overlay.display_overlay_text(
-                    f'Sell {function_response["commodity"]} at {function_response["sell_at"]} ({moon_or_planet_sell}) for {function_response["sell_price"]} aUEC.'    
-                )
-            function_response = json.dumps(function_response)
-            printr.print(f'-> Resultat: {function_response}', tags="info")
-
         if function_name == "box_delivery_mission_management":
             mission_id = function_args.get("mission_id", None)
             printr.print(f'-> Box Function: {function_args["type"]}', tags="info")
@@ -476,27 +413,13 @@ class StarCitizenWingman(OpenAiWingman):
             printr.print(f'-> Resultat: {function_response}', tags="info")
             self.current_tools = self._get_cora_tools()  # recalculate, as with every box mission, we have new information for the function call
 
-        if function_name == "transmit_commodity_price_data_to_uex":
-            printr.print(f'-> Command: Analysing commodity prices to be sent to uex corp')
-            print_debug(function_args)
-            if not function_args.get("player_provided_tradeport_name"):
-                function_response = json.dumps({"success": False, "instruction": "Ask the player to provide the tradeport name for which he wants the prices to be transmitted"})
-                return function_response, None
-            
-            tradeport = self.uex_service.get_tradeport(function_args["player_provided_tradeport_name"])
+        # finally, check for any function managers implementing the called function
+        if function_name in self.ai_functions_manager.get_function_registry():
+            function_to_call = self.ai_functions_manager.get_function(function_name)
+            if callable(function_to_call):
+                function_response = function_to_call(function_args)
 
-            if not tradeport:
-                function_response = json.dumps({"success": False, "instruction": "Invalid tradeport name. Ask the user for the tradeport he is currently at."})
-                return function_response, None
-            
-            if not function_args.get("validated_tradeport_by_user"):
-                function_response = json.dumps({"success": False, "instruction": f"The user has not explicitely confirmed the tradeport. Ask him to confirm the tradeport {tradeport['name']}"})
-                return function_response, None
-            
-            function_response = json.dumps(self.kiosk_prices_manager.identify_kiosk_prices(tradeport, function_args["operation"]))
-            printr.print(f'-> Result: {function_response}', tags="info")
-
-        return function_response, instant_reponse
+        return json.dumps(function_response), instant_reponse
 
     def _execute_switch_context_function(self, function_args):
         print_debug(f'switching context call: {function_args["context_name"]}')
@@ -518,16 +441,16 @@ class StarCitizenWingman(OpenAiWingman):
             # get the command based on the argument passed by GPT
         context_name_to_switch_to = function_args["context_name"]
         self._switch_context(context_name_to_switch_to)
-        if self.current_context == self.AIContext.CORA:
+        if self.current_context == AIContext.CORA:
             self.config["openai"]["tts_voice"] = self.config["openai"]["contexts"]["cora_voice"]
             self.config["sound"]["play_beep"] = False
             self.config["sound"]["effects"] = ["INTERIOR_HELMET", "ROBOT"]
-            self.config["openai"]["conversation_model"] = self.config["openai"]["contexts"][f"context-{self.AIContext.CORA.name}"]["conversation_model"]
-        elif self.current_context == self.AIContext.TDD:
+            self.config["openai"]["conversation_model"] = self.config["openai"]["contexts"][f"context-{AIContext.CORA.name}"]["conversation_model"]
+        elif self.current_context == AIContext.TDD:
             self.config["openai"]["tts_voice"] = self.tdd_voice
             self.config["sound"]["play_beep"] = True
             self.config["sound"]["effects"] = ["RADIO", "INTERIOR_HELMET"]
-            self.config["openai"]["conversation_model"] = self.config["openai"]["contexts"][f"context-{self.AIContext.TDD.name}"]["conversation_model"]
+            self.config["openai"]["conversation_model"] = self.config["openai"]["contexts"][f"context-{AIContext.TDD.name}"]["conversation_model"]
         self.messages.extend(context_messages)  # we readd the messages to the switched context.
         # self._add_user_message(self.current_user_request) # we readd the user message to the new context to make the same user request in the new context
         # context has been switched, so we can return the contexts swtich request
@@ -673,7 +596,7 @@ class StarCitizenWingman(OpenAiWingman):
         return response
 
     def _context_switch_tool(self, current_context: AIContext = None) -> list[dict]:
-        ai_context_values = [context.value for context in self.AIContext if context != current_context]
+        ai_context_values = [context.value for context in AIContext if context != current_context]
 
         tools = {
                 "type": "function",
@@ -795,197 +718,8 @@ class StarCitizenWingman(OpenAiWingman):
         tools = []
         tools.append(self._get_keybinding_commands())
         tools.extend(self._get_box_mission_tool())
-        tools.extend(self._get_uex_update_tool())
-        tools.append(self._context_switch_tool(current_context=self.AIContext.CORA))
+        for ai_function_manager in self.ai_functions_manager.get_managers(AIContext.CORA):
+            ai_function_manager: FunctionManager
+            tools.extend(ai_function_manager.get_function_tools())
+        tools.append(self._context_switch_tool(current_context=AIContext.CORA))
         return tools
-    
-    def _get_uex_update_tool(self):
-        tradeport_names = self.uex_service.get_category_names("tradeports")
-
-        tools = [
-            {
-                "type": "function",
-                "function": 
-                {
-                    "name": "transmit_commodity_price_data_to_uex",
-                    "description": "Transmit commodity prices to UEX. Always ask the user for what tradeport he wants to transmit prices, or ask him for confirmation, if you have selected one.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "player_provided_tradeport_name": {
-                                "type": "string",
-                                "description": "The tradeport name provided by the user. Ask, if he didn't provide a tradeport name.",
-                                "enum": tradeport_names
-                            },
-                            "operation": {
-                                "type": "string",
-                                "description": "What kind of prices the user want to transmit. 'buy' is for buyable commodities at the location, 'sell' are for sellable commodities.",
-                                "enum": ["sell","buy","both"]
-                            }, 
-                            "validated_tradeport_by_user": {
-                                "type": "boolean",
-                                "description": "Set to false, unless the user confirms the tradeport name explicitely.",
-                            }
-                        },
-                        "required": ["validated_tradeport_by_user"]
-                    }
-                }
-            }
-        ]
-
-        # print_debug(tools)
-        return tools
-
-    def _get_tdd_tools(self) -> list[dict]:
-
-        tradeport_names = self.uex_service.get_category_names("tradeports")
-        planet_names = self.uex_service.get_category_names("planets")
-        satellite_names = self.uex_service.get_category_names("satellites")
-        commodity_names = self.uex_service.get_category_names("commodities")
-        cities_names = self.uex_service.get_category_names("cities")
-
-        combined_locations_names = planet_names + satellite_names + cities_names + tradeport_names
-
-        # commands = all defined keybinding label names
-        tools = [
-            {
-                "type": "function",
-                "function": 
-                {
-                    "name": "find_best_trade_route_from_location",
-                    "description": "Identifies the best traderoute from a given tradeport, moon / satellite or planetary system.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "location_name": {
-                                "type": "string",
-                                "description": "The location name from where to start the trade route. Can be the name of a planet, a moon / satellite or a specific tradeport",
-                                "enum": combined_locations_names
-                            },
-                            "include_illegal_commodities": {
-                                "type": "boolean",
-                                "description": "Indicates if illegal or restricted commodities should be searched as well."
-                            }
-                        },
-                        "required": ["location_name"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": 
-                {
-                    "name": "find_best_trade_route_between_locations",
-                    "description": "Identifies the best traderoute between one location to another. The location is usually on planetary system scale, but can be more precise as well like moon / satellite or a specific tradeport",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "location_name_from": {
-                                "type": "string",
-                                "description": "The location name from where to start the trade route. Can be the name of a planet, a moon / satellite or a specific tradeport.",
-                                "enum": combined_locations_names
-                            },
-                            "location_name_to": {
-                                "type": "string",
-                                "description": "The location name where the player is heading to. Can be the name of a planet, a moon / satellite or a specific tradeport.",
-                                "enum": combined_locations_names
-                            },
-                            "include_illegal_commodities": {
-                                "type": "boolean",
-                                "description": "Indicates if illegal or restricted commodities should be searched as well."
-                            }
-                        },
-                        "required": ["location_name_from", "location_name_to"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": 
-                {
-                    "name": "find_best_sell_price_for_commodity_at_location",
-                    "description": "For a given commodity, identifies the best selling tradeport at a given location the player wants to go. The location is usually on planetary system scale, but can be more precise as well like moon / satellite or a specific tradeport",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "location_name_to": {
-                                "type": "string",
-                                "description": "The location name specifies the area where to find a tradeport to sell the commodity.",
-                                "enum": planet_names + satellite_names
-                            },
-                            "commodity_name": {
-                                "type": "string",
-                                "description": "The commodity that should be sold.",
-                                "enum": commodity_names
-                            },
-                            "search_illegal": {
-                                "type": "boolean",
-                                "description": "Indicates if illegal or restricted commodities should be searched as well."
-                            }
-                        },
-                        "required": ["location_name_to", "commodity_name"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": 
-                {
-                    "name": "find_best_trade_route_for_commodity",
-                    "description": "For a given commodity, what the most profitable trade route is existing",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "commodity_name": {
-                                "type": "string",
-                                "description": "The commodity that should be sold.",
-                                "enum": commodity_names
-                            }
-                        },
-                        "required": ["commodity_code"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": 
-                {
-                    "name": "find_best_selling_location_for_commodity",
-                    "description": "For a given commodity, it finds the best location to sell it with the highest sell price.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "commodity_name": {
-                                "type": "string",
-                                "description": "The commodity that should be sold. ",
-                                "enum": commodity_names
-                            }
-                        },
-                        "required": ["commodity_code"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": 
-                {
-                    "name": "switch_tdd_employee",
-                    "description": "Whenever the player adresses a new Trading Devision Location, make this function call.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "employee_id": {
-                                "type": "string",
-                                "description": "The id of the employee that will respond to the player request",
-                                "enum": self.config["openai"]["contexts"]["tdd_voices"].split(",")
-                            }
-                        },
-                        "required": ["employee_id"]
-                    }
-                }
-            }
-
-        ]
-        tools.append(self._context_switch_tool(current_context=self.AIContext.TDD))
-        return tools
-

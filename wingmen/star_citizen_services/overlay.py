@@ -77,12 +77,15 @@ class StarCitizenOverlay:
         draw.text((text_x, text_y), text, text_color_rgb, font=font, stroke_width=0, spacing=5)
         return text_image
 
-    def display_overlay_text(self, text, vertical_position_ratio=4):
+    def display_overlay_text(self, text, vertical_position_ratio=4, display_duration=15000):
+        """
+            displays the text as centered overlay. Ratio provided relative to screen-hight 4 beeing upper 4th part of screen. display_duration in milliseconds, default 15 Seconds. 
+        """
         self.new_text = True
 
         def create_overlay():
             if self.overlay_shown:
-                return
+                close_overlay(self.overlay_root)
 
             print_debug(f"showing overlay {time.time()}")
 
@@ -120,7 +123,7 @@ class StarCitizenOverlay:
 
             # Center the overlay horizontally
             overlay_root.geometry(f"+{x_position}+{y_position}")
-            overlay_root.after(15000, lambda: close_overlay(overlay_root))
+            overlay_root.after(display_duration, lambda: close_overlay(overlay_root))
 
             self.overlay_root = overlay_root
 

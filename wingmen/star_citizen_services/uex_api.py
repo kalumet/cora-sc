@@ -564,6 +564,28 @@ class UEXApi():
         
         return self.data[CATEGORY_TRADEPORTS].get("data", []).get(code, None)
     
+    def get_location(self, location_mapping_name):
+        code = self.name_mapping[CATEGORY_TRADEPORTS].get(location_mapping_name, None)
+        if code:
+            return "tradeport", self.data[CATEGORY_TRADEPORTS].get("data", []).get(code, None)
+        
+        code = self.name_mapping[CATEGORY_SATELLITES].get(location_mapping_name, None)
+        if code:
+            return "satellite", self.data[CATEGORY_SATELLITES].get("data", []).get(code, None)
+        
+        code = self.name_mapping[CATEGORY_PLANETS].get(location_mapping_name, None)
+        if code:
+            return "planet", self.data[CATEGORY_PLANETS].get("data", []).get(code, None)
+        
+        return None, None
+    
+    def get_commodity(self, commodity_mapping_name):
+        code = self.name_mapping[CATEGORY_COMMODITIES].get(commodity_mapping_name, None)
+        if code:
+            return self.data[CATEGORY_COMMODITIES].get("data", []).get(code, None)
+        
+        return None
+    
     def get_data(self, category):
         self._refresh_data()
         return self.data[category].get("data", [])
@@ -583,7 +605,7 @@ class UEXApi():
             "tradeport": tradeport.get("code"),
             "operation": operation,
             "price": commodity_update_info.get("price"),
-            "user_hash": self.uex_access_code,
+            "access_code": self.uex_access_code,
         }
         
         if not CALL_UEX_SR_ENDPOINT:

@@ -31,7 +31,7 @@ from wingmen.star_citizen_services.ai_context_enum import AIContext
 
 DEBUG = True
 SHOW_SCREENSHOTS = False
-TEST = True
+TEST = False
 
 
 def print_debug(to_print):

@@ -7,8 +7,8 @@ from services.printr import Printr
 
 
 DEBUG = False
-TEST = True
-CALL_UEX_SR_ENDPOINT = False
+TEST = False
+CALL_UEX_SR_ENDPOINT = True
 
 
 def print_debug(to_print):

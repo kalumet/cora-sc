@@ -47,11 +47,12 @@ class StarCitizenWingman(OpenAiWingman):
     - Execute command chains as of OpenAiWingman (combining a series of key presses) -> Great for this!
     
     Big differences starts now:
-    - Execute star-citizen commands as specified by your current keybinding-settings for a given release. All it needs is the default keybinding file + your exported keybinds overwrites. No need to config any commands but the instant-commands and the complex key changes
+    - Execute star-citizen commands as specified by your current keybinding-settings for a given release and your custom keybind settings. All it needs is the default keybinding file + your exported keybinds overwrites. You only need to config complex commands or your own instant activation phrases.
+    - All ingame commands are available. Instant Activation commands are provided for each of them dynamically. Commands can be filtered. Per Default, commands without keybinds are discarded. All commands can be checked in generated files.
     - incorporates UEX trading API letting you ask for best trade route (1 stop) between locations, best trade route from a given location, best sell option for a commodity, best selling option for a commodity at a location
     - TODO incorporates Galactepedia-Wiki search to get more detailed information about the game world and lore in game
-    - TODO incorporates Delivery Mission Management: based on delivery missionS (yes multiple) you are interested in, it will analyse the mission text, extract the payout, the locations from where you have to retrieve a package and the associated delivery location, calculates the best collection and delivery route to have to travel the least possible stops + incorporates profitable trade routes between the stops to earn an extra money on the trip.
-    - TODO based on a given trading consoles it will extract the location, commodity prices and stock levels and update the prices automatically in the UEX database
+    - DONE incorporates Delivery Mission Management: based on delivery missionS (yes multiple) you are interested in, it will analyse the mission text, extract the payout, the locations from where you have to retrieve a package and the associated delivery location, calculates the best collection and delivery route to have to travel the least possible stops + incorporates profitable trade routes between the stops to earn an extra money on the trip.
+    - DONE based on a given trading consoles it will extract the location, commodity prices and stock levels and update the prices automatically in the UEX database
     
     2. smart Action selection with reduced context size
     - The system will get your command and will first ask GPT what kind of Action the user wants to execute (one of the above)

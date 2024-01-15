@@ -13,7 +13,15 @@
             "available_SCU_quantity": 5000,
             "inventory_state": "MAX INVENTORY",
             "price_per_unit": 130,
-            "multiplier": "",
+            "multiplier": null,
+            "currency": "\u00a2" 
+        },
+        {
+            "commodity_name": "CHLORINE",
+            "available_SCU_quantity": 5000,
+            "inventory_state": "VERY HIGH INVENTORY",
+            "price_per_unit": 1.54224230,
+            "multiplier": "M",
             "currency": "\u00a2" 
         }
     ]

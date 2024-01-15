@@ -7,7 +7,7 @@ from services.printr import Printr
 
 
 DEBUG = True
-TEST = True
+TEST = False
 CALL_UEX_SR_ENDPOINT = True
 
 

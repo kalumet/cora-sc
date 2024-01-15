@@ -30,8 +30,8 @@ from wingmen.star_citizen_services.ai_context_enum import AIContext
 
 
 DEBUG = True
-SHOW_SCREENSHOTS = True
-TEST = True
+SHOW_SCREENSHOTS = False
+TEST = False
 
 
 def print_debug(to_print):
@@ -318,7 +318,7 @@ class UexDataRunnerManager(FunctionManager):
                         )
             if response is not None:
                 self.audio_player.stream_with_effects(response.content, self.config)
-            time.sleep(15)  # needed, because i need to check how i can control that a speech is not cut-off by another speech.
+            time.sleep(20)  # needed, because i need to check how i can control that a speech is not cut-off by another speech.
             self.config["sound"]["play_beep"] = False
             self.config["sound"]["effects"] = ["INTERIOR_HELMET", "ROBOT"]
         
@@ -341,7 +341,7 @@ class UexDataRunnerManager(FunctionManager):
         self.overlay.display_overlay_text(f"Starting analysis: taking screenshot to analyse {operation}able commodities", display_duration=15000)
         
         gray_screenshot = self._take_screenshot(operation, tradeport)
-        # time.sleep(10) # we wait, so that the message can be seen.
+        time.sleep(10) # we wait, so that the message can be seen.
         
         if gray_screenshot is None:
             self.overlay.display_overlay_text("Could not take screenshot. Please try again.")
@@ -367,7 +367,6 @@ class UexDataRunnerManager(FunctionManager):
             self.overlay.display_overlay_text("Vision not clear: reposition yourself in front of terminal, avoid bright spots.")
             return {"success": False, 
                     "instructions": "You cannot analyse the commodity terminal, as something is obstructing your view. The player should reposition himself to avoid bright spots on the terminal and stand in front of the terminal.", 
-                    "message": location_name
                     }, None
 
         print_debug(f"got raw location name: {location_name}")
@@ -378,7 +377,6 @@ class UexDataRunnerManager(FunctionManager):
             self.overlay.display_overlay_text("Error: Cannot validate location name!")
             return {"success": False, 
                     "instructions": "You cannot validate the given tradeport against the location in the screenshot. The user must select the current location in 'Your Inventories' drop-down. Or, if he did, he might need to transmit prices as single spoken commands without screenshot analysis.", 
-                    "message": validated_tradeport
                     }, None
         
         print_debug(f'validated location name: {validated_tradeport["name_short"]}')            
@@ -403,11 +401,11 @@ class UexDataRunnerManager(FunctionManager):
 
             _, max_val, _, _ = cv2.minMaxLoc(proof_position)
             
-            if max_val > 0.8:
-                print_debug(f"Confirming {operation} operation")
+            if max_val > 0.7:
+                print_debug(f"Confirming {operation} operation with confidence {max_val}")
                 return True
             else:
-                print(f"Cannot confirm {operation} operation selected")
+                print(f"Cannot confirm {operation} operation selected with confidence {max_val}")
                 return False
         except Exception:
             return False
@@ -420,7 +418,6 @@ class UexDataRunnerManager(FunctionManager):
             self.overlay.display_overlay_text("Error: no clear view on terminal, reposition and avoid bright spots.")
             return {"success": False, 
                     "instructions": "You cannot analyse the commodity data, as something is obstructing your view. The player should reposition himself to avoid bright spots on the terminal and stand in front of the terminal.", 
-                    "message": prices_raw
                     }
         
         number_of_extracted_prices = len(prices_raw["commodity_prices"])
@@ -433,7 +430,6 @@ class UexDataRunnerManager(FunctionManager):
             self.overlay.display_overlay_text("Error: could not identify commodities. Check logs.")
             return {"success": False, 
                     "instructions": "You couldn't identify the commodities and prices. Instruct the user to analyse the log files.", 
-                    "message": validated_prices
                     }
         
         number_of_validated_prices = len(validated_prices)
@@ -444,11 +440,11 @@ class UexDataRunnerManager(FunctionManager):
             self.overlay.display_overlay_text("Prices or commodity names not recognized. Check logs.")
             return {"success": False, 
                     "instructions": "You have made errors in recognizing the correct prices on the terminal and all have been rejected.", 
-                    "message": "Could not identify commodity names or prices are not within 20% of allowed tollerance to current prices"
+                    "message": "Could not identify commodity names or prices are not within 40% of allowed tollerance to current prices"
                     }
         
         # Write JSON data to a file
-        json_file_name = f'{self.data_dir_path}/debug_data/verified_price_information_{operation}_{self.current_timestamp}.json'
+        json_file_name = f'{self.data_dir_path}/debug_data/verified_price_information_{operation}_{validated_tradeport["code"]}_{self.current_timestamp}.json'
         with open(json_file_name, 'w') as file:
             json.dump(validated_prices, file, indent=4)
         
@@ -476,7 +472,7 @@ class UexDataRunnerManager(FunctionManager):
         rejected_commodities.extend(invalid_prices)
 
         # Write JSON data to a file
-        json_file_name = f'{self.data_dir_path}/debug_data/rejected_price_information_{operation}_{self.current_timestamp}.json'
+        json_file_name = f'{self.data_dir_path}/debug_data/rejected_price_information_{operation}_{validated_tradeport["code"]}_{self.current_timestamp}.json'
         with open(json_file_name, 'w') as file:
             json.dump(validated_prices, file, indent=4)
 
@@ -536,10 +532,17 @@ class UexDataRunnerManager(FunctionManager):
                     active_window.width,
                     active_window.height,
                 )
-                # Screenshot des bestimmten Bereichs machen
-                screenshot = pyautogui.screenshot(region=(x, y, width, height))
                 
-                gray_screenshot = cv2.cvtColor(screenshot, cv2.COLOR_BGR2GRAY)
+                screenshot = pyautogui.screenshot(region=(x, y, width, height))
+
+                # Konvertieren des PIL-Bildobjekts in ein NumPy-Array und Ändern der Farbreihenfolge von RGB zu BGR
+                screenshot_np = np.array(screenshot)
+                screenshot_bgr = cv2.cvtColor(screenshot_np, cv2.COLOR_RGB2BGR)
+
+                # Konvertieren in Graustufen
+                gray_screenshot = cv2.cvtColor(screenshot_bgr, cv2.COLOR_BGR2GRAY)
+
+                # Speichern des Graustufenbildes
                 cv2.imwrite(filename, gray_screenshot)
                 
                 return gray_screenshot
@@ -874,7 +877,7 @@ class UexDataRunnerManager(FunctionManager):
         #     text = pytesseract.image_to_string(bottom_roi)
         #     extracted_texts.append(text)
 
-        prices_raw, success = self._get_screenshot_texts(cropped_screenshot, operation)
+        prices_raw, success = self._get_screenshot_texts(cropped_screenshot, operation, validated_tradeport)
         return prices_raw, success
 
     def __debug_show_screenshot(self, image):
@@ -893,7 +896,7 @@ class UexDataRunnerManager(FunctionManager):
             print_debug("could not display image")
             return
 
-    def _get_screenshot_texts(self, image, operation):
+    def _get_screenshot_texts(self, image, operation, validated_tradeport):
 
         try:
 
@@ -946,7 +949,7 @@ class UexDataRunnerManager(FunctionManager):
                         "content": [
                             {"type": "text", "text": (
                                 
-                                f"Give me the text within this image. Give me the response in a plain json object structured as defined in this example: {json_string}. Provide the json within markdown ```json ... ```.If you are unable to process the image, just return 'error' as response.")
+                                f"Give me the text within this image. Give me the response in a plain json object structured as defined in this example: {json_string}. Valid values for 'multiplier' are null, K or M. Do not provide '/Unit'. Provide the json within markdown ```json ... ```.If you are unable to process the image, just return 'error' as response.")
                             },
                             {
                                 "type": "image_url",
@@ -966,7 +969,7 @@ class UexDataRunnerManager(FunctionManager):
             
             if DEBUG:
                 # Write JSON data to a file
-                filename = f'{self.data_dir_path}/debug_data/open_ai_full_response_{operation}_{self.current_timestamp}.json'
+                filename = f'{self.data_dir_path}/debug_data/open_ai_full_response_{operation}_{validated_tradeport["code"]}_{self.current_timestamp}.json'
                 with open(filename, 'w') as file:
                     json.dump(response.json(), file, indent=4)
 
@@ -987,7 +990,7 @@ class UexDataRunnerManager(FunctionManager):
             commodity_prices = json.loads(json_text)
 
             if DEBUG:
-                filename = f'{self.data_dir_path}/debug_data/extracted_open_ai_price_information_{operation}_{self.current_timestamp}.json'
+                filename = f'{self.data_dir_path}/debug_data/extracted_open_ai_price_information_{operation}_{validated_tradeport["code"]}_{self.current_timestamp}.json'
                 with open(filename, 'w') as file:
                     json.dump(commodity_prices, file, indent=4)
 

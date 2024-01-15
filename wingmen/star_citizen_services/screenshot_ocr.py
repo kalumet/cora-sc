@@ -12,9 +12,10 @@ import pyautogui
 import wingmen.star_citizen_services.text_analyser as text_analyser
 
 from wingmen.star_citizen_services.location_name_matching import LocationNameMatching
+from wingmen.star_citizen_services.overlay import StarCitizenOverlay
 
 
-DEBUG = False
+DEBUG = True
 TEST = False
 
 
@@ -30,10 +31,15 @@ class TransportMissionAnalyzer:
         self.data_dir_path = data_dir_path
         self.screenshots_path = f'{self.data_dir_path}/screenshots'
 
+        self.overlay = StarCitizenOverlay()
+
         if not os.path.exists(self.screenshots_path):
             os.makedirs(self.screenshots_path)
 
     def identify_mission(self):
+
+        self.overlay.display_overlay_text("Analyising delivery mission data now.", vertical_position_ratio=8)
+        time.sleep(10)
         filename = self.take_screenshot()
 
         if not filename:
@@ -41,18 +47,15 @@ class TransportMissionAnalyzer:
 
         screenshot_text, accept_button_coordinates = self.analyze_screenshot(filename)
         print_debug(f"screenshot text: {screenshot_text}")
-        # delivery_mission = text_analyser.TextAnalyzer.analyze_text(screenshot_text)
+        delivery_mission = text_analyser.TextAnalyzer.analyze_text(screenshot_text)
 
-        # if not delivery_mission or len(delivery_mission.packages) == 0:
-        #     return None
+        if not delivery_mission or len(delivery_mission.packages) == 0:
+            return None
 
-        # LocationNameMatching.validate_location_names(delivery_mission)
+        LocationNameMatching.validate_location_names(delivery_mission)
 
-        # if not TEST:
-        #     self.accept_mission_click(accept_button_coordinates)
-
-        # print_debug(delivery_mission)
-        # return delivery_mission
+        print_debug(delivery_mission)
+        return delivery_mission
 
     # def accept_mission_click(self, accept_button_coordinates):
     #     active_window = pygetwindow.getActiveWindow()

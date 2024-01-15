@@ -1,6 +1,7 @@
 import json
 import os
 import traceback
+import time
 
 from wingmen.star_citizen_services.model.delivery_mission import DeliveryMission, MissionPackage
 from wingmen.star_citizen_services.screenshot_ocr import TransportMissionAnalyzer
@@ -244,6 +245,14 @@ class MissionManager:
     def get_new_mission(self):
 
         delivery_mission: DeliveryMission = self.mission_recognition_service.identify_mission()
+        self.overlay.display_overlay_text(
+            (
+                f"Identified mission with a payout of {delivery_mission.revenue} aUEC and {len(delivery_mission.packages)} packages to deliver."
+            ),
+            vertical_position_ratio=8
+        )
+        time.sleep(10)
+
         self.missions[delivery_mission.id] = delivery_mission
         print_debug(f"new mission: {delivery_mission.to_json()}")
         

@@ -3,4 +3,5 @@
 *.png
 !template_*.png
 !response_structure_buy.json
+!response_structure_sell.json
 !kiosk_analyzer/examples/*

@@ -30,8 +30,8 @@ from wingmen.star_citizen_services.ai_context_enum import AIContext
 
 
 DEBUG = True
-SHOW_SCREENSHOTS = False
-TEST = False
+SHOW_SCREENSHOTS = True
+TEST = True
 
 
 def print_debug(to_print):
@@ -81,6 +81,12 @@ class UexDataRunnerManager(FunctionManager):
         self.template_kiosk_buy_button = cv2.imread(
             f"{self.data_dir_path}/template_kiosk_buy_button.png", 0
         )
+        self.template_kiosk_sell_proof = cv2.imread(
+            f"{self.data_dir_path}/template_kiosk_sell_proof.png", 0
+        )
+        self.template_kiosk_buy_proof = cv2.imread(
+            f"{self.data_dir_path}/template_kiosk_buy_proof.png", 0
+        )
         self.template_kiosk_commodity_upper_left = cv2.imread(
             f"{self.data_dir_path}/template_kiosk_commodity_upper_left.png", 0
         )
@@ -93,6 +99,7 @@ class UexDataRunnerManager(FunctionManager):
         self.uex_service = UEXApi()
         self.overlay = StarCitizenOverlay()
         self.audio_player = AudioPlayer()
+        self.current_timestamp = None
 
         if not os.path.exists(self.screenshots_path):
             os.makedirs(self.screenshots_path)
@@ -107,9 +114,9 @@ class UexDataRunnerManager(FunctionManager):
         print_debug("function prompt for uex data runner called.")
         return (
             "You are able to sent price information to the uex corp. To do so, you can call the following functions: "
-            f"- '{self.transmit_commodity_prices_for_tradeport.__name__}' should be called, if the player wants to transmit prices (many prices) and if he requests from you to analyse the prices displayed on the trading terminal. "
-            f"- '{self.sent_one_price_update_information_to_uex.__name__}' should be called, if he wants to transmit a single price, or if he wants you to correct prices from a previous analysis. Follow these instructions: "
-             " Do not make assumption about the values for this function. Only allowed values as specified are allowed. Go through every parameter with the player and ask him for the values. "
+            f"- '{self.transmit_commodity_prices_for_tradeport.__name__}' should be called, if the player wants to transmit prices (many prices) and if he requests from you to analyse the prices displayed on the trading terminal; "
+            f"- '{self.sent_one_price_update_information_to_uex.__name__}' should be called, if he wants to transmit a single price, or if he wants you to correct prices from a previous analysis. "
+             " Follow these rules: Never (Never!) make assumptions about the values for these functions. Set to empty if the user does not provide values. Never, never call this functions without the user providing the data, like the tradeport he is currently. Before calling these functions, ask the user to provide you the data required. Do repeat the given values and ask him to validate. Do only set the validated parameters to True, if the player has explicitely confirmed the data."
             " These requests should not incure a context switch to TDD. "
         )
     
@@ -127,7 +134,7 @@ class UexDataRunnerManager(FunctionManager):
                 "function": 
                 {
                     "name": self.transmit_commodity_prices_for_tradeport.__name__,
-                    "description": "Function to transmit commodity prices to the uex corp. Call this function on phrases like 'New prices for transmission'. ",
+                    "description": "Function to transmit commodity prices to the uex corp. Call this function on phrases like 'New prices for transmission'. Only fill values with user provided input.",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -139,7 +146,7 @@ class UexDataRunnerManager(FunctionManager):
                             "operation": {
                                 "type": "string",
                                 "description": "What kind of prices the user want to transmit. 'buy' is for buyable commodities at the location, 'sell' are for sellable commodities.",
-                                "enum": ["sell","buy","both"]
+                                "enum": ["sell","buy", None]
                             }, 
                             "validated_tradeport_by_user": {
                                 "type": "boolean",
@@ -155,7 +162,7 @@ class UexDataRunnerManager(FunctionManager):
                 "function": 
                 {
                     "name": self.sent_one_price_update_information_to_uex.__name__,
-                    "description": "Function to transmit one commodity price to uex. ",
+                    "description": "Function to transmit one commodity price to uex. To be called, if he wants to transmit a specific commodity price. Do not fill in any values without input from the user.",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -167,7 +174,7 @@ class UexDataRunnerManager(FunctionManager):
                             "operation": {
                                 "type": "string",
                                 "description": "What kind of prices the user want to transmit. 'buy' is for buyable commodities at the location, 'sell' are for sellable commodities.",
-                                "enum": ["sell","buy"]
+                                "enum": ["sell", "buy", None]
                             },
                             "commodity_name": {
                                 "type": "string",
@@ -181,7 +188,7 @@ class UexDataRunnerManager(FunctionManager):
                             "inventory_state": {
                                 "type": "string",
                                 "description": "Indicates the fill level of the inventory for this commodity",
-                                "enum": ["MAX INVENTORY", "MEDIUM INVENTORY", "LOW INVENTORY", "OUT OF STOCK"]
+                                "enum": ["MAX INVENTORY", "VERY HIGH INVENTORY", "HIGH INVENTORY", "MEDIUM INVENTORY", "LOW INVENTORY", "VERY LOW INVENTORY", "OUT OF STOCK"]
                             },
                             "price_per_unit": {
                                 "type": "number",
@@ -190,7 +197,7 @@ class UexDataRunnerManager(FunctionManager):
                             "multiplier": {
                                 "type": "string",
                                 "description": "The multiplier of the price",
-                                "enum": ["M", "k"]
+                                "enum": ["M", "k", None]
                             }, 
                             "values_validated_by_user": {
                                 "type": "boolean",
@@ -201,7 +208,7 @@ class UexDataRunnerManager(FunctionManager):
                                 "description": "Do not set. Only set to true, if the user confirms, that this commodity should be transmitted to uex."
                             }
                         },
-                        "required": ["player_provided_tradeport_name", "commodity_name", "price_per_unit", "values_validated_by_user"]
+                        "required": ["player_provided_tradeport_name", "commodity_name", "price_per_unit", "operation", "values_validated_by_user"]
                     }
                 }
             }
@@ -218,7 +225,7 @@ class UexDataRunnerManager(FunctionManager):
         return AIContext.CORA
 
     def sent_one_price_update_information_to_uex(self, function_args):
-        printr.print(f'-> Command: Sending price update to uex')
+        printr.print(f'-> Command: Sending price update to uex: {function_args}')
         print_debug(function_args)
 
         if not function_args.get("values_validated_by_user"):
@@ -230,7 +237,7 @@ class UexDataRunnerManager(FunctionManager):
             function_response = {"success": False, "instruction": "Invalid tradeport name. Ask the user for the tradeport he is currently at."}
             return function_response, None
         
-        operation = function_args["operation"]
+        operation = function_args.get("operation", None)
 
         new_commodity_confirmed = function_args.get("confirm_new_available_trade_commodity", False)
         
@@ -249,7 +256,6 @@ class UexDataRunnerManager(FunctionManager):
                 "operation": operation
             }
 
-        
         available_SCU_quantity = function_args.get("available_SCU_quantity", None)
 
         inventory_state = function_args.get("inventory_state", None)
@@ -278,7 +284,7 @@ class UexDataRunnerManager(FunctionManager):
         return {"success": True}
 
     def transmit_commodity_prices_for_tradeport(self, function_args):
-        printr.print(f'-> Command: Analysing commodity prices to be sent to uex corp')
+        printr.print(f'-> Command: Analysing commodity prices to be sent to uex corp. Doing screenshot analysis. Only commodity information and only if active window is star citizen.')
         print_debug(function_args)
         if not function_args.get("player_provided_tradeport_name"):
             function_response = json.dumps({"success": False, "instruction": "Ask the player to provide the tradeport name for which he wants the prices to be transmitted"})
@@ -320,120 +326,95 @@ class UexDataRunnerManager(FunctionManager):
 
         return function_response
 
-    def _get_data_from_screenshots(self, tradeport=None, asked_operation="both"):
+    def _get_data_from_screenshots(self, tradeport=None, asked_operation=None):
         validated_tradeport = tradeport
-
+        if not tradeport or not asked_operation:
+            self.overlay.display_overlay_text("Invalid command.")
+            return {"success": False, 
+                    "instructions": "The user did not provide enough information to process his request. He has to tell at what terminal he is standing and what trading operation he wants to analyse. It is important, that he selects the current location inventory and that he has activated the correct operations tab.", 
+                    "error": "missing tradeport or trading operation. "
+                    }, None
         operation = "buy"
         if asked_operation == "sell":
             operation = "sell"
         
-        screenshot_file_name = self._take_screenshot(operation)
+        self.overlay.display_overlay_text(f"Starting analysis: taking screenshot to analyse {operation}able commodities", display_duration=15000)
+        
+        gray_screenshot = self._take_screenshot(operation, tradeport)
+        # time.sleep(10) # we wait, so that the message can be seen.
+        
+        if gray_screenshot is None:
+            self.overlay.display_overlay_text("Could not take screenshot. Please try again.")
+            return {"success": False, 
+                    "instructions": "You where not able to analyse the data. You can provide error information, if he likes. ", 
+                    "error": "Could not make screenshot. Maybe, during screenshot taking, the active window displayed was NOT Star Citizen. In that case, I don't make any screenshots! "
+                    }, None
+        
+        self.__debug_show_screenshot(gray_screenshot)
 
-        if not tradeport:  # we try to identify the current tradeport
-            if not screenshot_file_name:
+        valid_operation = self._validate_operation(gray_screenshot, operation)
+
+        if not valid_operation:
+            self.overlay.display_overlay_text(f"Wrong tab selected for {operation}")
+            return {"success": False, 
+                    "instructions": f"It seems that the wrong operation tab is active. The user must select the {operation} tab for this command to be correct. ", 
+                    "error": "Potential error in operation tab. Please be sure to select the correct tab for the asked operation. "
+                    }, None
+        
+        location_name, success = self._get_location_name(gray_screenshot)
+
+        if not success:
+            self.overlay.display_overlay_text("Vision not clear: reposition yourself in front of terminal, avoid bright spots.")
+            return {"success": False, 
+                    "instructions": "You cannot analyse the commodity terminal, as something is obstructing your view. The player should reposition himself to avoid bright spots on the terminal and stand in front of the terminal.", 
+                    "message": location_name
+                    }, None
+
+        print_debug(f"got raw location name: {location_name}")
+
+        success = LocationNameMatching.validate_associated_location_name(location_name, validated_tradeport)
+
+        if not success:
+            self.overlay.display_overlay_text("Error: Cannot validate location name!")
+            return {"success": False, 
+                    "instructions": "You cannot validate the given tradeport against the location in the screenshot. The user must select the current location in 'Your Inventories' drop-down. Or, if he did, he might need to transmit prices as single spoken commands without screenshot analysis.", 
+                    "message": validated_tradeport
+                    }, None
+        
+        print_debug(f'validated location name: {validated_tradeport["name_short"]}')            
+
+        buy_result = self._analyse_prices_at_tradeport(gray_screenshot, validated_tradeport, operation)
+
+        if not buy_result["success"]:
+            return buy_result, None
+    
+        uex_text_speech = self._get_standalone_response(buy_result, operation)  
+        return buy_result, uex_text_speech
+            
+    def _validate_operation(self, gray_screenshot, operation):
+        try: 
+
+            print_debug(f"validating {operation} operation")
+            if operation == "buy":
+                proof_position = cv2.matchTemplate(gray_screenshot, self.template_kiosk_buy_proof, cv2.TM_CCOEFF_NORMED)
+                # Find the maximum location and value
+            elif operation == "sell":
+                proof_position = cv2.matchTemplate(gray_screenshot, self.template_kiosk_sell_proof, cv2.TM_CCOEFF_NORMED)
+
+            _, max_val, _, _ = cv2.minMaxLoc(proof_position)
+            
+            if max_val > 0.8:
+                print_debug(f"Confirming {operation} operation")
+                return True
+            else:
+                print(f"Cannot confirm {operation} operation selected")
                 return False
-
-            location_name, success = self._get_location_name(screenshot_file_name)
-
-            if not success:
-                self.overlay.display_overlay_text("Vision not clear: reposition yourself in front of terminal, avoid bright spots.")
-                return {"success": False, 
-                        "instructions": "You cannot analyse the commodity terminal, as something is obstructing your view. The player should reposition himself to avoid bright spots on the terminal and stand in front of the terminal.", 
-                        "message": location_name
-                        }, None
-
-            print_debug(f"got raw location name: {location_name}")
-
-            validated_tradeport, success = LocationNameMatching.validate_tradeport_name(location_name)
-
-            if not success:
-                self.overlay.display_overlay_text("Error: Select current location in your inventories drop down.")
-                return {"success": False, 
-                        "instructions": "You cannot identify at which tradeport the user is. He must select the tradeport in the commidity terminal and repeat the command.", 
-                        "message": validated_tradeport
-                        }, None
-            
-            print_debug(f'validated location name: {validated_tradeport["name_short"]}')            
-
-        if operation == "buy":
-            self.overlay.display_overlay_text(f"Processing buyable commodities... be patient", display_duration=50000)
-            self._click_button(screenshot_file_name, operation)
-            
-            screenshot_file_name = self._take_screenshot(operation)
-
-            buy_result = self._analyse_prices_at_tradeport(screenshot_file_name, validated_tradeport, operation)
-
-            if not buy_result["success"]:
-                return buy_result, None
-            
-            uex_text_speech = self._get_standalone_response(buy_result, operation)
-            
-            if not asked_operation == "both":
-                return buy_result, uex_text_speech
-        
-        if operation == "sell" or asked_operation == "both":
-            operation = "sell"
-            self.overlay.display_overlay_text(f"Processing sellable commodities... be patient", display_duration=50000)
-            self._click_button(screenshot_file_name, operation)
-
-            sell_screenshot_filename = self._take_screenshot(operation)
-
-            sell_result = self._analyse_prices_at_tradeport(sell_screenshot_filename, validated_tradeport, operation)
-
-            if asked_operation == "both":
-                buy_result["success"] = buy_result["success"] and sell_result["success"]
-                buy_result['message']['sellable_commodities_info'] = sell_result['message']['sellable_commodities_info']
-                uex_text_speech = self._get_standalone_response(buy_result, operation)
-                return buy_result, uex_text_speech
-
-            uex_text_speech = self._get_standalone_response(sell_result, operation)  
-            return sell_result, uex_text_speech
-            
-    def _click_button(self, screenshot_file_name, operation):
-        # first, get the coordinates of the sell button in the screen
-        screenshot = cv2.imread(screenshot_file_name)
-        gray_screenshot = cv2.cvtColor(screenshot, cv2.COLOR_BGR2GRAY)
-        
-        print_debug(f"clicking {operation} button")
-        if operation == "buy":
-            button_position = cv2.matchTemplate(gray_screenshot, self.template_kiosk_buy_button, cv2.TM_CCOEFF_NORMED)
-            _, _, _, button_coordinates = cv2.minMaxLoc(button_position)
-            template_height, template_width = self.template_kiosk_buy_button.shape[:2]
-        elif operation == "sell":
-            button_position = cv2.matchTemplate(gray_screenshot, self.template_kiosk_sell_button, cv2.TM_CCOEFF_NORMED)
-            _, _, _, button_coordinates = cv2.minMaxLoc(button_position)
-            template_height, template_width = self.template_kiosk_sell_button.shape[:2]
-        
-        active_window = pygetwindow.getActiveWindow()
-        if active_window:
-            # Speichere die aktuelle Position der Maus
-            original_mouse_x, original_mouse_y = pyautogui.position()
-
-            # Fensterposition bestimmen
-            window_x, window_y = active_window.left, active_window.top
-
-            # Berechne die absolute Mitte des Templates
-            absolute_x = window_x + button_coordinates[0] + template_width // 2
-            absolute_y = window_y + button_coordinates[1] + template_height // 2
-
-            print_debug(f"click coordinates: x:{absolute_x}, y:{absolute_y}")
-            # Bewege die Maus langsam zur Zielposition
-            pyautogui.moveTo(absolute_x, absolute_y, duration=0.2)
-
-            # Verzögerung vor dem Klick
-            time.sleep(0.1)
-
-            # Führe den Klick aus mit einer längeren Klickdauer
-            pyautogui.mouseDown()
-            time.sleep(0.1)  # Halte die Maustaste 0.1 Sekunden lang gedrückt
-            pyautogui.mouseUp()
-
-            # Setze die Mausposition auf die ursprüngliche Position zurück
-            pyautogui.moveTo(original_mouse_x, original_mouse_y, duration=0.2)
+        except Exception:
+            return False
          
-    def _analyse_prices_at_tradeport(self, screen_shot_path, validated_tradeport, operation):
+    def _analyse_prices_at_tradeport(self, gray_screenshot, validated_tradeport, operation):
         
-        prices_raw, success = self._get_price_information(screen_shot_path, operation)
+        prices_raw, success = self._get_price_information(gray_screenshot, operation, validated_tradeport)
 
         if not success:
             self.overlay.display_overlay_text("Error: no clear view on terminal, reposition and avoid bright spots.")
@@ -467,7 +448,7 @@ class UexDataRunnerManager(FunctionManager):
                     }
         
         # Write JSON data to a file
-        json_file_name = f'{self.data_dir_path}/debug_data/commodity_prices_validated_response_{operation}.json'
+        json_file_name = f'{self.data_dir_path}/debug_data/verified_price_information_{operation}_{self.current_timestamp}.json'
         with open(json_file_name, 'w') as file:
             json.dump(validated_prices, file, indent=4)
         
@@ -476,27 +457,34 @@ class UexDataRunnerManager(FunctionManager):
         update_errors_uex_status = []
         rejected_commodities = []
         # TODO collect valid prices that haven been successfully transmitted
-
+        
+        self.overlay.display_overlay_text("Got data from OpenAI and sanitized them, now transmitting to UEX.")
         for validated_price in validated_prices:
             response, success = self.uex_service.update_tradeport_price(tradeport=validated_tradeport, commodity_update_info=validated_price, operation=operation)
 
             if not success:
                 print_debug(f'price could not be updated: {response}')
                 update_errors_uex_status.append(response)
-                updated_commodities.append(validated_price)
+                validated_price["uex_rejection_reason"] = response
+                rejected_commodities.append(validated_price)
                 continue
 
             print_debug(f'price successfully updated')
             updated_commodities_uex_id.append(response)
-            rejected_commodities.append(validated_price)
+            updated_commodities.append(validated_price)
         
         rejected_commodities.extend(invalid_prices)
 
+        # Write JSON data to a file
+        json_file_name = f'{self.data_dir_path}/debug_data/rejected_price_information_{operation}_{self.current_timestamp}.json'
+        with open(json_file_name, 'w') as file:
+            json.dump(validated_prices, file, indent=4)
+
         if len(updated_commodities_uex_id) == 0:
-            self.overlay.display_overlay_text(f"UEX Corp: Thank you, we accepted {len(updated_commodities_uex_id)} out of {number_of_extracted_prices} price information.", display_duration=30000)
+            self.overlay.display_overlay_text(f"Error UEX: {len(updated_commodities_uex_id)}/{number_of_extracted_prices} price information accepted.", display_duration=30000)
             return {
                         "success": False,
-                        "instructions": "Tell the player in a funny but fair way, that UEX wasn't able to process the price information request. Ask him, ask him if he wants to correct these..",
+                        "instructions": "Tell the player in a funny but fair way, that UEX wasn't able to process the price information request. Tell him, that he should make single update commands. Give him information about the errornous price update if he asks for it. ",
                         "message": {
                             "tradeport": validated_tradeport["name"],
                             f"{operation}able_commodities_info": {
@@ -512,7 +500,7 @@ class UexDataRunnerManager(FunctionManager):
         self.overlay.display_overlay_text(f"UEX Corp: Thank you, we accepted {len(updated_commodities_uex_id)} out of {number_of_extracted_prices} price information.", display_duration=30000)
         return {
                     "success": True,
-                    "instructions": "Just say something like 'Prices where transmitted, do you need details?'. If there are rejected prices, ask him if he wants to correct these.",
+                    "instructions": "Just say something like 'Prices where transmitted, do you need details?'. Tell him if there are errors.",
                     "message": {
                         "tradeport": validated_tradeport["name"],
                         f"{operation}able_commodities_info": {
@@ -525,34 +513,38 @@ class UexDataRunnerManager(FunctionManager):
                     }
                 }
 
-
-
-    def _take_screenshot(self, operation):
+    def _take_screenshot(self, operation, tradeport):
         if TEST:
             return self.__random_image_from_directory(operation)
 
-        active_window = pygetwindow.getActiveWindow()
-        if active_window and "Star Citizen" in active_window.title:
-            # Aktuellen Zeitpunkt erfassen
-            now = datetime.datetime.now()
-            timestamp = now.strftime(
-                "%Y%m%d_%H%M%S_%f"
-            )  # Format: JahrMonatTag_StundeMinuteSekunde_Millisekunden
+        try: 
+            active_window = pygetwindow.getActiveWindow()
+            if active_window and "Star Citizen" in active_window.title:
+                # Aktuellen Zeitpunkt erfassen
+                now = datetime.datetime.now()
+                self.current_timestamp = now.strftime(
+                    "%Y%m%d_%H%M%S_%f"
+                )  # Format: JahrMonatTag_StundeMinuteSekunde_Millisekunden
 
-            # Dateinamen mit Zeitstempel erstellen
-            filename = f"{self.screenshots_path}/screenshot_{timestamp}.png"
+                # Dateinamen mit Zeitstempel erstellen
+                filename = f'{self.screenshots_path}/screenshot_{operation}_{tradeport["code"]}_{self.current_timestamp}.png'
 
-            # Fensterposition und -größe bestimmen
-            x, y, width, height = (
-                active_window.left,
-                active_window.top,
-                active_window.width,
-                active_window.height,
-            )
-            # Screenshot des bestimmten Bereichs machen
-            screenshot = pyautogui.screenshot(region=(x, y, width, height))
-            screenshot.save(filename)
-            return filename
+                # Fensterposition und -größe bestimmen
+                x, y, width, height = (
+                    active_window.left,
+                    active_window.top,
+                    active_window.width,
+                    active_window.height,
+                )
+                # Screenshot des bestimmten Bereichs machen
+                screenshot = pyautogui.screenshot(region=(x, y, width, height))
+                
+                gray_screenshot = cv2.cvtColor(screenshot, cv2.COLOR_BGR2GRAY)
+                cv2.imwrite(filename, gray_screenshot)
+                
+                return gray_screenshot
+        except Exception:
+            traceback.print_exc()    
         return None
 
     def __random_image_from_directory(self, operation):
@@ -582,15 +574,22 @@ class UexDataRunnerManager(FunctionManager):
             return None  # No images found
 
         # Randomly select an image
-        return os.path.join(directory, random.choice(images))
+        image = os.path.join(directory, random.choice(images))
 
-    def _preprocess_image(self, image):
+        # Load the screenshot for analysis
+        screenshot = cv2.imread(image)
+        if screenshot is None:
+            return None
+        gray_screenshot = cv2.cvtColor(screenshot, cv2.COLOR_BGR2GRAY)
+        return gray_screenshot
+
+    def _preprocess_image(self, gray_screenshot):
         """Preprocess the image for better OCR results."""
         # Apply color range filtering for grayscale image
         lower_bound = np.array([185])  # Lower bound for grayscale
         upper_bound = np.array([255])  # Upper bound for grayscale
-        mask = cv2.inRange(image, lower_bound, upper_bound)
-        result = cv2.bitwise_and(image, image, mask=mask)
+        mask = cv2.inRange(gray_screenshot, lower_bound, upper_bound)
+        result = cv2.bitwise_and(gray_screenshot, gray_screenshot, mask=mask)
 
         # Apply dilate and erode
         kernel = cv2.getStructuringElement(cv2.MORPH_CROSS, (1, 1))
@@ -599,18 +598,9 @@ class UexDataRunnerManager(FunctionManager):
 
         return eroded
 
-    def _get_location_name(self, screenshot_path):
+    def _get_location_name(self, gray_screenshot):
         """Analyze the screenshot and extract text."""
         try:
-            # Load the screenshot for analysis
-            screenshot = cv2.imread(screenshot_path)
-            if screenshot is None:
-                raise FileNotFoundError(
-                    f"Die Bilddatei wurde nicht gefunden: {screenshot_path}"
-                )
-            gray_screenshot = cv2.cvtColor(screenshot, cv2.COLOR_BGR2GRAY)
-            self.__debug_show_screenshot(gray_screenshot)
-
             # Schwellenwert für die Übereinstimmung
             threshold = 0.5
 
@@ -711,45 +701,43 @@ class UexDataRunnerManager(FunctionManager):
 
         return equalized
 
-    def _get_price_information(self, screenshot_path, operation):
+    def _get_price_information(self, gray_screenshot, operation, validated_tradeport):
         """Analyze the screenshot and extract text."""
-        # Screenshot laden
-        print_debug(f"file: {screenshot_path}")
-        screenshot = cv2.imread(screenshot_path)
-        if screenshot is None:
-            raise FileNotFoundError(
-                f"Die Bilddatei wurde nicht gefunden: {screenshot_path}"
+
+        try:
+            # We always take the buy button to recognize the commodity prices area
+            res_buy_button = cv2.matchTemplate(
+                gray_screenshot, self.template_kiosk_buy_button, cv2.TM_CCOEFF_NORMED
             )
-        gray_screenshot = cv2.cvtColor(screenshot, cv2.COLOR_BGR2GRAY)
-        
-        # We always take the buy button to recognize the commodity prices area
-        res_buy_button = cv2.matchTemplate(
-            gray_screenshot, self.template_kiosk_buy_button, cv2.TM_CCOEFF_NORMED
-        )
-        _, max_val_button, _, max_loc_button = cv2.minMaxLoc(res_buy_button)
-        threshold = 0.5
+            _, max_val_button, _, max_loc_button = cv2.minMaxLoc(res_buy_button)
+            threshold = 0.5
 
-        if max_val_button < threshold:
-            return "Could not identify buy button. Reposition yourself.", False
-        
-        h_screenshot, w_screenshot = gray_screenshot.shape[:2]
-        h_button, w_button = self.template_kiosk_buy_upper_left.shape[:2]
+            if max_val_button < threshold:
+                return "Could not identify buy button. Reposition yourself.", False
+            
+            h_screenshot, w_screenshot = gray_screenshot.shape[:2]
+            h_button, w_button = self.template_kiosk_buy_upper_left.shape[:2]
 
 
-        # Breite und Höhe des Buy-Button Templates
+            # Breite und Höhe des Buy-Button Templates
 
-        # Berechne den Ausschnitt ab der unteren linken Ecke des gefundenen Templates
-        x_start = max(max_loc_button[0] - 30, 0)
-        y_start = min(max_loc_button[1] + h_button, h_screenshot)
+            # Berechne den Ausschnitt ab der unteren linken Ecke des gefundenen Templates
+            x_start = max(max_loc_button[0] - 30, 0)
+            y_start = min(max_loc_button[1] + h_button, h_screenshot)
 
-        self.__debug_show_screenshot(gray_screenshot)
-        print_debug(f'cropping at ({x_start},{y_start}) -> ({w_screenshot},{h_screenshot})')
+            print_debug(f'cropping at ({x_start},{y_start}) -> ({w_screenshot},{h_screenshot})')
 
-        cropped_screenshot = gray_screenshot[y_start:, x_start:]
-        # if max_val_bottom_right >= threshold:
-        #     cropped_screenshot = gray_screenshot[y_start:y_end, x_start:x_end]
+            cropped_screenshot = gray_screenshot[y_start:, x_start:]
+            # if max_val_bottom_right >= threshold:
+            #     cropped_screenshot = gray_screenshot[y_start:y_end, x_start:x_end]
 
-        self.__debug_show_screenshot(cropped_screenshot)
+            self.__debug_show_screenshot(cropped_screenshot)
+            # Dateinamen mit Zeitstempel erstellen
+            filename = f'{self.screenshots_path}/screenshot_{operation}_{validated_tradeport["code"]}_{self.current_timestamp}.png'
+            cv2.imwrite(filename, gray_screenshot)
+        except Exception:
+            traceback.print_exc()
+            return "Exception", False
 
         # self.debug_show_screenshot(cropped_screenshot)
 
@@ -970,15 +958,17 @@ class UexDataRunnerManager(FunctionManager):
                 "max_tokens": 1000,
             }
 
+            self.overlay.display_overlay_text(f"Transmitting now commodity price area of screenshot to OpenAI for text extraction", display_duration=30000)
             print_debug("Calling openai vision for text extraction")
             response = requests.post(
                 "https://api.openai.com/v1/chat/completions", headers=headers, json=payload, timeout=300
             )
             
-            # Write JSON data to a file
-            filename = f'{self.data_dir_path}/debug_data/commodity_prices_raw_response_{operation}.json'
-            with open(filename, 'w') as file:
-                json.dump(response.json(), file, indent=4)
+            if DEBUG:
+                # Write JSON data to a file
+                filename = f'{self.data_dir_path}/debug_data/open_ai_full_response_{operation}_{self.current_timestamp}.json'
+                with open(filename, 'w') as file:
+                    json.dump(response.json(), file, indent=4)
 
             if response.status_code != 200:
                 print_debug(f'request error: {response.json()["error"]["type"]}. Check the file {filename} for details.')
@@ -996,9 +986,10 @@ class UexDataRunnerManager(FunctionManager):
             print_debug(json_text)
             commodity_prices = json.loads(json_text)
 
-            filename = f'{self.data_dir_path}/debug_data/commodity_prices_{operation}.json'
-            with open(filename, 'w') as file:
-                json.dump(commodity_prices, file, indent=4)
+            if DEBUG:
+                filename = f'{self.data_dir_path}/debug_data/extracted_open_ai_price_information_{operation}_{self.current_timestamp}.json'
+                with open(filename, 'w') as file:
+                    json.dump(commodity_prices, file, indent=4)
 
             return commodity_prices, True
         except BaseException:
@@ -1024,7 +1015,6 @@ class UexDataRunnerManager(FunctionManager):
         message["message"].pop("tradeport")
         message["message"][f"{operation}able_commodities_info"].pop("identified")
         message["message"][f"{operation}able_commodities_info"].pop("valid")
-        message["message"][f"{operation}able_commodities_info"].pop("rejected_price_data_by_uex")
         response = self.client.chat.completions.create(
             model=self.config["openai"]["summarize_model"],
             messages=[
@@ -1034,7 +1024,7 @@ class UexDataRunnerManager(FunctionManager):
                             "You are an employee of the UEX Corp, a corporation within the star citizen universe. "
                             "They are the service provider of the Trading Devision Departments around the universe. They collect all trading related data in real time and "
                             "And provide vital tax information to the TDDs but also consolidated decision-relevant information to their mobiGlass Application for all UEE (United Empire of Earth) citizens alike. "
-                            f'You will respond to user requests in the player language, which is {self.config["sc-keybind-mappings"]["player_language"]}. His title is {self.config["openai"]["player_title"]}, his name {self.config["openai"]["player_name"]}. Acknowledge the receipt of the data. Be thankful.'
+                            f'You will respond to user requests in the player language, which is {self.config["sc-keybind-mappings"]["player_language"]}. His title is {self.config["openai"]["player_title"]}, his name {self.config["openai"]["player_name"]}. Shortly introduce yourself and greet the player. Shortly acknowledge the receipt of the data. Be thankful. Specifically, if any price information have been rejected, shortly summarize the combined reasons.'
                         )
                     },
                 {"role": "user", "content": json.dumps(message)},

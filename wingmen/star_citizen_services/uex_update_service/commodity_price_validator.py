@@ -46,6 +46,7 @@ class CommodityPriceValidator:
             
             if not success:
                 print_debug(f"{new_price} not plausible ... skipping")
+                commodities_price_info_raw["error_reason"] = "price not plausible"
                 invalid_prices.append(commodity_price_info_raw)
                 
             commodity_price_info_raw["price"] = new_price

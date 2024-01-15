@@ -14,6 +14,13 @@ from wingmen.wingman import Wingman
 
 printr = Printr()
 
+DEBUG = False
+
+
+def print_debug(to_print):
+    if DEBUG:
+        print(to_print)
+
 
 def get_application_root(is_bundled: bool):
     if is_bundled:
@@ -61,6 +68,7 @@ class WingmanAI:
         self.active = False
 
     def on_press(self, key):
+        print_debug(f"key pressed: {key}")
         if self.active and self.tower and self.active_recording["key"] == "":
             wingman = self.tower.get_wingman_from_key(key)
             if wingman:
@@ -89,7 +97,7 @@ class WingmanAI:
                 play_thread.start()
 
     def on_press_mouse(self, x, y, button, pressed):
-        # print(f"Button: {button.name}, Pressed: {pressed}")
+        print_debug(f"Button: {button.name}, Pressed: {pressed}")
         if button.name == "x1":
             if pressed and self.active and self.tower and self.active_recording["key"] == "":
                 wingman = self.tower.get_wingman_from_key(button)

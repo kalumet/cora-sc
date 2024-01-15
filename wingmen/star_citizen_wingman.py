@@ -142,6 +142,23 @@ class StarCitizenWingman(OpenAiWingman):
             self.overlay = StarCitizenOverlay()
             self._set_current_context(AIContext.CORA, new=True)
 
+            printr.print_err(
+                ("IMPORTANT INFORMATION about this WingmenAI extension! \n"
+                "This tool requires an OpenAI API. Data is transmitted to OpenAI. This incures costs. You cannot use this tool without valid API keys. \n"
+                "This tool takes Screenshots of ingame elements. It will only make screenshots on given commands and only if the active window is 'Star Citizen'. \n"
+                "BUT IT TAKES THEM. Do not use this tool if you are not trusting the source. \n"
+                "This tool is open source and comes as is and without waranty. Use at your own risk. \n"
+                "With that said, I hope you enjoy the tool and that it will make your game experience in star citizen even better. "
+            ), wait_for_gui=True)
+            printr.print((
+                            "IMPORTANT INFORMATION about this WingmenAI extension! \n"
+                            "This tool requires an OpenAI API. Data is transmitted to OpenAI. This incures costs. You cannot use this tool without valid API keys. \n"
+                            "This tool takes Screenshots of ingame elements. It will only make screenshots on given commands and only if the active window is 'Star Citizen'. \n"
+                            "BUT IT TAKES THEM. Do not use this tool if you are not trusting the source. \n"
+                            "This tool is open source and comes as is and without waranty. Use at your own risk. \n"
+                            "With that said, I hope you enjoy the tool and that it will make your game experience in star citizen even better. \n\n"
+                        ), tags="err", wait_for_gui=True)
+
             # self.mission_manager_service.get_new_mission()  # TODO nur ein Test auskommentieren
             # self.kiosk_prices_manager.identify_kiosk_prices()  # TODO nur ein Test auskommentieren
         except Exception as e:

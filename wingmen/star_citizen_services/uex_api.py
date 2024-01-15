@@ -99,6 +99,12 @@ class UEXApi():
             if not file_data:
                 # print_debug("empty")
                 return None, None
+            
+            print_debug(f"no data from uex.api. Postponing file refresh: {file_path}")
+            # we got an error from api, so we should extend the time before we retry the next time
+            # therefore, we write back the data to file to update the file-date
+            with open(file_path, 'w', encoding='utf-8') as file:
+                json.dump(file_data, file, indent=3)
             return file_data, file_age
         else:
             # Make a map of the uexDB:
@@ -170,7 +176,6 @@ class UEXApi():
         # }
 
     def _needs_refresh(self, category):
-
         if not category or not self.data or category not in self.data:
             return True
         return self.data[category].get("age") > self.max_ages[category]

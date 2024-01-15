@@ -1,0 +1,20 @@
+{
+    "commodity_prices": [
+        {
+            "commodity_name": "DISTILLED SPIRITS",
+            "inventory_SCU_quantity": 0,
+            "inventory_state": "OUT OF STOCK",
+            "price_per_unit": 555,
+            "multiplier": "",
+            "currency": "\u00a2" 
+        },
+        {
+            "commodity_name": "MEDICAL SUPPLIES",
+            "inventory_SCU_quantity": 0,
+            "inventory_state": "OUT OF STOCK",
+            "price_per_unit": 1.92499995,
+            "multiplier": "K",
+            "currency": "\u00a2" 
+        }
+    ]
+}

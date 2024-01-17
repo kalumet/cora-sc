@@ -135,12 +135,16 @@ class MissionManager:
  
         return True, None
            
-    def manage_missions(self, type="new", mission_id=None):
+    def manage_missions(self, type="new", mission_id=None, confirmed_deletion=None):
         if type == "new_delivery_mission":
             return self.get_new_mission()
         if type == "delete_or_discard_all_missions":
+            if not confirmed_deletion or not confirmed_deletion == "confirmed":
+                return {"success": False, "instructions": "User has to confirm deletion of all missions"}
             return self.discard_all_missions()
         if type == "delete_or_discard_one_mission_with_id":
+            if not confirmed_deletion or not confirmed_deletion == "confirmed":
+                return {"success": False, "instructions": f"User has to confirm deletion of mission with id {mission_id}"}
             return self.discard_mission(mission_id)
         if type == "get_first_or_next_location_on_delivery_route":
             return self.get_next_location()
@@ -222,7 +226,8 @@ class MissionManager:
                 f'on  {moon_or_planet}  '
                 f'pickup:  {pickup_packages}  '
                 f'dropoff:  {dropoff_packages}'
-            )
+            ),
+            vertical_position_ratio=10
         )
         
         return {
@@ -249,7 +254,7 @@ class MissionManager:
             (
                 f"Identified mission with a payout of {delivery_mission.revenue} aUEC and {len(delivery_mission.packages)} packages to deliver."
             ),
-            vertical_position_ratio=8
+            vertical_position_ratio=10
         )
         time.sleep(10)
 
@@ -266,7 +271,7 @@ class MissionManager:
                 f"for {revenue_sum} αUEC   "
                 f"packages: {package_count}."
             ),
-            vertical_position_ratio=8
+            vertical_position_ratio=10
         )
 
         # 3 return new mission and active missions + instructions for ai
@@ -308,7 +313,8 @@ class MissionManager:
             f"Discarded Mission #{mission_id}   "
             f"Total missions: #{mission_count}  "
             f"for {revenue_sum} αUEC   "
-            f"packages: {package_count}. Next Location: {self.delivery_actions[0].location_ref.get('name')}"
+            f"packages: {package_count}. Next Location: {self.delivery_actions[0].location_ref.get('name')}", 
+            vertical_position_ratio=10
         )
         
         return {
@@ -338,7 +344,8 @@ class MissionManager:
         self.mission_started = False
 
         self.overlay.display_overlay_text(
-            "Discarded all mission, reject them ingame."
+            "Discarded all mission, reject them ingame.",
+            vertical_position_ratio=10
         )
 
         self.save_missions()

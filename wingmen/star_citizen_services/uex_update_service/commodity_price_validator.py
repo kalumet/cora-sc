@@ -68,10 +68,10 @@ class CommodityPriceValidator:
             return price_to_check, True
         
         # we can check, if we would be in range, if we apply the given multiplicator
-        if multiplier.lower()[0] == "m":
+        if multiplier and multiplier.lower()[0] == "m":
             price_to_check = price_to_check * 1000000
         
-        if multiplier.lower()[0] == "k":
+        if multiplier and multiplier.lower()[0] == "k":
             price_to_check = price_to_check * 1000
 
         difference = abs(uex_price - price_to_check)
@@ -98,7 +98,7 @@ class CommodityPriceValidator:
 
     @staticmethod
     def validate_commodity_name(commodity_raw, tradeport):
-        MIN_SIMILARITY_THRESHOLD = 50
+        MIN_SIMILARITY_THRESHOLD = 80
 
         prices = tradeport.get("prices", {})
         matched_commodity = None

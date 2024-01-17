@@ -116,7 +116,7 @@ class UexDataRunnerManager(FunctionManager):
             "You are able to sent price information to the uex corp. To do so, you can call the following functions: "
             f"- '{self.transmit_commodity_prices_for_tradeport.__name__}' should be called, if the player wants to transmit prices (many prices) and if he requests from you to analyse the prices displayed on the trading terminal; "
             f"- '{self.sent_one_price_update_information_to_uex.__name__}' should be called, if he wants to transmit a single price, or if he wants you to correct prices from a previous analysis. "
-             " Follow these rules: Never (Never!) make assumptions about the values for these functions. Set to empty if the user does not provide values. Never, never call this functions without the user providing the data, like the tradeport he is currently. Before calling these functions, ask the user to provide you the data required. Do repeat the given values and ask him to validate. Do only set the validated parameters to True, if the player has explicitely confirmed the data."
+             " Follow these rules: Never (Never!) make assumptions about the values for these functions. Set to empty if the user does not provide values. Never, never call this functions without the user providing the data, like the tradeport he is currently. Before calling these functions, ask the user to provide you the data required. Do repeat the given values and ask him to validate. Do only set the validated parameters to confirmed, if the player has explicitely confirmed the data."
             " These requests should not incure a context switch to TDD. "
         )
     
@@ -149,11 +149,11 @@ class UexDataRunnerManager(FunctionManager):
                                 "enum": ["sell","buy", None]
                             }, 
                             "validated_tradeport_by_user": {
-                                "type": "boolean",
-                                "description": "Set to false, unless the user confirms the tradeport name explicitely.",
+                                "type": "string",
+                                "description": "Do not set, unless the user confirms the tradeport name explicitely.",
+                                "enum": ["confirmed", None]
                             }
                         },
-                        "required": ["validated_tradeport_by_user"]
                     }
                 }
             },
@@ -200,21 +200,22 @@ class UexDataRunnerManager(FunctionManager):
                                 "enum": ["M", "k", None]
                             }, 
                             "values_validated_by_user": {
-                                "type": "boolean",
-                                "description": "Set to false, unless the user confirms all price information explicitely.",
+                                "type": "string",
+                                "description": "Do not set, unless the user explicitely confirms.",
+                                "enum": ["confirmed", None]
                             },
                             "confirm_new_available_trade_commodity": {
-                                "type": "boolean",
-                                "description": "Do not set. Only set to true, if the user confirms, that this commodity should be transmitted to uex."
+                                "type": "string",
+                                "description": "Do not set. Only set, if the user confirms, that this commodity should be transmitted to uex.",
+                                "enum": ["confirmed", None]
                             }
                         },
-                        "required": ["player_provided_tradeport_name", "commodity_name", "price_per_unit", "operation", "values_validated_by_user"]
                     }
                 }
             }
         ]
 
-        print_debug(tools)
+        # print_debug(tools)
         return tools
 
     # @abstractmethod
@@ -226,9 +227,10 @@ class UexDataRunnerManager(FunctionManager):
 
     def sent_one_price_update_information_to_uex(self, function_args):
         printr.print(f'-> Command: Sending price update to uex: {function_args}')
+        self.overlay.display_overlay_text("Trying to submit one price information ...")
         print_debug(function_args)
-
-        if not function_args.get("values_validated_by_user"):
+        confirmed =  function_args.get("values_validated_by_user", None)
+        if not confirmed and confirmed != "confirmed":
             function_response = {"success": False, "instruction": f"The user has not confirmed price update informations yet. Ask him to do so before calling this function again {json.dumps(function_args)}"}
             return function_response, None
 
@@ -239,11 +241,11 @@ class UexDataRunnerManager(FunctionManager):
         
         operation = function_args.get("operation", None)
 
-        new_commodity_confirmed = function_args.get("confirm_new_available_trade_commodity", False)
+        new_commodity_confirmed = function_args.get("confirm_new_available_trade_commodity", None)
         
         commodity_current_tradeport_price = self.uex_service.get_commodity_for_tradeport(function_args.get("commodity_name", None), tradeport)
         if not commodity_current_tradeport_price:
-            if not new_commodity_confirmed:
+            if not new_commodity_confirmed and new_commodity_confirmed != "confirmed":
                 function_response = {"success": False, "instruction": f"Commodity is not tradeable at this tradeport. Does the user still want to sent this commodity price update? Provide him the information {json.dumps(function_args)}"}
                 return function_response, None
             
@@ -279,12 +281,13 @@ class UexDataRunnerManager(FunctionManager):
         message, success = self.uex_service.update_tradeport_price(tradeport=tradeport, commodity_update_info=commodity_update_info, operation=operation)
 
         if not success:
-            return {"success": False, "instructions": "Request was not accepted by uex."}
+            return {"success": False, "instructions": "Request was not accepted by uex.", "reason": message}
         
-        return {"success": True}
+        return {"success": True, "instructions": "On repeated command, do not use the same function values. Reset the values_validated_by_user value to be false on next command."}
 
     def transmit_commodity_prices_for_tradeport(self, function_args):
-        printr.print(f'-> Command: Analysing commodity prices to be sent to uex corp. Doing screenshot analysis. Only commodity information and only if active window is star citizen.')
+        printr.print(f'-> Command: Analysing commodity prices to be sent to uex corp. Doing screenshot analysis. Only commodity information and only if active window is star citizen for {function_args}.')
+        self.overlay.display_overlay_text("Trying to submit all prices ...")
         print_debug(function_args)
         if not function_args.get("player_provided_tradeport_name"):
             function_response = json.dumps({"success": False, "instruction": "Ask the player to provide the tradeport name for which he wants the prices to be transmitted"})
@@ -293,10 +296,11 @@ class UexDataRunnerManager(FunctionManager):
         tradeport = self.uex_service.get_tradeport(function_args["player_provided_tradeport_name"])
 
         if not tradeport:
-            function_response = json.dumps({"success": False, "instruction": "Invalid tradeport name. Ask the user for the tradeport he is currently at."})
+            function_response = json.dumps({"success": False, "instruction": f'Invalid tradeport name {function_args["player_provided_tradeport_name"]}. Ask the user for the tradeport he is currently at. '})
             return function_response, None
         
-        if not function_args.get("validated_tradeport_by_user"):
+        confirmed = function_args.get("validated_tradeport_by_user", None)
+        if not confirmed and confirmed != "confirmed":
             function_response = json.dumps({"success": False, "instruction": f"The user has not explicitely confirmed the tradeport. Ask him to confirm the tradeport {tradeport['name']}"})
             return function_response, None
         
@@ -338,7 +342,7 @@ class UexDataRunnerManager(FunctionManager):
         if asked_operation == "sell":
             operation = "sell"
         
-        self.overlay.display_overlay_text(f"Starting analysis: taking screenshot to analyse {operation}able commodities", display_duration=15000)
+        self.overlay.display_overlay_text(f"Starting analysis: taking screenshot for {operation}able commodities at {tradeport['name']}", display_duration=15000)
         
         gray_screenshot = self._take_screenshot(operation, tradeport)
         time.sleep(10) # we wait, so that the message can be seen.
@@ -474,7 +478,7 @@ class UexDataRunnerManager(FunctionManager):
         # Write JSON data to a file
         json_file_name = f'{self.data_dir_path}/debug_data/rejected_price_information_{operation}_{validated_tradeport["code"]}_{self.current_timestamp}.json'
         with open(json_file_name, 'w') as file:
-            json.dump(validated_prices, file, indent=4)
+            json.dump(rejected_commodities, file, indent=4)
 
         if len(updated_commodities_uex_id) == 0:
             self.overlay.display_overlay_text(f"Error UEX: {len(updated_commodities_uex_id)}/{number_of_extracted_prices} price information accepted.", display_duration=30000)
@@ -1027,7 +1031,7 @@ class UexDataRunnerManager(FunctionManager):
                             "You are an employee of the UEX Corp, a corporation within the star citizen universe. "
                             "They are the service provider of the Trading Devision Departments around the universe. They collect all trading related data in real time and "
                             "And provide vital tax information to the TDDs but also consolidated decision-relevant information to their mobiGlass Application for all UEE (United Empire of Earth) citizens alike. "
-                            f'You will respond to user requests in the player language, which is {self.config["sc-keybind-mappings"]["player_language"]}. His title is {self.config["openai"]["player_title"]}, his name {self.config["openai"]["player_name"]}. Shortly introduce yourself and greet the player. Shortly acknowledge the receipt of the data. Be thankful. Specifically, if any price information have been rejected, shortly summarize the combined reasons.'
+                            f'You will respond to user requests in the player language, which is {self.config["sc-keybind-mappings"]["player_language"]}. His title is {self.config["openai"]["player_title"]}, his name {self.config["openai"]["player_name"]}. Shortly acknowledge the number of accepted and rejected price information.'
                         )
                     },
                 {"role": "user", "content": json.dumps(message)},

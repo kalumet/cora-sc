@@ -420,8 +420,9 @@ class StarCitizenWingman(OpenAiWingman):
 
         if function_name == "box_delivery_mission_management":
             mission_id = function_args.get("mission_id", None)
+            confirmed_deletion = function_args.get("confirm_deletion", None)
             printr.print(f'-> Box Function: {function_args["type"]}', tags="info")
-            function_response = json.dumps(self.mission_manager_service.manage_missions(type=function_args["type"], mission_id=mission_id))
+            function_response = json.dumps(self.mission_manager_service.manage_missions(type=function_args["type"], mission_id=mission_id, confirmed_deletion=confirmed_deletion))
             printr.print(f'-> Resultat: {function_response}', tags="info")
             self.current_tools = self._get_cora_tools()  # recalculate, as with every box mission, we have new information for the function call
 
@@ -688,12 +689,17 @@ class StarCitizenWingman(OpenAiWingman):
                                 "type": {
                                     "type": "string",
                                     "description": "The type of operation that the player wants to execute",
-                                    "enum": ["new_delivery_mission", "delete_or_discard_all_missions", "delete_or_discard_one_mission_with_id"]
+                                    "enum": ["new_delivery_mission", "delete_or_discard_all_missions", "delete_or_discard_one_mission_with_id", None]
                                 },
                                 "mission_id": {
                                     "type": "string",
                                     "description": "The id of the mission, the player wants to delete",
                                     "enum": mission_ids
+                                },
+                                "confirm_deletion": {
+                                    "type": "string",
+                                    "description": "User confirmed deletion",
+                                    "enum": ["confirmed", "notconfirmed", None]
                                 }
                             }
                         }

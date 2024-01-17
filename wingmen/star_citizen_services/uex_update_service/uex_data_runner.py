@@ -343,9 +343,9 @@ class UexDataRunnerManager(FunctionManager):
             operation = "sell"
         
         self.overlay.display_overlay_text(f"Starting analysis: taking screenshot for {operation}able commodities at {tradeport['name']}", display_duration=15000)
+        time.sleep(10) # we wait, so that the message can be seen.
         
         gray_screenshot = self._take_screenshot(operation, tradeport)
-        time.sleep(10) # we wait, so that the message can be seen.
         
         if gray_screenshot is None:
             self.overlay.display_overlay_text("Could not take screenshot. Please try again.")
@@ -362,15 +362,15 @@ class UexDataRunnerManager(FunctionManager):
             self.overlay.display_overlay_text(f"Wrong tab selected for {operation}")
             return {"success": False, 
                     "instructions": f"It seems that the wrong operation tab is active. The user must select the {operation} tab for this command to be correct. ", 
-                    "error": "Potential error in operation tab. Please be sure to select the correct tab for the asked operation. "
+                    "error": "Potential error in operation tab. Please be sure to select the correct tab for the asked operation, try to reduce bright spots and the screen view angle should be as direct as possible. "
                     }, None
         
         location_name, success = self._get_location_name(gray_screenshot)
 
         if not success:
-            self.overlay.display_overlay_text("Vision not clear: reposition yourself in front of terminal, avoid bright spots.")
+            self.overlay.display_overlay_text("Trying to validate location name not possible: reduce bright spots ...")
             return {"success": False, 
-                    "instructions": "You cannot analyse the commodity terminal, as something is obstructing your view. The player should reposition himself to avoid bright spots on the terminal and stand in front of the terminal.", 
+                    "instructions": "Tell the user, that you are not able to validate the provided location name. Bright spots might make recognition inpossible.", 
                     }, None
 
         print_debug(f"got raw location name: {location_name}")

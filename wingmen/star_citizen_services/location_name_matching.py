@@ -141,20 +141,26 @@ class LocationNameMatching:
         return f"could not identify tradeport {location_name}", False
     
     @staticmethod
-    def validate_associated_location_name(location_name, tradeport):
+    def validate_associated_location_name(location_name, tradeport, min_similarity=50):
         if not tradeport or not location_name:
             return False
         
-        MIN_SIMILARITY_THRESHOLD = 80
+        MIN_SIMILARITY_THRESHOLD = min_similarity
 
-        # first check if the given name matches the tradeport name. Only a few characters could be different
-        similarity = _calculate_similarity(
-                location_name.lower(),
-                tradeport["name"].lower(),
-                MIN_SIMILARITY_THRESHOLD,
-            )
-        if similarity > MIN_SIMILARITY_THRESHOLD:
-            return True
+        # first, check if you get the most likely tradeport name from the screenshort (location_name):
+        location_name_tradeport, success = LocationNameMatching.validate_tradeport_name(location_name)
+
+        if success is True:  # screenshot maps to a tradeport, but sal-5 and sal-2 could make a difference
+            if tradeport["name"].lower() == location_name_tradeport["name"].lower():
+                return True
+            #else
+                # actually we found a tradeport with what is written in the screenshot?
+                # cities "inventories" have usually a very different name than a tradeport within them (i.e. Io North Tower vs Area 18, Central Business District vs Lorville, ...)
+                # but stations have inventories and tradeports that are very close to each other ..
+
+            
+        # this case is, if the tradeport is at a station or a city. City is quite simple to validate, as we have knowledge about known city names
+        # we don't have knowledge about station names. They are part of the tradeport api somehow ... so bit tricky to find the correct one
 
         uex_service = UEXApi()
         
@@ -172,13 +178,10 @@ class LocationNameMatching:
                     city["name"].lower(),
                     MIN_SIMILARITY_THRESHOLD,
                 )
-            if similarity > MIN_SIMILARITY_THRESHOLD:
+            if similarity > 90:  # only 1 or 2 characters are allowed to be wrong
                 return True
         
-        # complicated, if it is another terminal at a space station
-        location_name_tradeport, success = LocationNameMatching.validate_tradeport_name(location_name)
-        # we only check if it is plausible, so all other codes must match
-        if not success:
+        if success is False:  # we have no tradeport found and no city matching ... no chance to validate
             return False
 
         satellite_code = location_name_tradeport.get("satellite", None)
@@ -202,7 +205,7 @@ class LocationNameMatching:
             else:
                 return False
         
-        return True  # basically a guess that chances are high, that it's the same location inventory
+        return True  # basically a guess that chances are high, that it's the same location inventory, but: if player makes error, ai makes error or ocr makes error or any combination thereof -> match of not same tradeports could happen
 
 
 

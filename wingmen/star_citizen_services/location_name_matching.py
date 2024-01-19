@@ -208,34 +208,6 @@ class LocationNameMatching:
         return True  # basically a guess that chances are high, that it's the same location inventory, but: if player makes error, ai makes error or ocr makes error or any combination thereof -> match of not same tradeports could happen
 
 
-
-
-        tradeport, success = LocationNameMatching.validate_tradeport_name(location_name)
-        
-        tradeports = uex_service.get_data("tradeports")
-        matched_tradeport = None
-        max_location_similarity = 0
-        for tradeport in tradeports.values():
-            validated_name = tradeport["name"]
-
-            # Check for exact match
-            if validated_name == location_name:
-                return validated_name, True
-
-            similarity = _calculate_similarity(
-                location_name.lower(),
-                validated_name.lower(),
-                MIN_SIMILARITY_THRESHOLD,
-            )
-            if similarity > max_location_similarity:
-                matched_tradeport = tradeport
-                max_location_similarity = similarity
-
-        if matched_tradeport:
-            return matched_tradeport, True
-        return f"could not identify tradeport {location_name}", False
-
-
 def _calculate_similarity(str1, str2, threshold):
     distance = Levenshtein.distance(str1, str2)
     similarity = 100 - (100 * distance / max(len(str1), len(str2)))

@@ -616,10 +616,10 @@ class UEXApi():
         url = f"{self.api_endpoint}/sr/"
         
         update_data = {
-            "commodity": commodity_update_info.get("code"),
-            "tradeport": tradeport.get("code"),
+            "commodity": commodity_update_info["code"],
+            "tradeport": tradeport["code"],
             "operation": operation,
-            "price": commodity_update_info.get("price"),
+            "price": commodity_update_info["uex_price"],
             "access_code": self.uex_access_code,
         }
         

@@ -16,6 +16,10 @@ import requests
 import json
 import traceback
 
+import tkinter as tk
+
+from wingmen.star_citizen_services.uex_update_service.data_validation_popup import OverlayPopup
+
 # import wingmen.star_citizen_services.text_analyser as text_analyser
 from services.secret_keeper import SecretKeeper
 from services.printr import Printr
@@ -27,6 +31,7 @@ from wingmen.star_citizen_services.uex_api import UEXApi
 from wingmen.star_citizen_services.overlay import StarCitizenOverlay
 from wingmen.star_citizen_services.function_manager import FunctionManager
 from wingmen.star_citizen_services.ai_context_enum import AIContext
+from wingmen.star_citizen_services.uex_update_service.data_validation_popup import OverlayPopup
 
 
 DEBUG = True
@@ -231,12 +236,12 @@ class UexDataRunnerManager(FunctionManager):
         print_debug(function_args)
         confirmed =  function_args.get("values_validated_by_user", None)
         if not confirmed and confirmed != "confirmed":
-            function_response = {"success": False, "instruction": f"The user has not confirmed price update informations yet. Ask him to do so before calling this function again {json.dumps(function_args)}"}
+            function_response = {"success": False, "instruction": f"User needs to validate the following data: {json.dumps(function_args)}"}
             return function_response, None
 
         tradeport = self.uex_service.get_tradeport(function_args.get("player_provided_tradeport_name", None))
         if not tradeport:
-            function_response = {"success": False, "instruction": "Invalid tradeport name. Ask the user for the tradeport he is currently at."}
+            function_response = {"success": False, "instruction": "You could not identify the tradeport. Ask the user to repeat clearly the name."}
             return function_response, None
         
         operation = function_args.get("operation", None)
@@ -246,7 +251,7 @@ class UexDataRunnerManager(FunctionManager):
         commodity_current_tradeport_price = self.uex_service.get_commodity_for_tradeport(function_args.get("commodity_name", None), tradeport)
         if not commodity_current_tradeport_price:
             if not new_commodity_confirmed and new_commodity_confirmed != "confirmed":
-                function_response = {"success": False, "instruction": f"Commodity is not tradeable at this tradeport. Does the user still want to sent this commodity price update? Provide him the information {json.dumps(function_args)}"}
+                function_response = {"success": False, "instruction": f"Commodity is not tradeable at this tradeport. Ask him to confirm the information if he wants to send the data anyway: {json.dumps(function_args)}"}
                 return function_response, None
             
             if not operation:
@@ -296,35 +301,15 @@ class UexDataRunnerManager(FunctionManager):
         tradeport = self.uex_service.get_tradeport(function_args["player_provided_tradeport_name"])
 
         if not tradeport:
-            function_response = json.dumps({"success": False, "instruction": f'Invalid tradeport name {function_args["player_provided_tradeport_name"]}. Ask the user for the tradeport he is currently at. '})
+            function_response = json.dumps({"success": False, "instruction": 'Could not identify the given tradeport name. Please repeat clearly the tradeport name.'})
             return function_response, None
         
         confirmed = function_args.get("validated_tradeport_by_user", None)
         if not confirmed and confirmed != "confirmed":
-            function_response = json.dumps({"success": False, "instruction": f"The user has not explicitely confirmed the tradeport. Ask him to confirm the tradeport {tradeport['name']}"})
+            function_response = json.dumps({"success": False, "instruction": f"You found this tradeport: {tradeport['name']}. Ask for confirmation."})
             return function_response, None
         
-        function_response, uex_text_speech = self._get_data_from_screenshots(tradeport, function_args["operation"])
-        
-        if uex_text_speech:
-            # select different voice for uex:
-            tdd_voice = self.config["openai"]["contexts"]["tdd_voice"]
-            available_voices = self.config["openai"]["contexts"]["tdd_voices"].split(",")
-            set_voices = set(available_voices)
-            set_voices.remove(tdd_voice)
-            uex_voice = random.choice(list(set_voices))
-            self.config["sound"]["play_beep"] = True
-            self.config["sound"]["effects"] = ["RADIO", "INTERIOR_HELMET"]
-            response = self.client.audio.speech.create(
-                            model="tts-1",
-                            voice=uex_voice,
-                            input=uex_text_speech
-                        )
-            if response is not None:
-                self.audio_player.stream_with_effects(response.content, self.config)
-            time.sleep(20)  # needed, because i need to check how i can control that a speech is not cut-off by another speech.
-            self.config["sound"]["play_beep"] = False
-            self.config["sound"]["effects"] = ["INTERIOR_HELMET", "ROBOT"]
+        function_response = self._get_data_from_screenshots(tradeport, function_args["operation"])
         
         printr.print(f'-> Result: {function_response}', tags="info")
 
@@ -341,9 +326,6 @@ class UexDataRunnerManager(FunctionManager):
         operation = "buy"
         if asked_operation == "sell":
             operation = "sell"
-        
-        self.overlay.display_overlay_text(f"Starting analysis: taking screenshot for {operation}able commodities at {tradeport['name']}", display_duration=15000)
-        time.sleep(10) # we wait, so that the message can be seen.
         
         gray_screenshot = self._take_screenshot(operation, tradeport)
         
@@ -365,7 +347,7 @@ class UexDataRunnerManager(FunctionManager):
                     "error": "Potential error in operation tab. Please be sure to select the correct tab for the asked operation, try to reduce bright spots and the screen view angle should be as direct as possible. "
                     }, None
         
-        location_name, success = self._get_location_name(gray_screenshot)
+        location_name, location_name_crop, success = self._get_location_name(gray_screenshot)
 
         if not success:
             self.overlay.display_overlay_text("Trying to validate location name not possible: reduce bright spots ...")
@@ -385,13 +367,13 @@ class UexDataRunnerManager(FunctionManager):
         
         print_debug(f'validated location name: {validated_tradeport["name_short"]}')            
 
-        buy_result = self._analyse_prices_at_tradeport(gray_screenshot, validated_tradeport, operation)
+        buy_result = self._analyse_prices_at_tradeport(gray_screenshot, location_name_crop, validated_tradeport, operation)
 
+        print_debug(buy_result)
         if not buy_result["success"]:
             return buy_result, None
     
-        uex_text_speech = self._get_standalone_response(buy_result, operation)  
-        return buy_result, uex_text_speech
+        return buy_result
             
     def _validate_operation(self, gray_screenshot, operation):
         try: 
@@ -414,9 +396,9 @@ class UexDataRunnerManager(FunctionManager):
         except Exception:
             return False
          
-    def _analyse_prices_at_tradeport(self, gray_screenshot, validated_tradeport, operation):
+    def _analyse_prices_at_tradeport(self, gray_screenshot, cropped_screenshot_location, validated_tradeport, operation):
         
-        prices_raw, success = self._get_price_information(gray_screenshot, operation, validated_tradeport)
+        prices_raw, cropped_screenshot_commodities, success = self._get_price_information(gray_screenshot, operation, validated_tradeport)
 
         if not success:
             self.overlay.display_overlay_text("Error: no clear view on terminal, reposition and avoid bright spots.")
@@ -428,7 +410,7 @@ class UexDataRunnerManager(FunctionManager):
 
         print_debug(f"extracted {number_of_extracted_prices} price-informations from screenshot")
 
-        validated_prices, invalid_prices, success = CommodityPriceValidator.validate_price_information(prices_raw, validated_tradeport, operation)
+        all_prices, validated_prices, invalid_prices, success = CommodityPriceValidator.validate_price_information(prices_raw, validated_tradeport, operation)
 
         if not success:
             self.overlay.display_overlay_text("Error: could not identify commodities. Check logs.")
@@ -436,7 +418,11 @@ class UexDataRunnerManager(FunctionManager):
                     "instructions": "You couldn't identify the commodities and prices. Instruct the user to analyse the log files.", 
                     }
         
-        number_of_validated_prices = len(validated_prices)
+        manually_confirmed_data = OverlayPopup.show_data_validation_popup(validated_tradeport, operation, all_prices, cropped_screenshot_commodities, cropped_screenshot_location)
+        
+        print(f"user-validated: {json.dumps(manually_confirmed_data, indent=2)}")
+        
+        number_of_validated_prices = len(manually_confirmed_data)
 
         print_debug(f"{number_of_validated_prices} prices are valid")
 
@@ -450,16 +436,15 @@ class UexDataRunnerManager(FunctionManager):
         # Write JSON data to a file
         json_file_name = f'{self.data_dir_path}/debug_data/verified_price_information_{operation}_{validated_tradeport["code"]}_{self.current_timestamp}.json'
         with open(json_file_name, 'w') as file:
-            json.dump(validated_prices, file, indent=4)
+            json.dump(manually_confirmed_data, file, indent=4)
         
         updated_commodities_uex_id = []
         updated_commodities = []
         update_errors_uex_status = []
         rejected_commodities = []
-        # TODO collect valid prices that haven been successfully transmitted
-        
-        self.overlay.display_overlay_text("Got data from OpenAI and sanitized them, now transmitting to UEX.")
-        for validated_price in validated_prices:
+
+        self.overlay.display_overlay_text("Now transmitting to UEX.")
+        for validated_price in manually_confirmed_data:
             response, success = self.uex_service.update_tradeport_price(tradeport=validated_tradeport, commodity_update_info=validated_price, operation=operation)
 
             if not success:
@@ -472,8 +457,6 @@ class UexDataRunnerManager(FunctionManager):
             print_debug(f'price successfully updated')
             updated_commodities_uex_id.append(response)
             updated_commodities.append(validated_price)
-        
-        rejected_commodities.extend(invalid_prices)
 
         # Write JSON data to a file
         json_file_name = f'{self.data_dir_path}/debug_data/rejected_price_information_{operation}_{validated_tradeport["code"]}_{self.current_timestamp}.json'
@@ -481,7 +464,7 @@ class UexDataRunnerManager(FunctionManager):
             json.dump(rejected_commodities, file, indent=4)
 
         if len(updated_commodities_uex_id) == 0:
-            self.overlay.display_overlay_text(f"Error UEX: {len(updated_commodities_uex_id)}/{number_of_extracted_prices} price information accepted.", display_duration=30000)
+            self.overlay.display_overlay_text(f"Error UEX: no price information accepted.", display_duration=30000)
             return {
                         "success": False,
                         "instructions": "Tell the player in a funny but fair way, that UEX wasn't able to process the price information request. Tell him, that he should make single update commands. Give him information about the errornous price update if he asks for it. ",
@@ -489,29 +472,23 @@ class UexDataRunnerManager(FunctionManager):
                             "tradeport": validated_tradeport["name"],
                             f"{operation}able_commodities_info": {
                                 "identified": number_of_extracted_prices,
-                                "valid": number_of_validated_prices,
-                                "accepted_price_data_by_uex": len(updated_commodities_uex_id),
                                 "rejected_price_data_by_uex": len(update_errors_uex_status),
                                 "rejected_commodity_price_infos": rejected_commodities
                             }
                         }
                     }
         
-        self.overlay.display_overlay_text(f"UEX Corp: Thank you, we accepted {len(updated_commodities_uex_id)} out of {number_of_extracted_prices} price information.", display_duration=30000)
-        return {
+        self.overlay.display_overlay_text(f"UEX Corp: {len(updated_commodities_uex_id)} out of {number_of_extracted_prices} price information accepted.", display_duration=30000)
+        
+        response = {
                     "success": True,
-                    "instructions": "Just say something like 'Prices where transmitted, do you need details?'. Tell him if there are errors.",
-                    "message": {
-                        "tradeport": validated_tradeport["name"],
-                        f"{operation}able_commodities_info": {
-                            "identified": number_of_extracted_prices,
-                            "valid": number_of_validated_prices,
-                            "accepted_price_data_by_uex": len(updated_commodities_uex_id),
-                            "rejected_price_data_by_uex": len(update_errors_uex_status),
-                            "rejected_commodity_price_infos": rejected_commodities
-                        }
-                    }
+                    "instructions": "Prices where transmitted.",
                 }
+        if len(update_errors_uex_status) > 0:
+            response["message"][f"{operation}able_commodities_info"]["rejected_price_data_by_uex"]: len(update_errors_uex_status)
+            response["message"][f"{operation}able_commodities_info"]["rejected_commodity_price_infos"]: rejected_commodities
+
+        return response
 
     def _take_screenshot(self, operation, tradeport):
         if TEST:
@@ -664,7 +641,7 @@ class UexDataRunnerManager(FunctionManager):
             text = pytesseract.image_to_string(preprocessed_cropped_screenshot_pil)
             # print_debug(text)
             # print_debug("---------------------")
-            return text, True
+            return text, preprocessed_cropped_screenshot_pil, True
         except Exception:
             traceback.print_exc()
             return "Error during price analysis. Check console", False
@@ -740,11 +717,14 @@ class UexDataRunnerManager(FunctionManager):
 
             self.__debug_show_screenshot(cropped_screenshot)
             # Dateinamen mit Zeitstempel erstellen
-            filename = f'{self.screenshots_path}/screenshot_{operation}_{validated_tradeport["code"]}_{self.current_timestamp}.png'
-            cv2.imwrite(filename, gray_screenshot)
+            filename = f'{self.screenshots_path}/cropped_screenshot_{operation}_{validated_tradeport["code"]}_{self.current_timestamp}.png'
+            cv2.imwrite(filename, cropped_screenshot)
         except Exception:
             traceback.print_exc()
             return "Exception", False
+        
+        prices_raw, success = self._get_screenshot_texts(cropped_screenshot, operation, validated_tradeport)
+        return prices_raw, cropped_screenshot, success
 
         # self.debug_show_screenshot(cropped_screenshot)
 
@@ -880,10 +860,7 @@ class UexDataRunnerManager(FunctionManager):
         #     # Textbereich extrahieren und OCR anwenden
         #     text = pytesseract.image_to_string(bottom_roi)
         #     extracted_texts.append(text)
-
-        prices_raw, success = self._get_screenshot_texts(cropped_screenshot, operation, validated_tradeport)
-        return prices_raw, success
-
+    
     def __debug_show_screenshot(self, image):
         if not SHOW_SCREENSHOTS:
             return
@@ -904,83 +881,91 @@ class UexDataRunnerManager(FunctionManager):
 
         try:
 
-            pil_img = Image.fromarray(image)
+            if not TEST:
 
-            # Einen BytesIO-Buffer für das Bild erstellen
-            buffered = BytesIO()
+                pil_img = Image.fromarray(image)
 
-            # Das PIL-Bild im Buffer als JPEG speichern
-            pil_img.save(buffered, format="JPEG")
+                # Einen BytesIO-Buffer für das Bild erstellen
+                buffered = BytesIO()
 
-            # Base64-String aus dem Buffer generieren
-            img_str = base64.b64encode(buffered.getvalue()).decode()
+                # Das PIL-Bild im Buffer als JPEG speichern
+                pil_img.save(buffered, format="JPEG")
 
-            # client = OpenAI()
+                # Base64-String aus dem Buffer generieren
+                img_str = base64.b64encode(buffered.getvalue()).decode()
 
-            # response = client.chat.completions.create(
-            #     model="gpt-4-vision-preview",
-            #     response_format={ "type": "json_object" },
-            #     messages=[{
-            #         "role": "user",
-            #         "content": [
-            #             {"type": "text", "text": "Give me the text within this image. Give me the response in a json object called image_data."},
-            #             {
-            #                 "type": "image_url",
-            #                 "image_url": {"url": f"data:image/jpeg;base64,{img_str}"},
-            #             },
-            #         ],
-            #     }],
-            # )
+                # client = OpenAI()
 
-            # Datei öffnen und lesen
-            with open(f'{self.data_dir_path}/response_structure_{operation}.json', 'r') as file:
-                file_content = file.read()
+                # response = client.chat.completions.create(
+                #     model="gpt-4-vision-preview",
+                #     response_format={ "type": "json_object" },
+                #     messages=[{
+                #         "role": "user",
+                #         "content": [
+                #             {"type": "text", "text": "Give me the text within this image. Give me the response in a json object called image_data."},
+                #             {
+                #                 "type": "image_url",
+                #                 "image_url": {"url": f"data:image/jpeg;base64,{img_str}"},
+                #             },
+                #         ],
+                #     }],
+                # )
 
-            # JSON-String direkt verwenden
-            json_string = file_content
+                # Datei öffnen und lesen
+                with open(f'{self.data_dir_path}/response_structure_{operation}.json', 'r') as file:
+                    file_content = file.read()
 
-            # # client = OpenAI()
-            headers = {
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {self.openai_api_key}",
-            }
-            payload = {
-                "model": "gpt-4-vision-preview",
-                #"response_format": { "type": "json_object" },  #  not supported on this model
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": (
-                                
-                                f"Give me the text within this image. Give me the response in a plain json object structured as defined in this example: {json_string}. Valid values for 'multiplier' are null, K or M. Do not provide '/Unit'. Provide the json within markdown ```json ... ```.If you are unable to process the image, just return 'error' as response.")
-                            },
-                            {
-                                "type": "image_url",
-                                "image_url": {"url": f"data:image/jpeg;base64,{img_str}"},
-                            },
-                        ],
-                    }
-                ],
-                "max_tokens": 1000,
-            }
+                # JSON-String direkt verwenden
+                json_string = file_content
 
-            self.overlay.display_overlay_text(f"Transmitting now commodity price area of screenshot to OpenAI for text extraction", display_duration=30000)
-            print_debug("Calling openai vision for text extraction")
-            response = requests.post(
-                "https://api.openai.com/v1/chat/completions", headers=headers, json=payload, timeout=300
-            )
-            
-            if DEBUG:
-                # Write JSON data to a file
-                filename = f'{self.data_dir_path}/debug_data/open_ai_full_response_{operation}_{validated_tradeport["code"]}_{self.current_timestamp}.json'
-                with open(filename, 'w') as file:
-                    json.dump(response.json(), file, indent=4)
+                # # client = OpenAI()
+                headers = {
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {self.openai_api_key}",
+                }
+                payload = {
+                    "model": "gpt-4-vision-preview",
+                    #"response_format": { "type": "json_object" },  #  not supported on this model
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": (
+                                    
+                                    f"Give me the text within this image. Give me the response in a plain json object structured as defined in this example: {json_string}. Valid values for 'multiplier' are null, K or M. Do not provide '/Unit'. Provide the json within markdown ```json ... ```.If you are unable to process the image, just return 'error' as response.")
+                                },
+                                {
+                                    "type": "image_url",
+                                    "image_url": {"url": f"data:image/jpeg;base64,{img_str}"},
+                                },
+                            ],
+                        }
+                    ],
+                    "max_tokens": 1000,
+                }
 
-            if response.status_code != 200:
-                print_debug(f'request error: {response.json()["error"]["type"]}. Check the file {filename} for details.')
-                return f"Error calling gpt vision. Check file 'commodity_prices_response_{operation}.json' for details", False
-            message_content = response.json()["choices"][0]["message"]["content"]
+                self.overlay.display_overlay_text(f"Transmitting now commodity price area of screenshot to OpenAI for text extraction", display_duration=30000)
+                print_debug("Calling openai vision for text extraction")
+                response = requests.post(
+                    "https://api.openai.com/v1/chat/completions", headers=headers, json=payload, timeout=300
+                )
+                
+                if DEBUG:
+                    # Write JSON data to a file
+                    filename = f'{self.data_dir_path}/debug_data/open_ai_full_response_{operation}_{validated_tradeport["code"]}_{self.current_timestamp}.json'
+                    with open(filename, 'w') as file:
+                        json.dump(response.json(), file, indent=4)
+
+                if response.status_code != 200:
+                    print_debug(f'request error: {response.json()["error"]["type"]}. Check the file {filename} for details.')
+                    return f"Error calling gpt vision. Check file 'commodity_prices_response_{operation}.json' for details", False
+                
+                message_content = response.json()["choices"][0]["message"]["content"]
+            else:
+                # Read JSON data from a file
+                filename = f'{self.data_dir_path}/examples/{operation}/open_ai_full_response_{operation}_LVRID_None.json'
+                with open(filename, 'r') as file:
+                    message_content = json.load(file)["choices"][0]["message"]["content"]
 
             if "error" in json.dumps(message_content).lower():
                 return f"Unable to analyse screenshot (maybe cropping error). {json.dumps(message_content)} ", False
@@ -1002,41 +987,3 @@ class UexDataRunnerManager(FunctionManager):
         except BaseException:
             traceback.print_exc()
             return "Some exception raised during screenshot analysis", False
-
-    def _get_standalone_response(self, json_message, operation):
-        print_debug(f"trying to summarize response {json_message}")
-
-        # "success": True,
-        #             "instructions": "Just say something like 'Prices where transmitted, do you need details?'",
-        #             "message": {
-        #                 "tradeport": validated_tradeport["name"],
-        #                 f"{operation}able_commodities_info": {
-        #                     "identified": number_of_extracted_prices,
-        #                     "valid": number_of_validated_prices,
-        #                     "accepted_price_data_by_uex": len(updated_commodities),
-        #                     "rejected_price_data_by_uex": len(update_errors)
-        #                 } 
-       
-        message = copy.deepcopy(json_message)
-        message["instructions"] = "Confirm the number of successfully received price data."
-        message["message"].pop("tradeport")
-        message["message"][f"{operation}able_commodities_info"].pop("identified")
-        message["message"][f"{operation}able_commodities_info"].pop("valid")
-        response = self.client.chat.completions.create(
-            model=self.config["openai"]["summarize_model"],
-            messages=[
-                {
-                    "role": "system", "content": 
-                        (
-                            "You are an employee of the UEX Corp, a corporation within the star citizen universe. "
-                            "They are the service provider of the Trading Devision Departments around the universe. They collect all trading related data in real time and "
-                            "And provide vital tax information to the TDDs but also consolidated decision-relevant information to their mobiGlass Application for all UEE (United Empire of Earth) citizens alike. "
-                            f'You will respond to user requests in the player language, which is {self.config["sc-keybind-mappings"]["player_language"]}. His title is {self.config["openai"]["player_title"]}, his name {self.config["openai"]["player_name"]}. Shortly acknowledge the number of accepted and rejected price information.'
-                        )
-                    },
-                {"role": "user", "content": json.dumps(message)},
-            ]
-        )
-
-        print_debug(f"got response for uex speech: {response.choices[0].message.content}")
-        return response.choices[0].message.content

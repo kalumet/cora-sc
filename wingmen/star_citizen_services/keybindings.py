@@ -199,17 +199,18 @@ class SCKeybindings():
                 {"role": "system", "content": "You are expert in handling json files and translations."},
                 {"role": "user",    "content": (
                                         "Analyse the following json an fill in for each action the attribute 'command-phrases' which should contain a list of sentences the user can call out as commands. "
-                                        "A command phrase should have at least 2 words and not more then 4. "
+                                        "A command phrase should have at least 1 word and not more then 4. "
                                         "The command phrases must be intuitive, and be in the style of a command a user would call out to somebody that must execute the action. "
                                         "Each entry must only contain the command, nothing else, therefore, it should not contain any abbreviations, punctuation marks or any other non alphanumerical characters. "
-                                        "Further, the sentences should be simple, but unique among all actions in the json-file. "
-                                        "Provide at least 3 variations of the command phrase, at most 5. "
+                                        "Further, the sentences should be simple, but it must be unique among all actions in the json-file."
+                                        "Provide - if possible and - a 1 word command phrase, 2 two word command phrases and 1 three word command phrase."
                                         "For each action, provide command phrases in the available languages of the action. "
                                         "An example for the 'command-phrases' attribute is: 'instant-activation-sentences': {'en': ['Roll left', 'Left roll'], 'de_DE': ['Links rollen', 'Rolle links']}. "
                                         f"Apart of en, provide {self.player_language} commands as well. "
-                                        "The commands should have as much context information as possible. Example 'Toggles the docking camera.' should not lead to a phrase 'Camera mode'. A good phrase would be 'Change docking view'"
+                                        "The commands should have as much context information as possible, be as precise as possible and as short as possible. Try to avoid combind words. Example 'Toggles the docking camera.' should not lead to a phrase 'Camera mode'. A good phrase would be 'Change docking view'"
                                         "The commands should not provide information on how to execute them. Example 'Engage Quantum Drive (Hold)' should not lead to a phrase 'Hold quantum' or 'Quantum standby'. A good phrase would be 'Engage Quantum Drive'. "
-                                        "As response, provide the updated json provided, without altering the structure or providing any adititional information. "
+                                        "Whenever you process a command that is a toggle, provide at least 2 additional opposite command phrases. Example 'Open/Close Doors (Toggle) should lead at least to the two following command phrases: 'Open doors', 'Close doors'. In such a case, provide also a single word phrase like 'doors'.  "
+                                        "Your response only contains the following json, nothing more, that you update with the provided command phrases for each entry. "
                                         f"json file: {json.dumps(keybindings_message_chunk)}"
                                     ) 
                 }
@@ -232,18 +233,17 @@ class SCKeybindings():
                 response_json = response.json()
                 
                 path = f"{self.data_root_path}{self.sc_channel_version}/completion_message_command_phrases_{chunk}.json"
+                
+                updated_keybindings = response_json["choices"][0]["message"]["content"]
+                # Da der "content" selbst ein JSON-String ist, müssen Sie diesen parsen
+                updated_keybindings = json.loads(updated_keybindings)
                 with open(path, mode="w", encoding="utf-8") as file:
-                    json.dump(response_json, file, indent=4)
+                    json.dump(updated_keybindings, file, indent=4)
                 
                 if response_json.get("error", False):
                     print(f'Error during request: {response_json["error"]["type"]} skipping')
                     continue
-
-                updated_keybindings = response_json["choices"][0]["message"]["content"]
-
-                # Da der "content" selbst ein JSON-String ist, müssen Sie diesen parsen
-                updated_keybindings = json.loads(updated_keybindings)
-
+                
                 for key, value in updated_keybindings.items():
                     print_debug(f"updating {key}")
                     if key in keybindings:

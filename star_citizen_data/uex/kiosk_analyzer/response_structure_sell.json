@@ -2,7 +2,7 @@
     "commodity_prices": [
         {
             "commodity_name": "DISTILLED SPIRITS",
-            "inventory_SCU_quantity": 0,
+            "available_SCU_quantity": 0,
             "inventory_state": "OUT OF STOCK",
             "price_per_unit": 555,
             "multiplier": null,
@@ -10,7 +10,7 @@
         },
         {
             "commodity_name": "Souvenirs",
-            "inventory_SCU_quantity": 10000,
+            "available_SCU_quantity": 10000,
             "inventory_state": "MEDIUM INVENTORY",
             "price_per_unit": 1.04999995,
             "multiplier": "K",
@@ -18,7 +18,7 @@
         },
         {
             "commodity_name": "Construction Materials",
-            "inventory_SCU_quantity": 200,
+            "available_SCU_quantity": 200,
             "inventory_state": "LOW INVENTORY",
             "price_per_unit": 6.09000015,
             "multiplier": "M",

@@ -33,6 +33,7 @@ class CommodityPriceValidator:
                 print_debug(f"{validated_commodity} ... skipping")
                 print_debug("...skipping")
                 price_info_raw["validation_result"] = "commodity not found"
+                price_info_raw["code"] = ""
                 invalid_prices.append(price_info_raw)
                 all_prices.append(price_info_raw)
                 continue
@@ -102,7 +103,7 @@ class CommodityPriceValidator:
     @staticmethod
     def validate_commodity_name(commodity_raw, tradeport):
         MIN_SIMILARITY_THRESHOLD = 80
-
+        print_debug(f"checking for {commodity_raw} @ {tradeport['name']}")
         prices = tradeport.get("prices", {})
         matched_commodity = None
         matched_commodity_key = None
@@ -112,7 +113,7 @@ class CommodityPriceValidator:
 
             # Check for exact match
             if validated_name == commodity_raw:
-                return validated_name, True
+                return key, commodity, True
 
             similarity = _calculate_similarity(
                 commodity_raw.lower(),

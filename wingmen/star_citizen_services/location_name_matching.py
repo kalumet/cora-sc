@@ -5,12 +5,12 @@ from wingmen.star_citizen_services.model.delivery_mission import DeliveryMission
 from wingmen.star_citizen_services.uex_api import UEXApi
 
 
-DEBUG = False
+DEBUG = True
 
 
 def print_debug(to_print):
     if DEBUG:
-        print_debug(to_print)
+        print(to_print)
 
 
 class LocationNameMatching:
@@ -143,8 +143,10 @@ class LocationNameMatching:
     @staticmethod
     def validate_associated_location_name(location_name, tradeport, min_similarity=50):
         if not tradeport or not location_name:
+            print_debug(f"cannot validate kiosk location, as tradeport or location name not provided.")
             return False
         
+        print_debug(f'checking {location_name} against given tradeport {tradeport["name"]} city={tradeport["city"]} sat={tradeport["satellite"]} planet={tradeport["planet"]}')
         MIN_SIMILARITY_THRESHOLD = min_similarity
 
         # first, check if you get the most likely tradeport name from the screenshort (location_name):
@@ -168,17 +170,20 @@ class LocationNameMatching:
         # this can either be a city, or a station with multiple trade kiosk
         # if there are multiple trade kiosk at one station, than the names are very similar
         city_code = tradeport.get("city", None)
+
         
         # easy, if it is a city tradeport
         if city_code:
             city = uex_service.get_data("cities")[city_code]
+            print_debug(f'found city {city}. location_name.lower={location_name.lower()}, tradeport_name.lower={city["name"].lower()}')
             # first check if the given name matches the tradeport name. Only a few characters could be different
             similarity = _calculate_similarity(
-                    location_name.lower(),
+                    location_name.strip().lower(),
                     city["name"].lower(),
                     MIN_SIMILARITY_THRESHOLD,
                 )
-            if similarity > 90:  # only 1 or 2 characters are allowed to be wrong
+            print_debug(f"tradeport in city? similarity={similarity}")
+            if similarity > 80:  # only 1 or 2 characters are allowed to be wrong
                 return True
         
         if success is False:  # we have no tradeport found and no city matching ... no chance to validate

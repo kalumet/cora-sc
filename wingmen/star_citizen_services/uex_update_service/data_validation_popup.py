@@ -20,6 +20,7 @@ class OverlayPopup(tk.Toplevel):
         self.current_tradeport = validated_tradeport
         self.updated_data = copy.deepcopy(all_prices)
         self.user_updated_data = all_prices
+        self.operation = operation
 
         print(json.dumps(self.updated_data, indent=2))
 
@@ -87,7 +88,8 @@ class OverlayPopup(tk.Toplevel):
         # self.data_table.tag_configure('currency', foreground='black', font=('Arial', 11, 'bold'))
 
         for index, item in enumerate(self.updated_data):
-            price_with_currency = f"{item['price_per_unit']:.2f}"
+            # price_with_currency = f"{item['price_per_unit']:.2f}"
+            price_with_currency = f"{item['price_per_unit']}" # do not cut off, to be able to see the exact price
             row = (
                 item['commodity_name'],
                 item['code'],
@@ -130,9 +132,13 @@ class OverlayPopup(tk.Toplevel):
         self.deiconify()
 
         # Close the popup when the user presses the button
-        close_button = tk.Button(self, text="No changes and continue", command=self.destroy)
+        close_button = tk.Button(self, text="Abort transmition", command=self.abort_process)
         close_button.pack()
 
+    def abort_process(self):
+        self.user_updated_data = "aborted"
+        self.destroy()
+    
     def process_data(self):
         # Logic to collect updated data from the user interface
         self.user_updated_data = self.updated_data
@@ -243,6 +249,15 @@ class OverlayPopup(tk.Toplevel):
                 table_values[0] = validated_commodity["name"]
                 self.updated_data[row_index]['code'] = validated_commodity_key
                 table_values[1] = validated_commodity_key
+                unit_price = self.updated_data[row_index]["price_per_unit"]
+                multiplier = self.updated_data[row_index]["multiplier"]
+                if multiplier and multiplier.lower()[0] == "m":
+                    unit_price = unit_price * 1000000
+                
+                if multiplier and multiplier.lower()[0] == "k":
+                    unit_price = unit_price * 1000
+
+                self.updated_data[row_index]['uex_price'] = unit_price
 
         self.data_table.item(item, values=table_values)
         self.update()  # Update window to get size  

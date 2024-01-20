@@ -615,6 +615,8 @@ class UEXApi():
     def update_tradeport_price(self, tradeport, commodity_update_info, operation):
         url = f"{self.api_endpoint}/sr/"
         
+        if not commodity_update_info["code"] or not commodity_update_info["uex_price"]:
+            return "missing code or uex_price, rejected", False
         update_data = {
             "commodity": commodity_update_info["code"],
             "tradeport": tradeport["code"],

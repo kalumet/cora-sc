@@ -61,43 +61,9 @@ class UexDataRunnerManager(FunctionManager):
         )
         self.client: OpenAI = OpenAI()
         self.client.api_key = self.openai_api_key
+
+        self.best_template_index = 1
         
-        self.template_kiosk_buy_lower_right = cv2.imread(
-            f"{self.data_dir_path}/template_kiosk_buy_lower_right.png", 0
-        )
-        self.template_kiosk_buy_upper_left = cv2.imread(
-            f"{self.data_dir_path}/template_kiosk_buy_upper_left.png", 0
-        )
-        self.template_kiosk_location_lower_right = cv2.imread(
-            f"{self.data_dir_path}/template_kiosk_location_lower_right.png", 0
-        )
-        self.template_kiosk_location_upper_left = cv2.imread(
-            f"{self.data_dir_path}/template_kiosk_location_upper_left.png", 0
-        )
-        self.template_kiosk_sell_lower_right = cv2.imread(
-            f"{self.data_dir_path}/template_kiosk_sell_lower_right.png", 0
-        )
-        self.template_kiosk_sell_upper_left = cv2.imread(
-            f"{self.data_dir_path}/template_kiosk_sell_upper_left.png", 0
-        )
-        self.template_kiosk_sell_button = cv2.imread(
-            f"{self.data_dir_path}/template_kiosk_sell_button.png", 0
-        )
-        self.template_kiosk_buy_button = cv2.imread(
-            f"{self.data_dir_path}/template_kiosk_buy_button.png", 0
-        )
-        self.template_kiosk_sell_proof = cv2.imread(
-            f"{self.data_dir_path}/template_kiosk_sell_proof.png", 0
-        )
-        self.template_kiosk_buy_proof = cv2.imread(
-            f"{self.data_dir_path}/template_kiosk_buy_proof.png", 0
-        )
-        self.template_kiosk_commodity_upper_left = cv2.imread(
-            f"{self.data_dir_path}/template_kiosk_commodity_upper_left.png", 0
-        )
-        self.template_kiosk_commodity_bottom_right = cv2.imread(
-            f"{self.data_dir_path}/template_kiosk_commodity_bottom_right.png", 0
-        )
         self.function_name = "transmit_commodity_prices_for_tradeport"
 
         self.screenshots_path = f"{self.data_dir_path}/screenshots"
@@ -206,12 +172,12 @@ class UexDataRunnerManager(FunctionManager):
                             }, 
                             "values_validated_by_user": {
                                 "type": "string",
-                                "description": "Do not set, unless the user explicitely confirms.",
+                                "description": "Do not set, unless the user explicitely confirms that values are valid.",
                                 "enum": ["confirmed", None]
                             },
                             "confirm_new_available_trade_commodity": {
                                 "type": "string",
-                                "description": "Do not set. Only set, if the user confirms, that this commodity should be transmitted to uex.",
+                                "description": "Do not set. Only set to 'confirmed', if the user confirms, that this commodity should be transmitted to uex.",
                                 "enum": ["confirmed", None]
                             }
                         },
@@ -280,7 +246,7 @@ class UexDataRunnerManager(FunctionManager):
 
         commodity_update_info = {
             "code": commodity["code"],
-            "price": new_price
+            "uex_price": new_price
         }
 
         message, success = self.uex_service.update_tradeport_price(tradeport=tradeport, commodity_update_info=commodity_update_info, operation=operation)
@@ -306,8 +272,15 @@ class UexDataRunnerManager(FunctionManager):
         
         confirmed = function_args.get("validated_tradeport_by_user", None)
         if not confirmed and confirmed != "confirmed":
-            function_response = json.dumps({"success": False, "instruction": f"You found this tradeport: {tradeport['name']}. Ask for confirmation."})
+            function_response = json.dumps({"success": False, "instruction": f"Repeat the found tradeport name: {tradeport['name']}. Ask for confirmation."})
             return function_response, None
+        
+        if "operation" not in function_args:
+            self.overlay.display_overlay_text("Invalid command.")
+            return {"success": False, 
+                    "instructions": "The user did not provide enough information to process his request. He has to tell at what terminal he is standing and what trading operation he wants to analyse. It is important, that he selects the current location inventory and that he has activated the correct operations tab.", 
+                    "error": "missing tradeport or trading operation. "
+                    }, None
         
         function_response = self._get_data_from_screenshots(tradeport, function_args["operation"])
         
@@ -317,35 +290,27 @@ class UexDataRunnerManager(FunctionManager):
 
     def _get_data_from_screenshots(self, tradeport=None, asked_operation=None):
         validated_tradeport = tradeport
-        if not tradeport or not asked_operation:
-            self.overlay.display_overlay_text("Invalid command.")
-            return {"success": False, 
-                    "instructions": "The user did not provide enough information to process his request. He has to tell at what terminal he is standing and what trading operation he wants to analyse. It is important, that he selects the current location inventory and that he has activated the correct operations tab.", 
-                    "error": "missing tradeport or trading operation. "
-                    }, None
         operation = "buy"
         if asked_operation == "sell":
             operation = "sell"
         
         gray_screenshot = self._take_screenshot(operation, tradeport)
-        
         if gray_screenshot is None:
-            self.overlay.display_overlay_text("Could not take screenshot. Please try again.")
+            self.overlay.display_overlay_text("Could not take screenshot. Or couldn't identify template index")
             return {"success": False, 
                     "instructions": "You where not able to analyse the data. You can provide error information, if he likes. ", 
                     "error": "Could not make screenshot. Maybe, during screenshot taking, the active window displayed was NOT Star Citizen. In that case, I don't make any screenshots! "
                     }, None
         
-        self.__debug_show_screenshot(gray_screenshot)
-
-        valid_operation = self._validate_operation(gray_screenshot, operation)
-
-        if not valid_operation:
-            self.overlay.display_overlay_text(f"Wrong tab selected for {operation}")
+        success = self.choose_best_matching_template_index(gray_screenshot)
+        if success is False:
+            self.overlay.display_overlay_text("Couldn't identify template index for kiosk")
             return {"success": False, 
-                    "instructions": f"It seems that the wrong operation tab is active. The user must select the {operation} tab for this command to be correct. ", 
-                    "error": "Potential error in operation tab. Please be sure to select the correct tab for the asked operation, try to reduce bright spots and the screen view angle should be as direct as possible. "
+                    "instructions": "You where not able identify the kiosk design. You can provide error information, if he likes. ", 
+                    "error": "Best matching template couldn't be found. Maybe new kiosk design or unknown kiosk type. Create new templates. "
                     }, None
+        
+        self.__debug_show_screenshot(gray_screenshot)
         
         location_name, location_name_crop, success = self._get_location_name(gray_screenshot)
 
@@ -374,26 +339,45 @@ class UexDataRunnerManager(FunctionManager):
             return buy_result, None
     
         return buy_result
-            
-    def _validate_operation(self, gray_screenshot, operation):
+
+    def choose_best_matching_template_index(self, gray_screenshot):
+        top_left_x = self.config["uex_data_runner"]["tradeport_kiosks"]["inventory_area"]["top_left_x"]
+        top_left_y = self.config["uex_data_runner"]["tradeport_kiosks"]["inventory_area"]["top_left_y"]
+        bottom_right_x = self.config["uex_data_runner"]["tradeport_kiosks"]["inventory_area"]["bottom_right_x"]
+        bottom_right_y = self.config["uex_data_runner"]["tradeport_kiosks"]["inventory_area"]["bottom_right_y"]
+        cropped_screenshot = gray_screenshot[
+                top_left_y : bottom_right_y, top_left_x : bottom_right_x
+            ]
+        
+        self.__debug_show_screenshot(cropped_screenshot)
+        
         try: 
-
-            print_debug(f"validating {operation} operation")
-            if operation == "buy":
-                proof_position = cv2.matchTemplate(gray_screenshot, self.template_kiosk_buy_proof, cv2.TM_CCOEFF_NORMED)
-                # Find the maximum location and value
-            elif operation == "sell":
-                proof_position = cv2.matchTemplate(gray_screenshot, self.template_kiosk_sell_proof, cv2.TM_CCOEFF_NORMED)
-
-            _, max_val, _, _ = cv2.minMaxLoc(proof_position)
+            continue_template_matching = True
+            next_template_index = 1
+            highest_score = -1
+            best_template_index = None
+            while continue_template_matching:
+                filename = f"{self.data_dir_path}/template_Identifyier_{next_template_index}.png"
+                if not os.path.exists(filename):
+                    continue_template_matching = False
+                    break
             
-            if max_val > 0.7:
-                print_debug(f"Confirming {operation} operation with confidence {max_val}")
-                return True
-            else:
-                print(f"Cannot confirm {operation} operation selected with confidence {max_val}")
-                return False
+                template = cv2.imread(filename, 0)
+                proof_position = cv2.matchTemplate(cropped_screenshot, template, cv2.TM_CCOEFF_NORMED)
+                _, max_val, _, _ = cv2.minMaxLoc(proof_position)
+
+                if max_val > highest_score:
+                    highest_score = max_val
+                    best_template_index = next_template_index
+
+                next_template_index += 1
+                    
+            self.best_template_index = best_template_index
+            print_debug(f"best template index: {best_template_index}")
+            return True
+
         except Exception:
+            traceback.print_exc()
             return False
          
     def _analyse_prices_at_tradeport(self, gray_screenshot, cropped_screenshot_location, validated_tradeport, operation):
@@ -420,6 +404,11 @@ class UexDataRunnerManager(FunctionManager):
         
         manually_confirmed_data = OverlayPopup.show_data_validation_popup(validated_tradeport, operation, all_prices, cropped_screenshot_commodities, cropped_screenshot_location)
         
+        if manually_confirmed_data == "aborted":
+            return {
+                "success": True,
+                "instructions": "Transmission has been aborted. "
+            }
         print(f"user-validated: {json.dumps(manually_confirmed_data, indent=2)}")
         
         number_of_validated_prices = len(manually_confirmed_data)
@@ -483,6 +472,12 @@ class UexDataRunnerManager(FunctionManager):
         response = {
                     "success": True,
                     "instructions": "Prices where transmitted.",
+                    "message": {
+                            "tradeport": validated_tradeport["name"],
+                            f"{operation}able_commodities_info": {
+                                "identified": number_of_extracted_prices,
+                            }
+                        }
                 }
         if len(update_errors_uex_status) > 0:
             response["message"][f"{operation}able_commodities_info"]["rejected_price_data_by_uex"]: len(update_errors_uex_status)
@@ -588,10 +583,23 @@ class UexDataRunnerManager(FunctionManager):
             # Schwellenwert für die Übereinstimmung
             threshold = 0.5
 
-            # Template matching for payment template
+            top_left_x = self.config["uex_data_runner"]["tradeport_kiosks"]["inventory_area"]["top_left_x"]
+            top_left_y = self.config["uex_data_runner"]["tradeport_kiosks"]["inventory_area"]["top_left_y"]
+            bottom_right_x = self.config["uex_data_runner"]["tradeport_kiosks"]["inventory_area"]["bottom_right_x"]
+            bottom_right_y = self.config["uex_data_runner"]["tradeport_kiosks"]["inventory_area"]["bottom_right_y"]
+            cropped_screenshot = gray_screenshot[
+                    top_left_y : bottom_right_y, top_left_x : bottom_right_x
+                ]
+            
+            self.__debug_show_screenshot(cropped_screenshot)
+            
+            filename = f"{self.data_dir_path}/template_kiosk_location_upper_left_{self.best_template_index}.png"  # best template index selected during operation validation
+            template_upper_left = cv2.imread(filename, 0)
+
+            # Template matching inventory dropdown
             result_location_drop_down_label = cv2.matchTemplate(
-                gray_screenshot,
-                self.template_kiosk_location_upper_left,
+                cropped_screenshot,
+                template_upper_left,
                 cv2.TM_CCOEFF_NORMED,
             )
             _, max_val_label, _, max_loc_label = cv2.minMaxLoc(
@@ -600,37 +608,42 @@ class UexDataRunnerManager(FunctionManager):
 
             if max_val_label < threshold:
                 print("Erstes Template nicht erkannt.")
-                return "Could not identify location dropdown", False
+                return "Could not identify location dropdown", None, False
+
+            filename = f"{self.data_dir_path}/template_kiosk_location_lower_right_{self.best_template_index}.png"  # best template index selected during operation validation
+            template_lower_right = cv2.imread(filename, 0)
 
             location_drop_down_action = cv2.matchTemplate(
-                gray_screenshot,
-                self.template_kiosk_location_lower_right,
+                cropped_screenshot,
+                template_lower_right,
                 cv2.TM_CCOEFF_NORMED,
             )
             _, max_val_action, _, max_loc_action = cv2.minMaxLoc(location_drop_down_action)
 
             if max_val_action < threshold:
                 print("Zweites Template nicht erkannt.")
-                return "Could not identify location dropdown", False
+                return "Could not identify location dropdown", None, False
 
-            h_loc, w_loc = self.template_kiosk_location_upper_left.shape
+            h_loc, w_loc = template_upper_left.shape
             top_left = (max_loc_label[0], max_loc_label[1] + h_loc)
 
-            h_action, w_action = self.template_kiosk_location_lower_right.shape
+            h_action, w_action = template_lower_right.shape
             bottom_right = (max_loc_action[0], max_loc_action[1] + h_action)
 
             print_debug(f"cropping for location name: ({top_left[0]}, {top_left[1]}) -> ({bottom_right[0]}, {bottom_right[1]})")
             # Crop the screenshot
-            cropped_screenshot = gray_screenshot[
+            cropped_screenshot_exact = cropped_screenshot[
                 top_left[1] : bottom_right[1], top_left[0] : bottom_right[0]
             ]
+
+            self.__debug_show_screenshot(cropped_screenshot_exact)
             # Prüfen, ob das zugeschnittene Bild leer ist
-            if cropped_screenshot.size == 0:
+            if cropped_screenshot_exact.size == 0:
                 print("Ungültige Region identifiziert.")
-                return "Could not extract location name, invalid region.", False
+                return "Could not extract location name, invalid region.", None, False
 
             # Preprocess the cropped screenshot for better OCR results
-            preprocessed_cropped_screenshot = self._preprocess_image(cropped_screenshot)
+            preprocessed_cropped_screenshot = self._preprocess_image(cropped_screenshot_exact)
 
             # Convert preprocessed cropped image to PIL format for pytesseract
             preprocessed_cropped_screenshot_pil = Image.fromarray(
@@ -644,7 +657,7 @@ class UexDataRunnerManager(FunctionManager):
             return text, preprocessed_cropped_screenshot_pil, True
         except Exception:
             traceback.print_exc()
-            return "Error during price analysis. Check console", False
+            return "Error during price analysis. Check console", None, False
 
     def _adjust_gamma(self, image, gamma=1.0):
         inv_gamma = 1.0 / gamma
@@ -689,9 +702,20 @@ class UexDataRunnerManager(FunctionManager):
         """Analyze the screenshot and extract text."""
 
         try:
+            top_left_x = self.config["uex_data_runner"]["tradeport_kiosks"]["commodity_price_area"]["top_left_x"]
+            top_left_y = self.config["uex_data_runner"]["tradeport_kiosks"]["commodity_price_area"]["top_left_y"]
+            bottom_right_x = self.config["uex_data_runner"]["tradeport_kiosks"]["commodity_price_area"]["bottom_right_x"]
+            bottom_right_y = self.config["uex_data_runner"]["tradeport_kiosks"]["commodity_price_area"]["bottom_right_y"]
+            commodities_screenshot_area = gray_screenshot[
+                top_left_y : bottom_right_y, top_left_x : bottom_right_x
+            ]
+
+            filename = f"{self.data_dir_path}/template_kiosk_buy_button_{self.best_template_index}.png"        
+            buy_button_template = cv2.imread(filename, 0)
+
             # We always take the buy button to recognize the commodity prices area
             res_buy_button = cv2.matchTemplate(
-                gray_screenshot, self.template_kiosk_buy_button, cv2.TM_CCOEFF_NORMED
+                commodities_screenshot_area, buy_button_template, cv2.TM_CCOEFF_NORMED
             )
             _, max_val_button, _, max_loc_button = cv2.minMaxLoc(res_buy_button)
             threshold = 0.5
@@ -699,9 +723,11 @@ class UexDataRunnerManager(FunctionManager):
             if max_val_button < threshold:
                 return "Could not identify buy button. Reposition yourself.", False
             
-            h_screenshot, w_screenshot = gray_screenshot.shape[:2]
-            h_button, w_button = self.template_kiosk_buy_upper_left.shape[:2]
-
+            filename = f"{self.data_dir_path}/template_kiosk_buy_upper_left_{self.best_template_index}.png"        
+            buy_button_template = cv2.imread(filename, 0)
+            
+            h_screenshot, w_screenshot = commodities_screenshot_area.shape[:2]
+            h_button, w_button = buy_button_template.shape[:2]
 
             # Breite und Höhe des Buy-Button Templates
 
@@ -711,20 +737,20 @@ class UexDataRunnerManager(FunctionManager):
 
             print_debug(f'cropping at ({x_start},{y_start}) -> ({w_screenshot},{h_screenshot})')
 
-            cropped_screenshot = gray_screenshot[y_start:, x_start:]
+            commodities_screenshot_area = commodities_screenshot_area[y_start:, x_start:]
             # if max_val_bottom_right >= threshold:
             #     cropped_screenshot = gray_screenshot[y_start:y_end, x_start:x_end]
 
-            self.__debug_show_screenshot(cropped_screenshot)
+            self.__debug_show_screenshot(commodities_screenshot_area)
             # Dateinamen mit Zeitstempel erstellen
             filename = f'{self.screenshots_path}/cropped_screenshot_{operation}_{validated_tradeport["code"]}_{self.current_timestamp}.png'
-            cv2.imwrite(filename, cropped_screenshot)
+            cv2.imwrite(filename, commodities_screenshot_area)
         except Exception:
             traceback.print_exc()
             return "Exception", False
         
-        prices_raw, success = self._get_screenshot_texts(cropped_screenshot, operation, validated_tradeport)
-        return prices_raw, cropped_screenshot, success
+        prices_raw, success = self._get_screenshot_texts(commodities_screenshot_area, operation, validated_tradeport)
+        return prices_raw, commodities_screenshot_area, success
 
         # self.debug_show_screenshot(cropped_screenshot)
 
@@ -944,7 +970,7 @@ class UexDataRunnerManager(FunctionManager):
                     "max_tokens": 1000,
                 }
 
-                self.overlay.display_overlay_text(f"Transmitting now commodity price area of screenshot to OpenAI for text extraction", display_duration=30000)
+                self.overlay.display_overlay_text(f"Analysing screenshot for text extraction", display_duration=30000)
                 print_debug("Calling openai vision for text extraction")
                 response = requests.post(
                     "https://api.openai.com/v1/chat/completions", headers=headers, json=payload, timeout=300

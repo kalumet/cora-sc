@@ -322,6 +322,8 @@ class StarCitizenWingman(OpenAiWingman):
             return self._finalize_response(str(summarize_response))
 
         # print_debug(self.messages[1:])
+        if not response_message:
+            return {"success": False, "instructions": "there has been an error. User should clear history, check logs and retry."}
 
         return response_message.content, response_message.content
 

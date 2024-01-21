@@ -340,7 +340,7 @@ class OverlayPopup(tk.Toplevel):
             # Update the corresponding item in updated_data
             self.updated_data[row_index][column_key] = new_value
             self.updated_data[row_index]["validation_result"] = "user updated"
-            table_values[6] = "user updated"
+            table_values[7] = "user updated" # index of the validation result collumn...
 
             if column_key == "price_per_unit":
                 unit_price = new_value

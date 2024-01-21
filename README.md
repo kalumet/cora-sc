@@ -1,3 +1,74 @@
+# Star-Citizen-AI
+This is a fork of the great Wingmen-AI. Original notes are below.
+
+**Important**
+This code is not provided currently as installable exe file. I don't know yet how to do it and not sure if I will try to provide a .exe for this.
+
+## Major differences to the 1.1.2b1 from 21.01.2024 main branch - core changes
+- improved instant commands selection (find the best match, not the first match)
+- allow **multiple modifiers** to be pressed
+- allow **mouse button** activation
+- allow to not ehave spoken responses for commands
+- allow access to wingman UI threads for extensions -> In Game Overlay Display
+- more debug statements
+
+## New Features
+
+### All Ingame Keybindings autoloadable as commands
+- No need to reconfigure keybindings in star citizen ai
+  - Regenerate easily based on new Game Version files  
+- Default + Customized keybindings
+- Automatic generation of instant activation commands for all ingame binded actions, in englisch and your defined language!
+- chain ingame actions without providing the keybinds to be pressed
+- exclude specific commands or complete categories, include specific commands
+- overwrite easily in game key press definitions
+- easily check what actions are available in one easy readable json file. All localisation information are provided.
+- extend easily localisation information of actions with community based translation files or official translations
+
+### Only one activation key to control multiple wingmen
+It is more complex and in some situation errornous ... so be aware of this ... maybe wrong approach, but I prefer to only have one keybind to activate speech recognition
+
+### Trading Devision Radio Calls
+Based on UEX Data retrieved regularly. Provides information about:
+- find_best_trade_route_starting_at_location (You are at Hurston and don't care where to go -> Will give you the best trading option starting at hurston)
+- find_tradeport_at_location_that_buys_commodity (You want to sell a commodity that you have and want to know if it can be sold near your current location)
+- find_best_trade_route_for_commodity_between_locations ( You want to trade a specific commodity between two locations ...)
+- find_best_sell_price_for_commodity (Where is the best selling option for a given commodity (not depending on where you are))
+- find_best_trade_route_between locations ( You want to go from A to B: Ask what commodity you could take with you for a little extra profit)
+
+You will get different employees respond to you :-)
+
+### Mission Manager - Delivery Route Planner
+You love the delivery missions? You want to get the best delivery route?
+- Add new mission to your route from ingame mission manager app
+- Get calculated the best delivery route
+  - takes into account dangerous locations and will try to get them done as early as possible (if risk to fail the mission exists, do it early)
+  - will try to avoid jumping between planets / moons as much as possible
+- Ask your AI companion for the next location you have to go next
+- Spoken responses, but text overlays help to not miss any vital information
+- delete specific missions or all missions if required
+- missions saved on disk, if for any reason, you have to restart wingman AI
+
+**Important** 
+This functionality makes ingame screenshots.
+- It will only make a screenshot on your voice command ("New Box Mission", "New Delivery Mission", "Add new delivery mission")
+- The screenshot is only taken, if the active window is Star Citizen, nothing else.
+- Analysis is made locally on your pc.
+
+### UEX Data Runner
+- Get ingame kiosk information analysed and transmitted to UEX
+- manual validation of the data in a popup, no need to switch / tab out
+- get important process information as text overlays
+- get your AI tell you about results and errors to guide you in the process
+- provide single commodity price information or just all prices you see on screen
+
+**Important** 
+This functionality makes ingame screenshots.
+- It will only make a screenshot on your voice command ("Transmit all sellabble commodity price informations at Loveridge Mineral Reserve" or similar)
+- The screenshot is only taken, if the active window is Star Citizen, nothing else.
+- Only the commodity price area is analysed. Text extraction done with OpenAI. 
+
+
 # Wingman AI
 
 ![Wingman AI Header](assets/header.webp)

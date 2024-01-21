@@ -118,11 +118,6 @@ class UexDataRunnerManager(FunctionManager):
                                 "type": "string",
                                 "description": "What kind of prices the user want to transmit. 'buy' is for buyable commodities at the location, 'sell' are for sellable commodities.",
                                 "enum": ["sell","buy", None]
-                            }, 
-                            "validated_tradeport_by_user": {
-                                "type": "string",
-                                "description": "Do not set, unless the user confirms the tradeport name explicitely.",
-                                "enum": ["confirmed", None]
                             }
                         },
                     }
@@ -269,16 +264,10 @@ class UexDataRunnerManager(FunctionManager):
         if not tradeport:
             function_response = json.dumps({"success": False, "instruction": 'Could not identify the given tradeport name. Please repeat clearly the tradeport name.'})
             return function_response, None
-        
-        confirmed = function_args.get("validated_tradeport_by_user", None)
-        if not confirmed and confirmed != "confirmed":
-            function_response = json.dumps({"success": False, "instruction": f"Repeat the found tradeport name: {tradeport['name']}. Ask for confirmation."})
-            return function_response, None
-        
+               
         if "operation" not in function_args:
             self.overlay.display_overlay_text("Invalid command.")
-            return {"success": False, 
-                    "instructions": "The user did not provide enough information to process his request. He has to tell at what terminal he is standing and what trading operation he wants to analyse. It is important, that he selects the current location inventory and that he has activated the correct operations tab.", 
+            return {"success": False, "instructions": "The user did not provide enough information to process his request. He has to tell at what terminal he is standing and what trading operation he wants to analyse. It is important, that he selects the current location inventory and that he has activated the correct operations tab.", 
                     "error": "missing tradeport or trading operation. "
                     }, None
         
@@ -297,16 +286,14 @@ class UexDataRunnerManager(FunctionManager):
         gray_screenshot = self._take_screenshot(operation, tradeport)
         if gray_screenshot is None:
             self.overlay.display_overlay_text("Could not take screenshot. Or couldn't identify template index")
-            return {"success": False, 
-                    "instructions": "You where not able to analyse the data. You can provide error information, if he likes. ", 
+            return {"success": False, "instructions": "You where not able to analyse the data. You can provide error information, if he likes. ", 
                     "error": "Could not make screenshot. Maybe, during screenshot taking, the active window displayed was NOT Star Citizen. In that case, I don't make any screenshots! "
                     }, None
         
         success = self.choose_best_matching_template_index(gray_screenshot)
         if success is False:
             self.overlay.display_overlay_text("Couldn't identify template index for kiosk")
-            return {"success": False, 
-                    "instructions": "You where not able identify the kiosk design. You can provide error information, if he likes. ", 
+            return {"success": False, "instructions": "You where not able identify the kiosk design. You can provide error information, if he likes. ", 
                     "error": "Best matching template couldn't be found. Maybe new kiosk design or unknown kiosk type. Create new templates. "
                     }, None
         
@@ -316,8 +303,8 @@ class UexDataRunnerManager(FunctionManager):
 
         if not success:
             self.overlay.display_overlay_text("Trying to validate location name not possible: reduce bright spots ...")
-            return {"success": False, 
-                    "instructions": "Tell the user, that you are not able to validate the provided location name. Bright spots might make recognition inpossible.", 
+            return {
+                    "success": False, "instructions": "Tell the user, that you are not able to validate the provided location name. Bright spots might make recognition inpossible.", 
                     }, None
 
         print_debug(f"got raw location name: {location_name}")
@@ -335,7 +322,7 @@ class UexDataRunnerManager(FunctionManager):
         buy_result = self._analyse_prices_at_tradeport(gray_screenshot, location_name_crop, validated_tradeport, operation)
 
         print_debug(buy_result)
-        if not buy_result["success"]:
+        if "success" not in buy_result:
             return buy_result, None
     
         return buy_result
@@ -406,8 +393,7 @@ class UexDataRunnerManager(FunctionManager):
         
         if manually_confirmed_data == "aborted":
             return {
-                "success": True,
-                "instructions": "Transmission has been aborted. "
+                "instructions": "Tell the user, that transmission has been aborted. "
             }
         print(f"user-validated: {json.dumps(manually_confirmed_data, indent=2)}")
         
@@ -471,17 +457,18 @@ class UexDataRunnerManager(FunctionManager):
         
         response = {
                     "success": True,
-                    "instructions": "Prices where transmitted.",
+                    "instructions": "Prices where transmitted. Only if 'rejected_price_data_by_uex' is provided, ask the user if he wants details about the rejections.",
                     "message": {
                             "tradeport": validated_tradeport["name"],
                             f"{operation}able_commodities_info": {
                                 "identified": number_of_extracted_prices,
+                                "transmitted": number_of_validated_prices
                             }
                         }
                 }
         if len(update_errors_uex_status) > 0:
-            response["message"][f"{operation}able_commodities_info"]["rejected_price_data_by_uex"]: len(update_errors_uex_status)
-            response["message"][f"{operation}able_commodities_info"]["rejected_commodity_price_infos"]: rejected_commodities
+            response["message"][f"{operation}able_commodities_info"]["rejected_price_data_by_uex"] = len(update_errors_uex_status)
+            response["message"][f"{operation}able_commodities_info"]["rejected_commodity_price_infos"] = rejected_commodities
 
         return response
 

@@ -304,13 +304,14 @@ class Wingman(FileCreator):
                     phrase.lower(),
                 ).ratio()
                 if ratio > 0.8:  # we only accept commands that have a high ration
+                    print(f"instant activation ratio for {phrase}: {ratio}")
                     if ratio > best_ratio: # some command activations might have quite similar values, therefore, we need to check if there are better commands!
                         best_command = command
                         best_ratio = ratio
         
-        self._execute_command(best_command)
-
         if best_command:
+            print(f"instant activation found for {transcript}: {best_command['name']} with ratio {best_ratio}")
+            self._execute_command(best_command)
             return best_command
         return None
 

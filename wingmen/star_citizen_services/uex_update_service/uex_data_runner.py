@@ -181,7 +181,7 @@ class UexDataRunnerManager(FunctionManager):
             }
         ]
 
-        print_debug(json.dumps(tools, indent=2))
+        # print_debug(json.dumps(tools, indent=2))
         return tools
 
     # @abstractmethod

@@ -9,8 +9,8 @@ from wingmen.star_citizen_services.function_manager import FunctionManager
 from wingmen.star_citizen_services.ai_context_enum import AIContext
 
 
-DEBUG = True
-TEST = True
+DEBUG = False
+# TEST = True
 
 printr = Printr()
 
@@ -102,7 +102,7 @@ class TddManager(FunctionManager):
 
         ]
 
-        print_debug(f"tools definition: {json.dumps(tools, indent=2)}")
+        # print_debug(f"tools definition: {json.dumps(tools, indent=2)}")
         return tools
 
     # @abstractmethod

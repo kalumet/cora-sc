@@ -82,16 +82,12 @@ class TddManager(FunctionManager):
                                 "description": (
                                     "The possible request_types the user can ask for. This defines what other parameters are required for this request to be fulfillable. "
                                 ),
-                                "enum": ["find_best_trade_route_starting_at_location", "find_tradeport_at_location_that_buys_commodity", 
+                                "enum": ["find_best_trade_route_starting_at_location", 
                                          "find_best_trade_route_for_commodity_between_locations", "find_best_sell_price_for_commodity", 
-                                         "find_best_trade_route_between"]
+                                         "find_best_trade_route_between, find_tradeport_at_location_to_sell_commodity"]
                             },
-                            "request_validated_by_user": {
-                                "type": "boolean",
-                                "description": "Set to false, unless the user confirms the request explicitely.",
-                            }
                         },
-                        "required": ["request_type", "request_validated_by_user"]
+                        "required": ["request_type"]
                     }
                 }
             },
@@ -105,6 +101,8 @@ class TddManager(FunctionManager):
             }
 
         ]
+
+        print_debug(f"tools definition: {json.dumps(tools, indent=2)}")
         return tools
 
     # @abstractmethod
@@ -130,24 +128,30 @@ class TddManager(FunctionManager):
         print_debug(f"trade request: {function_args}")
         
         request_type = function_args.get("request_type", "")
-        request_validated_by_user = function_args.get("request_validated_by_user", False)
                 
-        if request_type == "find_best_trade_route_starting_at_location":
-                
+        if request_type == "find_best_trade_route_starting_at_location":  
             location_type, location = self.uex_service.get_location(function_args.get("location_name_from", None))
             if not location:
-                return {"success": False, "instructions": "Ask the player for the location he wants to start his trade route."}
-            if not request_validated_by_user:
-                return {"success": False, "instructions": f"Request confirmation of user for the starting location {location['name']}({location_type})"}
+                return {"success": False, "instructions": "Missing starting location"}
             
-            function_response = self.uex_service.find_best_trade_from_location(location_name=function_args["location_name_from"])
+            function_response = self.uex_service.find_best_trade_from_location_code(location_code=location["code"])
 
-            if not function_response.get("success", None):
-                moon_or_planet_buy = function_response["buy_satellite"] if function_response["buy_satellite"] else function_response["buy_planet"]
-                moon_or_planet_sell = function_response["sell_satellite"] if function_response["sell_satellite"] else function_response["sell_planet"]
+            success = function_response.get("success", False)
+            if success:
+                trade_route = function_response["trade_routes"][0]
+                moon_or_planet_buy = trade_route["buy_satellite"] if trade_route["buy_satellite"] else trade_route["buy_planet"]
+                moon_or_planet_sell = trade_route["sell_satellite"] if trade_route["sell_satellite"] else trade_route["sell_planet"]
                 self.overlay.display_overlay_text(
-                    f'Buy {function_response["commodity"]} at {function_response["buy_at"]} ({moon_or_planet_buy}). '
-                    f'Sell at {function_response["sell_at"]} ({moon_or_planet_sell}).'    
+                    f'Buy {trade_route["commodity"]} at {trade_route["buy_at_tradeport_name"]} ({moon_or_planet_buy}). '
+                    f'Sell at {trade_route["sell_at_tradeport_name"]} ({moon_or_planet_sell}). Profit: {trade_route["profit"]} aUEC.'    
+                )
+                print_debug((
+                    f'Buy {trade_route["commodity"]} at {trade_route["buy_at_tradeport_name"]} ({moon_or_planet_buy}). '
+                    f'Sell at {trade_route["sell_at_tradeport_name"]} ({moon_or_planet_sell}).'    
+                ))
+            else:
+                self.overlay.display_overlay_text(
+                    function_response["message"] 
                 )
             function_response = json.dumps(function_response)
             printr.print(f'-> Resultat: {function_response}', tags="info") 
@@ -155,62 +159,80 @@ class TddManager(FunctionManager):
 
         if request_type == "find_best_trade_route_between":
             
-            location_type_from, location_from = self.uex_service.get_location(function_args.get("location_name_from", None))
-            location_type_to, location_to = self.uex_service.get_location(function_args.get("location_name_to", None))
+            location_name_from = function_args.get("location_name_from", None)
+            location_type_from, location_from = self.uex_service.get_location(location_name_from)
+            location_name_to = function_args.get("location_name_to", None)
+            location_type_to, location_to = self.uex_service.get_location(location_name_to)
             
-            if not (location_from and location_to): 
+            if not location_from: 
                 return {
                     "success": False, 
-                    "instructions": "Ask the user from where he wants to start and where he wants to go."
-                }
-
-            if not request_validated_by_user:
-                return {
-                    "success": False, 
-                    "instructions": (
-                        f"Request confirmation of user for starting location {location_from['name']}({location_type_from}) "
-                        f"and target location {location_to['name']}({location_type_to})"
-                    )
+                    "instructions": f"Start location not recognised: {location_name_from}"
                 }
             
-            function_response = self.uex_service.find_best_trade_between_locations(location_name1=function_args["location_name_from"], location_name2=function_args["location_name_to"])
-            if not function_response.get("success", None):
-                moon_or_planet_buy = function_response["buy_satellite"] if function_response["buy_satellite"] else function_response["buy_planet"]
-                moon_or_planet_sell = function_response["sell_satellite"] if function_response["sell_satellite"] else function_response["sell_planet"]
+            if not location_to:
+                return {
+                    "success": False, 
+                    "instructions": f"Target location not recognised: {location_name_to}"
+                }   
+           
+            function_response = self.uex_service.find_best_trade_between_locations_code(location_code1=location_from['code'], location_code2=location_to['code'])
+            
+            success = function_response.get("success", False)
+            if success:
+                trade_route = function_response["trade_routes"][0]
+                moon_or_planet_buy = trade_route["buy_satellite"] if trade_route["buy_satellite"] else trade_route["buy_planet"]
+                moon_or_planet_sell = trade_route["sell_satellite"] if trade_route["sell_satellite"] else trade_route["sell_planet"]
                 self.overlay.display_overlay_text(
-                    f'Buy {function_response["commodity"]} at {function_response["buy_at"]} ({moon_or_planet_buy}). '
-                    f'Sell at {function_response["sell_at"]} ({moon_or_planet_sell}).'    
+                    f'Buy {trade_route["commodity"]} at {trade_route["buy_at_tradeport_name"]} ({moon_or_planet_buy}). '
+                    f'Sell at {trade_route["sell_at_tradeport_name"]} ({moon_or_planet_sell}). Profit: {trade_route["profit"]} aUEC.'    
                 )
+                print_debug((
+                    f'Buy {trade_route["commodity"]} at {trade_route["buy_at_tradeport_name"]} ({moon_or_planet_buy}). '
+                    f'Sell at {trade_route["sell_at_tradeport_name"]} ({moon_or_planet_sell}).'    
+                ))
+            else:
+                print_debug(function_response["message"])
             function_response = json.dumps(function_response)
             printr.print(f'-> Resultat: {function_response}', tags="info")
             return function_response
 
         if request_type == "find_tradeport_at_location_to_sell_commodity":
             
-            location_type_to, location_to = self.uex_service.get_location(function_args.get("location_name_to", None))
-            commodity = self.uex_service.get_commodity(function_args.get("commodity_name", None))
+            location_name = function_args.get("location_name_to", None)
+            location_type_to, location_to = self.uex_service.get_location(location_name)
             
-            if not (commodity and location_to):
+            commodity_name = function_args.get("commodity_name", None)
+            commodity = self.uex_service.get_commodity(commodity_name)
+            
+            if not location_to:
+                print(f"find_tradeport_at_location_to_sell_commodity - location {location_name} not found.")
                 return {
                     "success": False, 
-                    "instructions": "Ask the player to provide a commodity name and the location where he wants to sell the commodity."
-                }
-
-            if not request_validated_by_user:
-                return {
-                    "success": False, 
-                    "instructions": (
-                        f"Request confirmation of the user if he wants to sell commodity {commodity['name']} at {location_to['name']}({location_type_to})"
-                    )
+                    "instructions": f"The location {location_name} could not be found. User should try again speaking clearly. "
                 }
             
-            function_response = self.uex_service.find_best_sell_price_at_location(location_name=function_args["location_name_to"], commodity_name=function_args["commodity_name"])
-           
-            if not function_response.get("success", None):
-                moon_or_planet_sell = function_response["sell_satellite"] if function_response["sell_satellite"] else function_response["sell_planet"]
+            if not commodity:
+                print(f"find_tradeport_at_location_to_sell_commodity - commodity {commodity_name} not found.")
+                return {
+                    "success": False, 
+                    "instructions": f"The commodity {commodity_name} could not be identified. Ask the user to repeat the name clearly. "
+                }
+            
+            function_response = self.uex_service.find_best_sell_price_at_location_codes(location_code=location_to["code"], commodity_code=commodity['code'])
+            
+            success = function_response.get("success", False)
+            if success:
+                trade_route = function_response["trade_routes"][0]
+                moon_or_planet_sell = trade_route["sell_satellite"] if trade_route["sell_satellite"] else trade_route["sell_planet"]
                 self.overlay.display_overlay_text(
-                    f'Sell {function_response["commodity"]} at {function_response["sell_at"]} ({moon_or_planet_sell}) for {function_response["sell_price"]} aUEC.'    
+                    f'Sell {trade_route["commodity"]} at {trade_route["sell_at_tradeport_name"]} ({moon_or_planet_sell}) for {trade_route["sell_price"]} aUEC.'    
                 )
+                print_debug((
+                     f'Sell {trade_route["commodity"]} at {trade_route["sell_at_tradeport_name"]} ({moon_or_planet_sell}) for {trade_route["sell_price"]} aUEC.'      
+                ))
+            else:
+                print_debug(function_response["message"])
             function_response = json.dumps(function_response)
             printr.print(f'-> Resultat: {function_response}', tags="info")
 
@@ -224,23 +246,24 @@ class TddManager(FunctionManager):
                     "success": False, 
                     "instructions": "Ask the player for the commodity that he wants to trade."
                 }
-
-            if not request_validated_by_user:
-                return {
-                    "success": False, 
-                    "instructions": (
-                        f"Request confirmation of the user if he wants to trade commodity {commodity['name']}"
-                    )
-                }
            
-            function_response = self.uex_service.find_best_trade_for_commodity(commodity_name=function_args["commodity_name"])
-            if not function_response.get("success", None):
-                moon_or_planet_buy = function_response["buy_satellite"] if function_response["buy_satellite"] else function_response["buy_planet"]
-                moon_or_planet_sell = function_response["sell_satellite"] if function_response["sell_satellite"] else function_response["sell_planet"]
+            function_response = self.uex_service.find_best_trade_for_commodity_code(commodity_code=commodity['code'])
+            
+            success = function_response.get("success", False)
+            if success:
+                trade_route = function_response["trade_routes"][0]
+                moon_or_planet_buy = trade_route["buy_satellite"] if trade_route["buy_satellite"] else trade_route["buy_planet"]
+                moon_or_planet_sell = trade_route["sell_satellite"] if trade_route["sell_satellite"] else trade_route["sell_planet"]
                 self.overlay.display_overlay_text(
-                    f'Buy {function_response["commodity"]} at {function_response["buy_at"]} ({moon_or_planet_buy}). '
-                    f'Sell at {function_response["sell_at"]} ({moon_or_planet_sell}).'    
+                    f'Buy {trade_route["commodity"]} at {trade_route["buy_at_tradeport_name"]} ({moon_or_planet_buy}). '
+                    f'Sell at {trade_route["sell_at_tradeport_name"]} ({moon_or_planet_sell}). Profit: {trade_route["profit"]} aUEC.'    
                 )
+                print_debug((
+                    f'Buy {trade_route["commodity"]} at {trade_route["buy_at_tradeport_name"]} ({moon_or_planet_buy}). '
+                    f'Sell at {trade_route["sell_at_tradeport_name"]} ({moon_or_planet_sell}).'   
+                ))
+            else:
+                print_debug(function_response["message"])
             function_response = json.dumps(function_response)
             printr.print(f'-> Resultat: {function_response}', tags="info")
             return function_response
@@ -249,25 +272,26 @@ class TddManager(FunctionManager):
              
             commodity = self.uex_service.get_commodity(function_args.get("commodity_name", None))
             
-            if not (commodity):
+            if not commodity:
                 return {
                     "success": False, 
                     "instructions": "Ask the player the commodity that he wants to sell."
                 }
-            if not (commodity) or not request_validated_by_user:
-                return {
-                    "success": False, 
-                    "instructions": (
-                        f"Request confirmation of the user if he wants to sell commodity {commodity['name']}"
-                    )
-                }
             
-            function_response = self.uex_service.find_best_selling_location_for_commodity(commodity_name=function_args["commodity_name"])
-            if not function_response.get("success", None):
-                moon_or_planet_sell = function_response["sell_satellite"] if function_response["sell_satellite"] else function_response["sell_planet"]
+            function_response = self.uex_service.find_best_selling_location_for_commodity_code(commodity_code=commodity["code"])
+            
+            success = function_response.get("success", False)
+            if success:
+                trade_route = function_response["trade_routes"][0]
+                moon_or_planet_sell = trade_route["sell_satellite"] if trade_route["sell_satellite"] else trade_route["sell_planet"]
                 self.overlay.display_overlay_text(
-                    f'Sell {function_response["commodity"]} at {function_response["sell_at"]} ({moon_or_planet_sell}) for {function_response["sell_price"]} aUEC.'    
+                    f'Sell {trade_route["commodity"]} at {trade_route["sell_at_tradeport_name"]} ({moon_or_planet_sell}) for {trade_route["sell_price"]} aUEC.'    
                 )
+                print_debug((
+                    f'Sell {trade_route["commodity"]} at {trade_route["sell_at_tradeport_name"]} ({moon_or_planet_sell}) for {trade_route["sell_price"]} aUEC.'    
+                ))
+            else:
+                print_debug(function_response["message"])
             function_response = json.dumps(function_response)
             printr.print(f'-> Resultat: {function_response}', tags="info")
             return function_response

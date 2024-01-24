@@ -230,7 +230,13 @@ class StarCitizenWingman(OpenAiWingman):
         try:
             # Versuche, den Kontext basierend auf dem Namen zu finden
             # context_to_switch_to = AIContext(new_context_name)
-            context_to_switch_to = next(context for context in AIContext if context.value == new_context_name)
+            context_to_switch_to = next((context for context in AIContext if context.value == new_context_name), None)
+
+            if context_to_switch_to is None:
+                # Handle the case where the context is not found
+                # For example, log an error or notify the user
+                print(f"Context '{new_context_name}' not found.")
+                return
 
             # Überprüfe, ob der Kontext im Dictionary existiert
             if context_to_switch_to in self.contexts_history:

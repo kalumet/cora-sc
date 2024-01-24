@@ -96,8 +96,8 @@ class UexDataRunnerManager(FunctionManager):
         """ 
         Provides the openai function definition for this manager. 
         """
-        tradeport_names = self.uex_service.get_category_short_names("tradeports")
-        commodity_names = self.uex_service.get_category_short_names("commodities")
+        tradeport_names = self.uex_service.get_category_names("tradeports")
+        commodity_names = self.uex_service.get_category_names("commodities")
 
         tools = [
             {
@@ -117,7 +117,7 @@ class UexDataRunnerManager(FunctionManager):
                             "operation": {
                                 "type": "string",
                                 "description": "What kind of prices the user want to transmit. 'buy' is for buyable commodities at the location, 'sell' are for sellable commodities.",
-                                "enum": ["sell","buy", None]
+                                "enum": ["sell", "buy", None]
                             }
                         },
                     }
@@ -181,7 +181,7 @@ class UexDataRunnerManager(FunctionManager):
             }
         ]
 
-        # print_debug(tools)
+        print_debug(json.dumps(tools, indent=2))
         return tools
 
     # @abstractmethod

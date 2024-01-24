@@ -96,8 +96,8 @@ class UexDataRunnerManager(FunctionManager):
         """ 
         Provides the openai function definition for this manager. 
         """
-        tradeport_names = self.uex_service.get_category_names("tradeports")
-        commodity_names = self.uex_service.get_category_names("commodities")
+        tradeport_names = self.uex_service.get_category_short_names("tradeports")
+        commodity_names = self.uex_service.get_category_short_names("commodities")
 
         tools = [
             {
@@ -344,7 +344,7 @@ class UexDataRunnerManager(FunctionManager):
             highest_score = -1
             best_template_index = None
             while continue_template_matching:
-                filename = f"{self.data_dir_path}/template_Identifyier_{next_template_index}.png"
+                filename = f"{self.data_dir_path}/template_kiosk_location_upper_left_{next_template_index}.png"
                 if not os.path.exists(filename):
                     continue_template_matching = False
                     break
@@ -612,7 +612,7 @@ class UexDataRunnerManager(FunctionManager):
                 return "Could not identify location dropdown", None, False
 
             h_loc, w_loc = template_upper_left.shape
-            top_left = (max_loc_label[0], max_loc_label[1] + h_loc)
+            top_left = (max_loc_label[0] - 60, max_loc_label[1] + h_loc) # lower left corner, 60 pixel more to the left
 
             h_action, w_action = template_lower_right.shape
             bottom_right = (max_loc_action[0], max_loc_action[1] + h_action)
@@ -710,19 +710,15 @@ class UexDataRunnerManager(FunctionManager):
             if max_val_button < threshold:
                 return "Could not identify buy button. Reposition yourself.", False
             
-            filename = f"{self.data_dir_path}/template_kiosk_buy_upper_left_{self.best_template_index}.png"        
-            buy_button_template = cv2.imread(filename, 0)
-            
-            h_screenshot, w_screenshot = commodities_screenshot_area.shape[:2]
             h_button, w_button = buy_button_template.shape[:2]
 
             # Breite und Höhe des Buy-Button Templates
 
             # Berechne den Ausschnitt ab der unteren linken Ecke des gefundenen Templates
-            x_start = max(max_loc_button[0] - 30, 0)
-            y_start = min(max_loc_button[1] + h_button, h_screenshot)
+            x_start = max_loc_button[0]
+            y_start = max_loc_button[1] + h_button
 
-            print_debug(f'cropping at ({x_start},{y_start}) -> ({w_screenshot},{h_screenshot})')
+            # print_debug(f'cropping at ({x_start},{y_start})')
 
             commodities_screenshot_area = commodities_screenshot_area[y_start:, x_start:]
             # if max_val_bottom_right >= threshold:

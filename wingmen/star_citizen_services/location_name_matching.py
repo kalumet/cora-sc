@@ -1,11 +1,13 @@
 import random
 import Levenshtein
+import re
 
 from wingmen.star_citizen_services.model.delivery_mission import DeliveryMission
 from wingmen.star_citizen_services.uex_api import UEXApi
 
 
 DEBUG = True
+regex_remove_control_characters = r'[^\S ]'
 
 
 def print_debug(to_print):
@@ -147,7 +149,6 @@ class LocationNameMatching:
             return False
         
         print_debug(f'checking {location_name} against given tradeport {tradeport["name"]} city={tradeport["city"]} sat={tradeport["satellite"]} planet={tradeport["planet"]}')
-        MIN_SIMILARITY_THRESHOLD = min_similarity
 
         # first, check if you get the most likely tradeport name from the screenshort (location_name):
         location_name_tradeport, success = LocationNameMatching.validate_tradeport_name(location_name)
@@ -171,19 +172,18 @@ class LocationNameMatching:
         # if there are multiple trade kiosk at one station, than the names are very similar
         city_code = tradeport.get("city", None)
 
-        
         # easy, if it is a city tradeport
         if city_code:
             city = uex_service.get_data("cities")[city_code]
-            print_debug(f'found city {city}. location_name.lower={location_name.lower()}, tradeport_name.lower={city["name"].lower()}')
+            print_debug(f'found city {city}. location_name.lower="{location_name.lower()}", tradeport_name.lower="{city["name"].lower()}"')
             # first check if the given name matches the tradeport name. Only a few characters could be different
             similarity = _calculate_similarity(
                     location_name.strip().lower(),
                     city["name"].lower(),
-                    MIN_SIMILARITY_THRESHOLD,
+                    min_similarity,
                 )
             print_debug(f"tradeport in city? similarity={similarity}")
-            if similarity > 80:  # only 1 or 2 characters are allowed to be wrong
+            if similarity > min_similarity:  # only 1 or 2 characters are allowed to be wrong
                 return True
         
         if success is False:  # we have no tradeport found and no city matching ... no chance to validate
@@ -214,8 +214,11 @@ class LocationNameMatching:
 
 
 def _calculate_similarity(str1, str2, threshold):
+    str1 = re.sub(r'[^\S ]', '', str1)
+    str2 = re.sub(r'[^\S ]', '', str2)
     distance = Levenshtein.distance(str1, str2)
     similarity = 100 - (100 * distance / max(len(str1), len(str2)))
+    print_debug(f"Levenshtein distance '{str1}'->'{str2}'={distance}, similarity={similarity}")
     return similarity if similarity >= threshold else 0
 
 

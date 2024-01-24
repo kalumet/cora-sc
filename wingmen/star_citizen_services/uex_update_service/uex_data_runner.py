@@ -84,10 +84,10 @@ class UexDataRunnerManager(FunctionManager):
     def get_function_prompt(self):
         print_debug("function prompt for uex data runner called.")
         return (
-            "You are able to sent price information to the uex corp. To do so, you can call the following functions: "
-            f"- '{self.transmit_commodity_prices_for_tradeport.__name__}' should be called, if the player wants to transmit prices (many prices) and if he requests from you to analyse the prices displayed on the trading terminal; "
+            "If the user ask you to transmit commodity prices, you can do so by calling one of the following functions: "
+            f"- '{self.transmit_commodity_prices_for_tradeport.__name__}' should be called, if the player wants to transmit all prices (many prices) and if he requests from you to analyse the prices displayed on the trading terminal; "
             f"- '{self.sent_one_price_update_information_to_uex.__name__}' should be called, if he wants to transmit a single price, or if he wants you to correct prices from a previous analysis. "
-             " Follow these rules: Never (Never!) make assumptions about the values for these functions. Set to empty if the user does not provide values. Never, never call this functions without the user providing the data, like the tradeport he is currently. Before calling these functions, ask the user to provide you the data required. Do repeat the given values and ask him to validate. Do only set the validated parameters to confirmed, if the player has explicitely confirmed the data."
+             " Follow these rules: Never (Never!) make assumptions about the values for these functions. Set to empty if the user does not provide values. Never, never call this functions without the user providing the data, like the tradeport he is currently. Before calling these functions, ask the user to provide you the data required."
             " These requests should not incure a context switch to TDD. "
         )
     
@@ -249,6 +249,7 @@ class UexDataRunnerManager(FunctionManager):
         if not success:
             return {"success": False, "instructions": "Request was not accepted by uex.", "reason": message}
         
+        self.overlay.display_overlay_text(f'Transmitted: {operation} {commodity_update_info["code"]} @ {tradeport["name_short"]} -> {new_price} aUEC')
         return {"success": True, "instructions": "On repeated command, do not use the same function values. Reset the values_validated_by_user value to be false on next command."}
 
     def transmit_commodity_prices_for_tradeport(self, function_args):
@@ -309,7 +310,7 @@ class UexDataRunnerManager(FunctionManager):
 
         print_debug(f"got raw location name: {location_name}")
 
-        success = LocationNameMatching.validate_associated_location_name(location_name, validated_tradeport)
+        success = LocationNameMatching.validate_associated_location_name(location_name, validated_tradeport, min_similarity=50)
 
         if not success:
             self.overlay.display_overlay_text("Error: Cannot validate location name!")

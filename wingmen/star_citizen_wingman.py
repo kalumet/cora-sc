@@ -89,7 +89,9 @@ class StarCitizenWingman(OpenAiWingman):
         self.mission_manager_service: MissionManager = None # initialized in validate()
         self.messages_buffer = 10
         self.current_tools = None # init in validate
-        self.tdd_voice = self.config["openai"]["contexts"]["tdd_voice"]
+        tdd_voices = set(self.config["openai"]["contexts"]["tdd_voices"].split(","))
+        self.tdd_voice = random.choice(list(tdd_voices))
+        self.config["openai"]["contexts"]["tdd_voice"] = self.tdd_voice
         self.config["openai"]["tts_voice"] = self.config["openai"]["contexts"]["cora_voice"]
         self.config["sound"]["play_beep"] = False
         self.config["sound"]["effects"] = ["INTERIOR_HELMET", "ROBOT"]
@@ -268,82 +270,6 @@ class StarCitizenWingman(OpenAiWingman):
         else:
             return self._context_switch_tool()
        
-    async def _get_response_for_transcript(
-        self, transcript: str, locale: str | None
-    ) -> tuple[str, str]:
-        """Overwritten to deal with dynamic context switches.
-
-        Summary: This implementation is an extended version of the original, 
-        specifically adapted to handle dynamic context switches and additional 
-        functionalities related to instant commands and GPT call logic.
-        
-        Gets the response for a given transcript.
-
-        This function interprets the transcript, runs instant commands if triggered,
-        calls the OpenAI API when needed, processes any tool calls, and generates the final response.
-        
-
-        Args:
-            transcript (str): The user's spoken text transcribed.
-
-        Returns:
-            A tuple of strings representing the response to a function call and an instant response.
-        """
-        self.last_transcript_locale = locale
-        self.current_user_request = transcript
-
-        # instant_response = self._execute_instant_activation_command(transcript)
-        # if instant_response:
-        #     return instant_response, instant_response
-        # if instant_response is False:
-        #     return False, False
-
-        instant_response = self._try_instant_activation(transcript)  # we try instant activation, else we let gpt decide
-        if instant_response:
-            return instant_response, instant_response
-
-        self._add_user_message(transcript)
-        response_message, tool_calls = self._make_gpt_call()
-
-        if tool_calls:
-            instant_response = await self._handle_tool_calls(tool_calls)
-            
-            # if self.switch_context_executed:
-            #     instant_response = None
-            #     response_message = None
-            #     tool_calls = None
-            #     # repeat the gpt call now in the new switched context
-            #     print_debug("switched context")
-            #     # msg = {"role": "user", "content": transcript}
-            #     # self.messages.append(msg)
-            #     # response_message, tool_calls = self._make_gpt_call()
-            #     self.switch_context_executed = False # might be problematik, if gpt tries to make another context switch.
-            #     # if tool_calls:
-            #     #     instant_response = await self._handle_tool_calls(tool_calls)
-
-            # if instant_response: # might be "Error"
-            #     return instant_response, instant_response
-
-            summarize_response = self._summarize_function_calls()
-            return self._finalize_response(str(summarize_response))
-
-        # print_debug(self.messages[1:])
-        if not response_message:
-            return {"success": False, "instructions": "there has been an error. User should clear history, check logs and retry."}
-
-        return response_message.content, response_message.content
-
-    def _make_gpt_call(self):
-        completion = self._gpt_call()
-
-        if completion is None:
-            return None, None
-
-        response_message, tool_calls = self._process_completion(completion)
-
-        # do not tamper with this message as it will lead to 400 errors!
-        self.messages.append(response_message)
-        return response_message, tool_calls
 
     def _cleanup_conversation_history(self):
         """
@@ -492,13 +418,13 @@ class StarCitizenWingman(OpenAiWingman):
 
         if not command:
             print_debug(f"Command not found {command_name}")
-            return json.dumps({"success": False, "error": f"Command not found {command_name}"}), f"Command not found {command_name}"
+            return {"success": False, "error": f"Command not found {command_name}"}, f"Command not found {command_name}"
 
         avoid_filter_names = self.config.get("avoid-commands", [])
         avoid_filter_names_set = set(avoid_filter_names)
         if command_name in avoid_filter_names_set:
             print_debug(f"Command not allowed {command_name}")
-            return json.dumps({"success": False, "error": f"Command not allowed {command_name}"}), f"Command not allowed {command_name}"
+            return {"success": False, "error": f"Command not allowed {command_name}"}, f"Command not allowed {command_name}"
 
         # Definiere eine Reihenfolge für die Modifiertasten
         order = ["alt", "ctrl", "shift", "altleft", "ctrlleft", "shiftleft", "altright", "ctrlrigth", "shiftright"]
@@ -547,7 +473,7 @@ class StarCitizenWingman(OpenAiWingman):
                 return "Ok", "Ok"
         
             if hold == "notSupported":
-                return json.dumps({"success": "False", "message": f"{command_message}", "error": f"activation mode not supported {sc_activation_mode}"}), None
+                return {"success": "False", "message": f"{command_message}", "error": f"activation mode not supported {sc_activation_mode}"}, None
 
             active_modifiers = []
 
@@ -585,7 +511,7 @@ class StarCitizenWingman(OpenAiWingman):
         except Exception as e:
             # Genereller Fehlerfang
             print_debug(f"Ein Fehler ist aufgetreten: {e.__class__.__name__}, {e}")
-            return json.dumps({"success": "False", "error": f"{e}"}), None
+            return {"success": False, "error": f"{e}"}, None
       
     def _execute_command(self, command: dict):
         """Triggers the execution of a command. This implementation executes the defined star citizen commands.

@@ -83,7 +83,7 @@ class TddManager(FunctionManager):
                                     "The possible request_types the user can ask for. This defines what other parameters are required for this request to be fulfillable. "
                                 ),
                                 "enum": ["find_best_trade_route_starting_at_location", 
-                                         "find_best_trade_route_for_commodity_between_locations", "find_best_sell_price_for_commodity", 
+                                         "find_best_trade_route_for_commodity_between_locations", "find_locations_to_sell_commodity", 
                                          "find_best_trade_route_between, find_tradeport_at_location_to_sell_commodity"]
                             },
                         },
@@ -117,7 +117,7 @@ class TddManager(FunctionManager):
                 "- find_best_trade_route_between: used, if the player wants to trade between locations. Requires both 'location_name_from' and 'location_name_to' "
                 "- find_tradeport_at_location_to_sell_commodity: used if the player wants to sell a specific commodity at a given location. Requires 'commodity_name' and 'location_name_to' "
                 "- find_best_trade_route_for_commodity_between_locations: used if the player wants to trade a given commodity without specifying any buying location or selling location. Requires only 'commodity_name' "
-                "- find_best_sell_price_for_commodity: used if the player wants to know where to get the best price for a given commodity independent of any location. Requires only 'commodity_name' "
+                "- find_locations_to_sell_commodity: used if the player wants to know where where he can sell a given commodity independent of any location. Requires only 'commodity_name' "
         )
     
     #@abstractmethod
@@ -268,7 +268,7 @@ class TddManager(FunctionManager):
             printr.print(f'-> Resultat: {function_response}', tags="info")
             return function_response
 
-        if request_type == "find_best_sell_price_for_commodity":
+        if request_type == "find_locations_to_sell_commodity":
              
             commodity = self.uex_service.get_commodity(function_args.get("commodity_name", None))
             

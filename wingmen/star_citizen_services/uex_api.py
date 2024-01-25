@@ -367,7 +367,7 @@ class UEXApi():
 
                 if best_buy and best_sell:
                     profit = max_sell_price - min_buy_price
-                    if profit > best_profit:
+                    if profit > best_profit or len(top_trades) < 3:
                         trade_info = self._create_trade_info(best_buy, best_sell, commodity_code, min_buy_price, max_sell_price, round(profit, ndigits=2))
                         # - profit as lowest value is always at top_trades[0]
                         heapq.heappush(top_trades, (-profit, trade_id, trade_info))
@@ -407,7 +407,7 @@ class UEXApi():
             if commodity_code in trade.get('prices', {}):
                 details = trade['prices'][commodity_code]
                 sell_price = details.get('price_sell', 0)
-                if details['operation'] == 'sell' and sell_price and sell_price > max_sell_price:
+                if details['operation'] == 'sell' and sell_price and (sell_price > max_sell_price or len(top_trades) < 3):
                     trade_info = self._build_trade_selling_info(commodity_code, trade, round(sell_price, ndigits=2))
                     # - profit as lowest value is always at top_trades[0]
                     heapq.heappush(top_trades, (-sell_price, trade_id, trade_info))
@@ -450,7 +450,7 @@ class UEXApi():
             if commodity_code in trade.get('prices', {}):
                 details = trade['prices'][commodity_code]
                 sell_price = details.get('price_sell', 0)
-                if details['operation'] == 'sell' and sell_price and sell_price > max_sell_price:
+                if details['operation'] == 'sell' and sell_price and (sell_price > max_sell_price or len(top_trades) < 3):
                     trade_info = self._build_trade_selling_info(commodity_code, trade, round(sell_price, ndigits=2))
                     # - profit as lowest value is always at top_trades[0]
                     heapq.heappush(top_trades, (-sell_price, trade_id, trade_info))

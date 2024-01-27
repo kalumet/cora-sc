@@ -10,7 +10,7 @@ from screeninfo import get_monitors
 
 from gui.root import WingmanUI 
 
-from wingmen.star_citizen_services.uex_update_service.commodity_price_validator import CommodityPriceValidator
+from wingmen.star_citizen_services.functions.uex_update_services.commodity_price_validator import CommodityPriceValidator
 from wingmen.star_citizen_services.location_name_matching import LocationNameMatching
 
 

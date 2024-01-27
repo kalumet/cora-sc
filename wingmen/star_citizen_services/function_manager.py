@@ -1,6 +1,16 @@
+import pkgutil
+import importlib
+from pathlib import Path
 from abc import ABC, abstractmethod
 
 from wingmen.star_citizen_services.ai_context_enum import AIContext
+
+DEBUG = False
+
+
+def print_debug(to_print):
+    if DEBUG:
+        print(to_print)
 
 
 class StarCitizensAiFunctionsManager:
@@ -32,10 +42,42 @@ class StarCitizensAiFunctionsManager:
         return self.function_registry.get(function_name)
 
     def initialize_function_managers(self, config, secret_keeper):
-        for cls in FunctionManager.__subclasses__():
-            manager_instance = cls(config, secret_keeper)
-            manager_instance.register_functions(self.function_registry)
-            self.register_manager(manager_instance.get_context_mapping(), manager_instance)
+        # Define the package name where the managers are located
+        package_name = 'wingmen.star_citizen_services.functions'
+        
+        # Import the package
+        package = importlib.import_module(package_name)
+        print_debug(f"Scanning package {package.__name__} for FunctionManagers")
+        
+        # Recursively import all modules and submodules
+        def import_submodules(package):
+            for loader, module_name, is_pkg in pkgutil.iter_modules(package.__path__, package.__name__ + '.'):
+                # Import the module
+                module = importlib.import_module(module_name)
+                print_debug(f"  Scanning module {module.__name__} for FunctionManagers")
+                
+                # Iterate through attributes of the module
+                for attribute_name in dir(module):
+                    attribute = getattr(module, attribute_name)
+                    print_debug(f"    Checking if {attribute_name} is a FunctionManager")
+
+                    if isinstance(attribute, type) and issubclass(attribute, FunctionManager) and attribute is not FunctionManager:
+                        print_debug(f"     -> YES")
+                        # This is a FunctionManager subclass, register it accordingly
+                        manager_instance = attribute(config, secret_keeper)
+                        manager_instance.register_functions(self.function_registry)
+                        print(f"{attribute.__name__} registered")
+                        self.register_manager(manager_instance.get_context_mapping(), manager_instance)
+                    else:
+                        print_debug(f"     -> NO")
+                        
+                # If it's a package, we need to import its submodules as well
+                if is_pkg:
+                    subpackage = importlib.import_module(module_name)
+                    import_submodules(subpackage)
+        
+        # Start the import process from the root package
+        import_submodules(package)
 
     def get_managers(self, ai_context: AIContext) -> list:
         if ai_context in self.managers:

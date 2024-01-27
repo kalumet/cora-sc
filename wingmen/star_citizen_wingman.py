@@ -14,9 +14,7 @@ from wingmen.star_citizen_services.ai_context_enum import AIContext
 from wingmen.star_citizen_services.keybindings import SCKeybindings
 from wingmen.star_citizen_services.uex_api import UEXApi
 from wingmen.star_citizen_services.mission_manager import MissionManager 
-from wingmen.star_citizen_services.uex_update_service.uex_data_runner import UexDataRunnerManager  
 from wingmen.star_citizen_services.overlay import StarCitizenOverlay
-from wingmen.star_citizen_services.tdd_manager import TddManager
 from wingmen.star_citizen_services.function_manager import StarCitizensAiFunctionsManager, FunctionManager
 
 DEBUG = True
@@ -152,14 +150,6 @@ class StarCitizenWingman(OpenAiWingman):
                 "This tool is open source and comes as is and without waranty. Use at your own risk. \n"
                 "With that said, I hope you enjoy the tool and that it will make your game experience in star citizen even better. "
             ), wait_for_gui=True)
-            printr.print((
-                            "IMPORTANT INFORMATION about this WingmenAI extension! \n"
-                            "This tool requires an OpenAI API. Data is transmitted to OpenAI. This incures costs. You cannot use this tool without valid API keys. \n"
-                            "This tool takes Screenshots of ingame elements. It will only make screenshots on given commands and only if the active window is 'Star Citizen'. \n"
-                            "BUT IT TAKES THEM. Do not use this tool if you are not trusting the source. \n"
-                            "This tool is open source and comes as is and without waranty. Use at your own risk. \n"
-                            "With that said, I hope you enjoy the tool and that it will make your game experience in star citizen even better. \n\n"
-                        ), tags="err", wait_for_gui=True)
 
             # self.mission_manager_service.get_new_mission()  # TODO nur ein Test auskommentieren
             # self.kiosk_prices_manager.identify_kiosk_prices()  # TODO nur ein Test auskommentieren
@@ -270,7 +260,6 @@ class StarCitizenWingman(OpenAiWingman):
         else:
             return self._context_switch_tool()
        
-
     def _cleanup_conversation_history(self):
         """
         Overwritten from openai_ai_wingman to deal with context switches, as every context has his own message buffer.
@@ -680,4 +669,5 @@ class StarCitizenWingman(OpenAiWingman):
             ai_function_manager: FunctionManager
             tools.extend(ai_function_manager.get_function_tools())
         tools.append(self._context_switch_tool(current_context=AIContext.CORA))
+
         return tools

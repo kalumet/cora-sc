@@ -30,10 +30,14 @@ class TddManager(FunctionManager):
         self.tdd_voice = self.config["openai"]["contexts"]["tdd_voice"]
 
     # @abstractmethod
+    def get_context_mapping(self) -> AIContext:
+        return AIContext.TDD
+    
+    # @abstractmethod
     def register_functions(self, function_register):
         function_register[self.get_trade_information_from_tdd_employee.__name__] = self.get_trade_information_from_tdd_employee
         function_register[self.switch_tdd_employee.__name__] = self.switch_tdd_employee
-
+        
     # @abstractmethod
     def get_function_tools(self):
         tradeport_names = self.uex_service.get_category_names("tradeports")
@@ -119,10 +123,6 @@ class TddManager(FunctionManager):
                 "- find_best_trade_route_for_commodity_between_locations: used if the player wants to trade a given commodity without specifying any buying location or selling location. Requires only 'commodity_name' "
                 "- find_locations_to_sell_commodity: used if the player wants to know where where he can sell a given commodity independent of any location. Requires only 'commodity_name' "
         )
-    
-    #@abstractmethod
-    def get_context_mapping(self) -> AIContext:
-        return AIContext.TDD
 
     def get_trade_information_from_tdd_employee(self, function_args):
         print_debug(f"trade request: {function_args}")

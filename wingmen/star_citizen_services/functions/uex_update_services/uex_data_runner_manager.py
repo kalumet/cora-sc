@@ -1,6 +1,5 @@
 import os
 import datetime
-import time
 import random
 import cv2
 import numpy as np
@@ -8,7 +7,6 @@ from PIL import Image
 import pytesseract
 import pygetwindow
 import pyautogui
-import copy
 from openai import OpenAI
 import base64
 from io import BytesIO
@@ -16,9 +14,9 @@ import requests
 import json
 import traceback
 
-import tkinter as tk
 
-from wingmen.star_citizen_services.uex_update_service.data_validation_popup import OverlayPopup
+from wingmen.star_citizen_services.functions.uex_update_services.data_validation_popup import OverlayPopup
+from wingmen.star_citizen_services.functions.uex_update_services.commodity_price_validator import CommodityPriceValidator
 
 # import wingmen.star_citizen_services.text_analyser as text_analyser
 from services.secret_keeper import SecretKeeper
@@ -26,15 +24,13 @@ from services.printr import Printr
 from services.audio_player import AudioPlayer
 
 from wingmen.star_citizen_services.location_name_matching import LocationNameMatching
-from wingmen.star_citizen_services.uex_update_service.commodity_price_validator import CommodityPriceValidator
 from wingmen.star_citizen_services.uex_api import UEXApi
 from wingmen.star_citizen_services.overlay import StarCitizenOverlay
 from wingmen.star_citizen_services.function_manager import FunctionManager
 from wingmen.star_citizen_services.ai_context_enum import AIContext
-from wingmen.star_citizen_services.uex_update_service.data_validation_popup import OverlayPopup
 
 
-DEBUG = True
+DEBUG = False
 SHOW_SCREENSHOTS = False
 TEST = False
 
@@ -76,18 +72,24 @@ class UexDataRunnerManager(FunctionManager):
             os.makedirs(self.screenshots_path)
 
     # @abstractmethod
+    def get_context_mapping(self) -> AIContext:
+        """  
+            This method returns the context this manager is associated to
+        """
+        return AIContext.CORA
+    
+    # @abstractmethod
     def register_functions(self, function_register):
         function_register[self.transmit_commodity_prices_for_tradeport.__name__] = self.transmit_commodity_prices_for_tradeport
         function_register[self.sent_one_price_update_information_to_uex.__name__] = self.sent_one_price_update_information_to_uex
     
     # @abstractmethod
     def get_function_prompt(self):
-        print_debug("function prompt for uex data runner called.")
         return (
             "If the user ask you to transmit commodity prices, you can do so by calling one of the following functions: "
             f"- '{self.transmit_commodity_prices_for_tradeport.__name__}' should be called, if the player wants to transmit all prices (many prices) and if he requests from you to analyse the prices displayed on the trading terminal; "
             f"- '{self.sent_one_price_update_information_to_uex.__name__}' should be called, if he wants to transmit a single price, or if he wants you to correct prices from a previous analysis. "
-             " Follow these rules: Never (Never!) make assumptions about the values for these functions. Set to empty if the user does not provide values. Never, never call this functions without the user providing the data, like the tradeport he is currently. Before calling these functions, ask the user to provide you the data required."
+            " Follow these rules: Never (Never!) make assumptions about the values for these functions. Set to empty if the user does not provide values. Never, never call this functions without the user providing the data, like the tradeport he is currently. Before calling these functions, ask the user to provide you the data required."
             " These requests should not incure a context switch to TDD. "
         )
     
@@ -183,13 +185,6 @@ class UexDataRunnerManager(FunctionManager):
 
         # print_debug(json.dumps(tools, indent=2))
         return tools
-
-    # @abstractmethod
-    def get_context_mapping(self) -> AIContext:
-        """  
-            This method returns the context this manager is associated to
-        """
-        return AIContext.CORA
 
     def sent_one_price_update_information_to_uex(self, function_args):
         printr.print(f'-> Command: Sending price update to uex: {function_args}')

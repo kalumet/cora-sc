@@ -80,6 +80,21 @@ This functionality makes ingame screenshots.
 - allow access to wingman UI threads for extensions -> In Game Overlay Display
 - more debug statements
 
+## If you want to refer to this project
+Use the following information:
+
+Icon: 
+
+![Cora SC Header](assets/icons/context-icon.png)
+
+URL: https://github.com/kalumet/cora-sc/tree/kalu_1_sc
+
+Read-me: https://github.com/kalumet/cora-sc/blob/kalu_1_sc/README.md
+
+Star-Citizen Profile: https://robertsspaceindustries.com/citizens/eXpG_kalumet 
+
+Contact: Via Spectrum or through this project.
+
 ## Open Source Acknowledgements
 
 This fork extends the usage of other Open Source projects internally (without modifying them in any way).
@@ -89,15 +104,6 @@ So in addition to the ones mentioned further below, I'd like to thank further cr
 - [pytesseract](https://github.com/madmaze/pytesseract) - Apache-2.0
 - [screeninfo](https://github.com/rr-/screeninfo) - MIT (c) 2015 Marcin Kurczewski
 - [openai](https://github.com/openai/openai-python) - Apache-2.0
-
-## If you want to refer to this project
-Use the following information:
-Icon: 
-![Cora SC Header](assets/icons/context-icon.png)
-URL: https://github.com/kalumet/cora-sc/tree/kalu_1_sc
-Read-me: https://github.com/kalumet/cora-sc/blob/kalu_1_sc/README.md
-Star-Citizen Profile: https://robertsspaceindustries.com/citizens/eXpG_kalumet 
-Contact: Via Spectrum or through this project.
 
 # Wingman AI
 

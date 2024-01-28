@@ -42,7 +42,7 @@ class LoreManager(FunctionManager):
     # @abstractmethod
     def get_function_prompt(self):
         return (
-                "When asked for star citizen game world information, you can retrieve information by calling the given functions: "
+                "When asked for star citizen game world lore information that are not related to trade related questions, you can call the following functions: "
                 f"- {self.get_news_of_the_day.__name__}: call this, if the player ask you to give him the latest news of the day."
                 f"- {self.get_more_information_about_topic.__name__}: call this, if the player wants to get information about a specific topic."
         )
@@ -92,6 +92,7 @@ class LoreManager(FunctionManager):
     
     def get_news_of_the_day(self, function_args):
         print_debug(f"{self.get_news_of_the_day.__name__} called.")
+        printr.print_info(f"Executing function '{self.get_news_of_the_day.__name__}'.")
         try:
             response = requests.get(url=f"{self.wiki_base_url}?limit=1&page=1")
             response.raise_for_status()
@@ -131,6 +132,7 @@ class LoreManager(FunctionManager):
     def get_more_information_about_topic(self, function_args):
         search_term = function_args.get("search_term", "")
         print_debug(f"{self.get_more_information_about_topic.__name__} called with '{search_term}'")
+        printr.print_info(f"Executing function '{self.get_more_information_about_topic.__name__}'. Search-Term: '{search_term}'")
         search_url = f"{self.wiki_base_url}/search"
         headers = {
             'accept': 'application/json',

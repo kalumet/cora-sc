@@ -65,17 +65,17 @@ class TddManager(FunctionManager):
                             "location_name_from": {
                                 "type": "string",
                                 "description": "The location, where the player wants buy a commodity or start a trade route from. Can be the name of a planet, a moon / satellite or a specific tradeport. Can be empty.",
-                                "enum": combined_locations_names
+                                # "enum": combined_locations_names
                             },
                             "location_name_to": {
                                 "type": "string",
                                 "description": "The location, where the player wants sell a commodity or end a trade route. Can be the name of a planet, a moon / satellite or a specific tradeport. Can be empty.",
-                                "enum": combined_locations_names
+                                # "enum": combined_locations_names
                             },
                             "commodity_name": {
                                 "type": "string",
                                 "description": "The commodity that the user wants to sell or buy. Can be empty.",
-                                "enum": commodity_names
+                                # "enum": commodity_names
                             },
                             "include_illegal_commodities": {
                                 "type": "boolean",

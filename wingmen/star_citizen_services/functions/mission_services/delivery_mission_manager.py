@@ -3,14 +3,19 @@ import os
 import traceback
 import time
 
+from services.printr import Printr
+
 from wingmen.star_citizen_services.model.delivery_mission import DeliveryMission, MissionPackage
-from wingmen.star_citizen_services.screenshot_ocr import TransportMissionAnalyzer
-from wingmen.star_citizen_services.delivery_manager import PackageDeliveryPlanner, DeliveryMissionAction, UEXApi
+from wingmen.star_citizen_services.functions.mission_services.delivery_mission_services.screenshot_ocr import TransportMissionAnalyzer
+from wingmen.star_citizen_services.functions.mission_services.delivery_mission_services.delivery_manager import PackageDeliveryPlanner, DeliveryMissionAction, UEXApi
 from wingmen.star_citizen_services.overlay import StarCitizenOverlay
+from wingmen.star_citizen_services.function_manager import FunctionManager
+from wingmen.star_citizen_services.ai_context_enum import AIContext
 
 
 DEBUG = True
 TEST = False
+printr = Printr()
 
 
 def print_debug(to_print):
@@ -18,15 +23,13 @@ def print_debug(to_print):
         print(to_print)
 
 
-class MissionManager:
-    """ maintains a set of all missions and provides functionality to manage this set
-    
-        missions: dict(mission id, DeliveryMission)
-        pickup_locations: dict(location_code, mission id)
-        drop_off_locations: dict(location_code, mission id)
-    
+class DeliveryMissionManager(FunctionManager):
+    """  
+        This is an example implementation structure that can be copy pasted for new managers.
     """
-    def __init__(self, config=None):
+    def __init__(self, config, secret_keeper):
+        super().__init__(config, secret_keeper)
+        # do further initialisation steps here
 
         self.missions: dict(int, DeliveryMission) = {}
         self.delivery_actions: list(DeliveryMissionAction) = []
@@ -55,7 +58,105 @@ class MissionManager:
 
         self.mission_started = False
         self.current_delivery_location = None
+      
+    # @abstractmethod - overwritten
+    def get_context_mapping(self) -> AIContext:
+        """  
+            This method returns the context this manager is associated to. This means, that this function will only be callable if the current context matches the defined context here.
+        """
+        return AIContext.CORA    
+    
+    # @abstractmethod - overwritten
+    def register_functions(self, function_register):
+        """  
+            You register method(s) that can be called by openAI.
+        """
+        function_register[self.box_delivery_mission_management.__name__] = self.box_delivery_mission_management
+        function_register[self.get_first_or_next_location_on_delivery_route.__name__] = self.get_first_or_next_location_on_delivery_route
+    
+    # @abstractmethod - overwritten
+    def get_function_prompt(self) -> str:
+        """  
+            Here you can provide instructions to open ai on how to use this function. 
+        """
+        return (
+            f"You are able to manage delivery missions the user has to fulfill. The following functions allow you to help the player in this task: "
+            f"- {self.box_delivery_mission_management.__name__}: call it to add 1, remove 1 or delete all missions. "
+            f"  This function will return all available and registered mission ids that you will need for further requests. "
+            f"- {self.get_first_or_next_location_on_delivery_route.__name__}: get information about the next location the user should go. "
+        )
+    
+    # @abstractmethod - overwritten
+    def get_function_tools(self) -> list[dict]:
+        """  
+            This is the function definition for OpenAI, provided as a list of tool definitions:
+            Location names (planet, moons, cities, tradeports / outposts) are given in the system context, 
+            so no need to make reference to it here.
+        """
+       
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": self.box_delivery_mission_management.__name__,
+                    "description": "Allows the player to add a new box mission, to delete a specific mission, to delete all missions or to get information about the next location he has to travel to",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "type": {
+                                "type": "string",
+                                "description": "The type of operation that the player wants to execute",
+                                "enum": ["new_delivery_mission", "delete_or_discard_all_missions", "delete_or_discard_one_mission_with_id", None]
+                            },
+                            "mission_id": {
+                                "type": "string",
+                                "description": "The id of the mission, the player wants to delete",
+                            },
+                            "confirm_deletion": {
+                                "type": "string",
+                                "description": "User confirmed deletion",
+                                "enum": ["confirmed", "notconfirmed", None]
+                            }
+                        }
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": self.get_first_or_next_location_on_delivery_route.__name__,
+                    "description": (
+                        "Identifies the next location where to pickup or drop boxes according to the calculated delivery route for the active delivery missions. "
+                        "Always execute this function, if the user ask to get the next location. Do not call this function, if the user want's to have details about the current location."
+                    ),
+                }
+            },
+        ]
 
+        return tools
+
+    def box_delivery_mission_management(self, function_args):
+        mission_id = function_args.get("mission_id", None)
+        confirmed_deletion = function_args.get("confirm_deletion", None)
+        function_type= function_args["type"]
+        printr.print(f'-> Delivery Mission Management: {function_type}', tags="info")
+        function_response = self.manage_missions(type=function_type, mission_id=mission_id, confirmed_deletion=confirmed_deletion)
+        printr.print(f'-> Result: {json.dumps(function_response, indent=2)}', tags="info")
+
+        return function_response
+    
+    def manage_missions(self, type="new", mission_id=None, confirmed_deletion=None):
+        if type == "new_delivery_mission":
+            return self.get_new_mission()
+        if type == "delete_or_discard_all_missions":
+            if not confirmed_deletion or not confirmed_deletion == "confirmed":
+                return {"success": False, "instructions": "User has to confirm deletion of all missions"}
+            return self.discard_all_missions()
+        if type == "delete_or_discard_one_mission_with_id":
+            if not confirmed_deletion or not confirmed_deletion == "confirmed":
+                return {"success": False, "instructions": f"User has to confirm deletion of mission with id {mission_id}"}
+            return self.discard_mission(mission_id)
+        
     def get_next_actions(self, current_index=0):
         print_debug(f"get_next_actions start at {current_index}")
         if not self.delivery_actions or not self.missions:
@@ -134,21 +235,7 @@ class MissionManager:
         self.save_delivery_route()
  
         return True, None
-           
-    def manage_missions(self, type="new", mission_id=None, confirmed_deletion=None):
-        if type == "new_delivery_mission":
-            return self.get_new_mission()
-        if type == "delete_or_discard_all_missions":
-            if not confirmed_deletion or not confirmed_deletion == "confirmed":
-                return {"success": False, "instructions": "User has to confirm deletion of all missions"}
-            return self.discard_all_missions()
-        if type == "delete_or_discard_one_mission_with_id":
-            if not confirmed_deletion or not confirmed_deletion == "confirmed":
-                return {"success": False, "instructions": f"User has to confirm deletion of mission with id {mission_id}"}
-            return self.discard_mission(mission_id)
-        if type == "get_first_or_next_location_on_delivery_route":
-            return self.get_next_location()
-        
+                   
     def get_missions_information(self):
         mission_count = 0
         package_count = 0
@@ -183,7 +270,7 @@ class MissionManager:
 
         return mission_count, package_count, revenue_sum, location_count, planetary_system_changes
 
-    def get_next_location(self):
+    def get_first_or_next_location_on_delivery_route(self):
         
         uexApi = UEXApi()
 
@@ -279,6 +366,7 @@ class MissionManager:
             "success": "True", 
             "instructions": "Provide the user with all provided information based on your calculation of the best delivery route considering risk, and least possible location-switches. Do not provide any information, if there is no value or 0.",
             "missions_count": mission_count,
+            "all_mission_ids": self.get_mission_ids(),
             "total_revenue": revenue_sum,
             "total_packages_to_deliver": package_count,
             "number_of_locations_to_visit": location_count,
@@ -321,19 +409,11 @@ class MissionManager:
             "success": "True", 
             "instructions": "Provide the user with all provided information based on your calculation of the best delivery route considering risk, and least possible location-switches. Do not provide any information, if there is no value or 0.",
             "missions_count": mission_count,
+            "all_mission_ids": self.get_mission_ids(),
             "total_revenue": revenue_sum,
             "total_packages_to_deliver": package_count,
             "number_of_locations_to_visit": location_count,
             "number_of_moons_or_planets_to_visit": planetary_system_changes,
-            "next_location": next_location.get("name"),
-            "on_moon": next_location.get("satellite"),
-            "on_planet": next_location.get("planet"),
-            "in_city": next_location.get("city"),
-            "possible_threads": next_action.danger,
-            "number_of_packages_to_pickup": pickup_count,
-            "number_of_packages_to_dropoff": dropoff_count,
-            "sell_commodity": uexApi.get_commodity_name(next_action.sell_commodity_code),
-            "buy_commodity": uexApi.get_commodity_name(next_action.buy_commodity_code)
         }
 
     def discard_all_missions(self):

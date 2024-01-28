@@ -9,7 +9,7 @@ import pytesseract
 import pygetwindow
 import pyautogui
 
-import wingmen.star_citizen_services.text_analyser as text_analyser
+import wingmen.star_citizen_services.functions.mission_services.delivery_mission_services.text_analyser as text_analyser
 
 from wingmen.star_citizen_services.location_name_matching import LocationNameMatching
 from wingmen.star_citizen_services.overlay import StarCitizenOverlay

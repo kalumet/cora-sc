@@ -118,7 +118,9 @@ class FunctionManager(ABC):
         """
         pass
 
-
+# ─────────────────────────────────── ↓ EXAMPLE ↓ ─────────────────────────────────────────
+# from wingmen.star_citizen_services.function_manager import FunctionManager
+# from wingmen.star_citizen_services.ai_context_enum import AIContext
 # class ExampleManager(FunctionManager):
 #     """  
 #         This is an example implementation structure that can be copy pasted for new managers.
@@ -126,14 +128,32 @@ class FunctionManager(ABC):
 #     def __init__(self, config, secret_keeper):
 #         super().__init__(config, secret_keeper)
 #         # do further initialisation steps here
-      
+
+#     # @abstractmethod - overwritten
+#     def get_context_mapping(self) -> AIContext:
+#         """  
+#             This method returns the context this manager is associated to. This means, that this function will only be callable if the current context matches the defined context here.
+#         """
+#         return AIContext.CORA         
+
 #     # @abstractmethod - overwritten
 #     def register_functions(self, function_register):
 #         """  
 #             You register a method(s) that can be called by openAI.
 #         """
 #         function_register[self.example_function.__name__] = self.example_function
-    
+
+#     # @abstractmethod - overwritten
+#     def get_function_prompt(self) -> str:
+#         """  
+#            This is the function definition for OpenAI, provided as a list of tool definitions:
+#            Location names (planet, moons, cities, tradeports / outposts) are given in the system context, 
+#            so no need to make reference to it here.
+#         """
+#         return (
+#             f"Call the function {self.example_function.__name__} if the user wants an example. Be aware of the following rules that apply:"
+#         ) 
+        
 #     # @abstractmethod - overwritten
 #     def get_function_tools(self) -> list[dict]:
 #         """  
@@ -160,22 +180,6 @@ class FunctionManager(ABC):
 #             },
 #         ]
 #         return tools
-    
-#     # @abstractmethod - overwritten
-#     def get_function_prompt(self) -> str:
-#         """  
-#             Here you can provide instructions to open ai on how to use this function. 
-#         """
-#         return (
-#             f"Call the function {self.example_function.__name__} if the user wants an example. Be aware of the following rules that apply:"
-#         )
-    
-#     # @abstractmethod - overwritten
-#     def get_context_mapping(self) -> AIContext:
-#         """  
-#             This method returns the context this manager is associated to. This means, that this function will only be callable if the current context matches the defined context here.
-#         """
-#         return AIContext.CORA    
 
 #     def example_function(self, args):
 #         # this must always return a json.dumps thing

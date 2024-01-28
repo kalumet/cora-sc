@@ -6,6 +6,7 @@ import asyncio
 from difflib import SequenceMatcher
 from openai import OpenAI
 from elevenlabs import generate, stream, Voice, voices
+
 from services.printr import Printr
 from services.secret_keeper import SecretKeeper
 from wingmen.open_ai_wingman import OpenAiWingman
@@ -13,7 +14,6 @@ from wingmen.open_ai_wingman import OpenAiWingman
 from wingmen.star_citizen_services.ai_context_enum import AIContext
 from wingmen.star_citizen_services.keybindings import SCKeybindings
 from wingmen.star_citizen_services.uex_api import UEXApi
-from wingmen.star_citizen_services.mission_manager import MissionManager 
 from wingmen.star_citizen_services.overlay import StarCitizenOverlay
 from wingmen.star_citizen_services.function_manager import StarCitizensAiFunctionsManager, FunctionManager
 
@@ -48,7 +48,7 @@ class StarCitizenWingman(OpenAiWingman):
     - Execute star-citizen commands as specified by your current keybinding-settings for a given release and your custom keybind settings. All it needs is the default keybinding file + your exported keybinds overwrites. You only need to config complex commands or your own instant activation phrases.
     - All ingame commands are available. Instant Activation commands are provided for each of them dynamically. Commands can be filtered. Per Default, commands without keybinds are discarded. All commands can be checked in generated files.
     - incorporates UEX trading API letting you ask for best trade route (1 stop) between locations, best trade route from a given location, best sell option for a commodity, best selling option for a commodity at a location
-    - TODO incorporates Galactepedia-Wiki search to get more detailed information about the game world and lore in game
+    - DONE incorporates Galactepedia-Wiki search to get more detailed information about the game world and lore in game
     - DONE incorporates Delivery Mission Management: based on delivery missionS (yes multiple) you are interested in, it will analyse the mission text, extract the payout, the locations from where you have to retrieve a package and the associated delivery location, calculates the best collection and delivery route to have to travel the least possible stops + incorporates profitable trade routes between the stops to earn an extra money on the trip.
     - DONE based on a given trading consoles it will extract the location, commodity prices and stock levels and update the prices automatically in the UEX database
     
@@ -84,7 +84,6 @@ class StarCitizenWingman(OpenAiWingman):
         self.switch_context_executed = False  # used to identify multiple switch executions that would be incorrect -> Error
         self.sc_keybinding_service: SCKeybindings = None  # initialised in validate
         self.uex_service: UEXApi = None  # set in validate()
-        self.mission_manager_service: MissionManager = None # initialized in validate()
         self.messages_buffer = 10
         self.current_tools = None # init in validate
         tdd_voices = set(self.config["openai"]["contexts"]["tdd_voices"].split(","))
@@ -132,7 +131,6 @@ class StarCitizenWingman(OpenAiWingman):
         try:
             # every conversation starts with the "context" that the user has configured
             self.uex_service = UEXApi.init(uex_api_key, uex_access_code)
-            self.mission_manager_service = MissionManager(config=self.config)
             self.sc_keybinding_service = SCKeybindings(self.config, self.secret_keeper)
             self.sc_keybinding_service.parse_and_create_files()
 
@@ -151,8 +149,6 @@ class StarCitizenWingman(OpenAiWingman):
                 "With that said, I hope you enjoy the tool and that it will make your game experience in star citizen even better. "
             ), wait_for_gui=True)
 
-            # self.mission_manager_service.get_new_mission()  # TODO nur ein Test auskommentieren
-            # self.kiosk_prices_manager.identify_kiosk_prices()  # TODO nur ein Test auskommentieren
         except Exception as e:
             print(e)
             traceback.print_exc()
@@ -167,6 +163,23 @@ class StarCitizenWingman(OpenAiWingman):
             self.current_tools = self._get_context_tools(current_context=new_context)
             self.current_context = new_context
             context_prompt = f'{self.config["openai"]["contexts"].get(f"context-{new_context.name}")}'
+
+            tradeport_names = self.uex_service.get_category_names("tradeports")
+            planet_names = self.uex_service.get_category_names("planets")
+            satellite_names = self.uex_service.get_category_names("satellites")
+            commodity_names = self.uex_service.get_category_names("commodities")
+            cities_names = self.uex_service.get_category_names("cities")
+
+            context_prompt += (
+                " Whenever you need to provide or reference the name of a location it must be one of the available tradeport-, planet-, satellite / moon or city names that matches best the player request. "
+                "The same applies to commodity names. Identify the correct names among the following values: "
+                f"Available tradeport names: {tradeport_names}. "
+                f"Available planet names: {planet_names}. "
+                f"Available satellite names: {satellite_names}. "
+                f"Available city names: {cities_names}. "
+                f"Available commodity names: {commodity_names}. "
+            )
+
             functions_prompt = " "
 
             context_switch_prompt = ""
@@ -186,7 +199,8 @@ class StarCitizenWingman(OpenAiWingman):
                     f"If the current user request does not fit the current context, switch to an appropriate context "
                     f"by calling the switch_context function. Do switch to context {AIContext.CORA}, "
                     f"if the player adresses 'Cora' or using words like 'computer' or demanding a specific player or ship action or mission related actions. "
-                    f'He wants you to respond in {self.config["sc-keybind-mappings"]["player_language"]}'
+                    "Do switch as well, if the user is asking non trade related questions. "
+                    f'He wants you to respond in {self.config["sc-keybind-mappings"]["player_language"]}. '
                 )
 
             # add all additional function prompts of implemented managers for the given context.
@@ -340,20 +354,6 @@ class StarCitizenWingman(OpenAiWingman):
             if command and command.get("responses"):
                 instant_reponse = self._select_command_response(command)
                 await self._play_to_user(instant_reponse)
-
-        if function_name == "box_delivery_mission_management":
-            mission_id = function_args.get("mission_id", None)
-            confirmed_deletion = function_args.get("confirm_deletion", None)
-            printr.print(f'-> Box Function: {function_args["type"]}', tags="info")
-            function_response = json.dumps(self.mission_manager_service.manage_missions(type=function_args["type"], mission_id=mission_id, confirmed_deletion=confirmed_deletion))
-            printr.print(f'-> Resultat: {function_response}', tags="info")
-            self.current_tools = self._get_cora_tools()  # recalculate, as with every box mission, we have new information for the function call
-
-        if function_name == "next_location_on_delivery_route_for_box_or_delivery_missions":
-            printr.print('-> Command: get next delivery route location')
-            function_response = json.dumps(self.mission_manager_service.manage_missions(type="get_first_or_next_location_on_delivery_route"))
-            printr.print(f'-> Resultat: {function_response}', tags="info")
-            self.current_tools = self._get_cora_tools()  # recalculate, as with every box mission, we have new information for the function call
 
         # finally, check for any function managers implementing the called function
         if function_name in self.ai_functions_manager.get_function_registry():
@@ -591,80 +591,10 @@ class StarCitizenWingman(OpenAiWingman):
                 }
             }
         return tools
-    
-    def _get_box_mission_tool(self):
-
-        if self.mission_manager_service is None:
-            print_debug("not yet initialised")
-            return []
         
-        mission_ids = self.mission_manager_service.get_mission_ids()
-        if len(mission_ids) > 0:
-            tools = [
-                {
-                    "type": "function",
-                    "function": {
-                        "name": "box_delivery_mission_management",
-                        "description": "Allows the player to add a new box mission, to delete a specific mission, to delete all missions or to get information about the next location he has to travel to",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "type": {
-                                    "type": "string",
-                                    "description": "The type of operation that the player wants to execute",
-                                    "enum": ["new_delivery_mission", "delete_or_discard_all_missions", "delete_or_discard_one_mission_with_id", None]
-                                },
-                                "mission_id": {
-                                    "type": "string",
-                                    "description": "The id of the mission, the player wants to delete",
-                                    "enum": mission_ids
-                                },
-                                "confirm_deletion": {
-                                    "type": "string",
-                                    "description": "User confirmed deletion",
-                                    "enum": ["confirmed", "notconfirmed", None]
-                                }
-                            }
-                        }
-                    }
-                },
-                {
-                    "type": "function",
-                    "function": {
-                        "name": "next_location_on_delivery_route_for_box_or_delivery_missions",
-                        "description": (
-                            "Identifies the next location where to pickup or drop boxes according to the calculated delivery route for the active delivery missions. "
-                            "Always execute this function, if the user ask to get the next location. Do not call this function, if the user want's to have details about the current location."
-                        ),
-                    }
-                },
-            ]
-        else:
-            tools = [
-                {
-                    "type": "function",
-                    "function": {
-                        "name": "box_delivery_mission_management",
-                        "description": "Allows the player to add a new box mission, to delete a specific mission or to delete all missions",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "type": {
-                                    "type": "string",
-                                    "description": "The type of operation that the player wants to execute",
-                                    "enum": ["new_delivery_mission"]
-                                }
-                            }
-                        }
-                    }
-                }
-            ]
-        return tools
-    
     def _get_cora_tools(self) -> list[dict]:
         tools = []
         tools.append(self._get_keybinding_commands())
-        tools.extend(self._get_box_mission_tool())
         for ai_function_manager in self.ai_functions_manager.get_managers(AIContext.CORA):
             ai_function_manager: FunctionManager
             tools.extend(ai_function_manager.get_function_tools())

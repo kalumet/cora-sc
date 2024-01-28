@@ -98,7 +98,6 @@ class SCKeybindings():
 
         for key, keybindingEntry in self.keybindings.items():
             print_debug(f"keybind entry for key:{key}= {json.dumps(keybindingEntry, indent=2)}")
-            time.sleep(5)
             if keybindingEntry["actionname"] in avoid_commands and not keybindingEntry["category"] in self.keybind_categories_to_ignore:
                 continue
             filtered.append(key)

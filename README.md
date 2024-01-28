@@ -1,5 +1,5 @@
 # Cora-SC your Star-Citizen AI compagnion
-This is a fork of the great Wingmen-AI by ShipBit. Original notes are below.
+This is a fork of the great Wingmen-AI by [ShipBit](https://github.com/ShipBit/wingman-ai). Original notes are below.
 
 **Important**
 This code is not provided currently as installable exe file. I don't know yet how to do it and not sure if I will try to provide a .exe for this.
@@ -89,6 +89,15 @@ So in addition to the ones mentioned further below, I'd like to thank further cr
 - [pytesseract](https://github.com/madmaze/pytesseract) - Apache-2.0
 - [screeninfo](https://github.com/rr-/screeninfo) - MIT (c) 2015 Marcin Kurczewski
 - [openai](https://github.com/openai/openai-python) - Apache-2.0
+
+## If you want to refer to this project
+Use the following information:
+Icon: 
+![Cora SC Header](assets/icons/context-icon.png)
+URL: https://github.com/kalumet/cora-sc/tree/kalu_1_sc
+Read-me: https://github.com/kalumet/cora-sc/blob/kalu_1_sc/README.md
+Star-Citizen Profile: https://robertsspaceindustries.com/citizens/eXpG_kalumet 
+Contact: Via Spectrum or through this project.
 
 # Wingman AI
 

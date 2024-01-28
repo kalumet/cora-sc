@@ -1,16 +1,8 @@
 # Star-Citizen-AI
-This is a fork of the great Wingmen-AI. Original notes are below.
+This is a fork of the great Wingmen-AI by ShipBit. Original notes are below.
 
 **Important**
 This code is not provided currently as installable exe file. I don't know yet how to do it and not sure if I will try to provide a .exe for this.
-
-## Major differences to the 1.1.2b1 from 21.01.2024 main branch - core changes
-- improved instant commands selection (find the best match, not the first match)
-- allow **multiple modifiers** to be pressed
-- allow **mouse button** activation
-- allow to not ehave spoken responses for commands
-- allow access to wingman UI threads for extensions -> In Game Overlay Display
-- more debug statements
 
 ## New Features
 
@@ -25,10 +17,22 @@ This code is not provided currently as installable exe file. I don't know yet ho
 - easily check what actions are available in one easy readable json file. All localisation information are provided.
 - extend easily localisation information of actions with community based translation files or official translations
 
+A tutorial on how to configure it will be provided on demand. You can get in touch with me via Spectrum (eXpG_kalumet) or via github for the moment.
+
 ### Only one activation key to control multiple wingmen
 It is more complex and in some situation errornous ... so be aware of this ... maybe wrong approach, but I prefer to only have one keybind to activate speech recognition
 
+### Galactapedia lore available
+This functionality is using the API provided by the fantastic Star-Citizen Wiki (https://star-citizen.wiki/) and uses their API.
+
+If you ask about ingame locations Cora will try to retrieve galactapedia information and provide it to you ingame. 
+Cora will make a search query to the Star Citizen Wiki if you say something like "What can you tell me about Lorville?"
+You can ask for more details.
+
+If you ask for "The news of the day", Cora will just retrieve a random galactapedia entry.
+
 ### Trading Devision Radio Calls
+This Functionality is using the great information provided by UEX (https://uexcorp.space/) and uses their API v1.
 Based on UEX Data retrieved regularly. Provides information about:
 - find_best_trade_route_starting_at_location (You are at Hurston and don't care where to go -> Will give you the best trading option starting at hurston)
 - find_tradeport_at_location_that_buys_commodity (You want to sell a commodity that you have and want to know if it can be sold near your current location)
@@ -59,7 +63,7 @@ This functionality makes ingame screenshots.
 - Get ingame kiosk information analysed and transmitted to UEX
 - manual validation of the data in a popup, no need to switch / tab out
 - get important process information as text overlays
-- get your AI tell you about results and errors to guide you in the process
+- get Cora tell you about results and errors to guide you in the process
 - provide single commodity price information or just all prices you see on screen
 
 **Important** 
@@ -68,6 +72,13 @@ This functionality makes ingame screenshots.
 - The screenshot is only taken, if the active window is Star Citizen, nothing else.
 - Only the commodity price area is analysed. Text extraction done with OpenAI. 
 
+## Major technical differences to the 1.1.2b1 from 21.01.2024 main branch - core changes
+- improved instant commands selection (find the best match, not the first match)
+- allow **multiple modifiers** to be pressed
+- allow **mouse button** activation
+- allow to not have spoken responses for commands
+- allow access to wingman UI threads for extensions -> In Game Overlay Display
+- more debug statements
 
 # Wingman AI
 

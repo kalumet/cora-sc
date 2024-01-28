@@ -31,7 +31,7 @@ You can ask for more details.
 
 If you ask for "The news of the day", Cora will just retrieve a random galactapedia entry.
 
-### Trading Devision Radio Calls
+### Trading Division Radio Calls
 This Functionality is using the great information provided by UEX (https://uexcorp.space/) and uses their API v1.
 Based on UEX Data retrieved regularly. Provides information about:
 - find_best_trade_route_starting_at_location (You are at Hurston and don't care where to go -> Will give you the best trading option starting at hurston)

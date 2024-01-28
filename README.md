@@ -87,7 +87,7 @@ So in addition to the ones mentioned further below, I'd like to thank further cr
 
 - [opencv](https://github.com/opencv/opencv) - Apache-2.0
 - [pytesseract](https://github.com/madmaze/pytesseract) - Apache-2.0
-- [screeninfo](https://github.com/rr-/screeninfo) - MIT
+- [screeninfo](https://github.com/rr-/screeninfo) - MIT (c) 2015 Marcin Kurczewski
 - [openai](https://github.com/openai/openai-python) - Apache-2.0
 
 # Wingman AI

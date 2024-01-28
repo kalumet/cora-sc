@@ -60,7 +60,7 @@ This functionality makes ingame screenshots.
 - Analysis is made locally on your pc.
 
 ### UEX Data Runner
-- Get ingame kiosk information analysed and transmitted to UEX
+- Get ingame kiosk information analysed and transmitted to UEX (https://uexcorp.space/) and uses their API v1.
 - manual validation of the data in a popup, no need to switch / tab out
 - get important process information as text overlays
 - get Cora tell you about results and errors to guide you in the process
@@ -79,6 +79,16 @@ This functionality makes ingame screenshots.
 - allow to not have spoken responses for commands
 - allow access to wingman UI threads for extensions -> In Game Overlay Display
 - more debug statements
+
+## Open Source Acknowledgements
+
+This fork extends the usage of other Open Source projects internally (without modifying them in any way).
+So in addition to the ones mentioned further below, I'd like to thank further creators for their great work and contributions to the Open Source community, especially:
+
+- [opencv](https://github.com/opencv/opencv) - Apache-2.0
+- [pytesseract](https://github.com/madmaze/pytesseract) - Apache-2.0
+- [screeninfo](https://github.com/rr-/screeninfo) - MIT
+- [openai](https://github.com/openai/openai-python) - Apache-2.0
 
 # Wingman AI
 

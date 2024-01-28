@@ -7,6 +7,7 @@ import traceback
 import os
 import copy
 import requests
+import time
 
 from services.secret_keeper import SecretKeeper
 
@@ -28,8 +29,7 @@ class SCKeybindings():
         self.user_keybinding_file_name = self.config["sc-keybind-mappings"]["user_keybinding_file_name"]
         self.sc_active_channel = self.config["sc-keybind-mappings"]["sc_active_channel"]
         self.sc_channel_version = self.config["sc-keybind-mappings"]["sc_channel_version"]
-        self.json_path = f"{self.data_root_path}{self.sc_channel_version}/keybindings_existing.json"
-        self.json_path_miss = f"{self.data_root_path}{self.sc_channel_version}/keybindings_missing.json"
+        self.json_path = f"{self.data_root_path}{self.sc_channel_version}/sc_all_keybindings.json"
         self.json_path_knowledge = f"{self.data_root_path}{self.sc_channel_version}/keybindings_existing_knowledge.json"
         self.json_path_miss_knowledge = f"{self.data_root_path}{self.sc_channel_version}/keybindings_missing_knowledge.json"
         self.keybindings: dict = None # will be filled on first access
@@ -97,6 +97,8 @@ class SCKeybindings():
         avoid_commands.difference_update(include_actions)
 
         for key, keybindingEntry in self.keybindings.items():
+            print_debug(f"keybind entry for key:{key}= {json.dumps(keybindingEntry, indent=2)}")
+            time.sleep(5)
             if keybindingEntry["actionname"] in avoid_commands and not keybindingEntry["category"] in self.keybind_categories_to_ignore:
                 continue
             filtered.append(key)
@@ -169,18 +171,26 @@ class SCKeybindings():
             "activationMode",
             "keyboard-mapping",
             "keyboard-mapping-en",
-            f"keyboard-mapping-{self.player_language}"
+            f"keyboard-mapping-{self.player_language}",
         ]
 
         # Entfernen der spezifizierten Attribute aus jedem Eintrag in der JSON-Struktur
-        for item in keybindings_reduce.values():
+        keybindings_to_update = {}
+        for action, item in keybindings_reduce.items():
             for key in attributes_to_remove:
                 item.pop(key, None)
+                if self.config["regenerate_all_instant_commands"]:
+                    item.pop("command-phrases", None)
+                    keybindings_to_update[action] = item
+                else:
+                    # only update the item, if it has no "command-phrases"
+                    if not item.get("command-phrases", None):
+                        keybindings_to_update[action] = item
 
         chunk_size = 40
         chunk = 0
-        totalItems = len(list(keybindings_reduce.keys()))
-        items_list = list(keybindings_reduce)
+        totalItems = len(list(keybindings_to_update.keys()))
+        items_list = list(keybindings_to_update)
         print_debug(f"retrieving command phrases for a total of {totalItems} actions")
         index = 0
 
@@ -269,6 +279,11 @@ class SCKeybindings():
             with open(self.json_path_knowledge, "r", encoding="utf-8") as file:
                 self.keybindings = json.load(file)
         return self.keybindings
+    
+    def _load_sc_all_keybindings(self) -> dict:
+        with open(self.json_path, "r", encoding="utf-8") as file:
+            actions = json.load(file)
+        return actions
 
     def _load_translations(self, file_path):
         """Load translations from a given INI file."""
@@ -315,43 +330,21 @@ class SCKeybindings():
         localized_parts = [localization_map.get(part, part) for part in parts]
         return "+".join(localized_parts)
 
-    def _filter_actions(self, actions, onlyMissing):
+    def _filter_actions(self, actions, inclusion_mode):
         """Filters the actions according to param onlyMissing
         
             onlyMissing = True -> returns only actions with no keyboard keybinds available
             onlyMissing = False -> returns only actions that have a keybind
         """
-        return (details for details in actions.values() if self._include_action(details, onlyMissing))
+        return (details for details in actions.values() if self._include_action(details, inclusion_mode))
 
-    def _include_action(self, action_details, onlyMissing):
+    def _include_action(self, action_details, inclusion_mode):
         keybinding = action_details.get("keyboard-mapping", "")
         # Prüfe auf leere oder None-Werte
         keybinding_exists = bool(keybinding and keybinding.strip())
-        return (onlyMissing and not keybinding_exists) or (not onlyMissing and keybinding_exists)
+        return (inclusion_mode and not keybinding_exists) or (not inclusion_mode and keybinding_exists)
 
-    def _write_csv(self, path, actions, onlyMissing):
-        headers = [
-            "actionname",
-            "activationMode",
-            "keyboard-mapping",
-            "action-label-en",
-            f"action-label-{self.player_language}",
-            "action-description-en",
-            f"action-description-{self.player_language}",
-            "keyboard-mapping-en",
-            f"keyboard-mapping-{self.player_language}",
-            # "keyboard-mapping-ui",
-            # "label-ui",
-            # "description-ui",
-        ]
-
-        with open(path, mode="w", newline="", encoding="utf-8") as file:
-            writer = csv.writer(file, delimiter=";", quotechar='"', quoting=csv.QUOTE_ALL)
-            writer.writerow(headers)
-            for action_details in self._filter_actions(actions, onlyMissing):
-                writer.writerow([action_details.get(header, "") for header in headers])
-
-    def _should_include_action(self, action_details, onlyMissing):
+    def _should_exclude_action(self, action_details, inclusion_mode):
         """ Checks if the action should be included in the final file
             if onlyMissing = False: we discard any actions with 
             - unsupported activation modes
@@ -372,17 +365,17 @@ class SCKeybindings():
         if action_details.get("category") in self.keybind_categories_to_ignore and action_details.get("actionname") not in self.keybind_actions_to_include_from_category:
             excludedCategory = True
 
-
-
-        if onlyMissing:
-            return not keybinding_exists or not_supported_activation_mode or excludedCategory  # True, wenn keybinding leer ist
+        if inclusion_mode == "discarded_keybindings_only":
+            return not keybinding_exists or not_supported_activation_mode or excludedCategory  # True, if no keybinding set, activation mode not supported or if the category is excluded
+        elif inclusion_mode == "only_allowed_keybindings":
+            return not (keybinding_exists and not not_supported_activation_mode and not excludedCategory)  # True, if keybinding set, if activation mode is supported and it doesn't belong to an excluded category
         
-        return keybinding_exists and not not_supported_activation_mode and not excludedCategory  # True, wenn keybinding einen Wert hat
+        return False  # all keybindings should be included
 
-    def _create_json_data(self, actions, only_missing, content_keys, mode):
+    def _create_json_data(self, actions, inclusion_mode, content_keys, mode):
         json_data = {}
         for action_name, action_details in actions.items():
-            if not self._should_include_action(action_details, only_missing):
+            if self._should_exclude_action(action_details, inclusion_mode):
                 continue
 
             key_value = action_details.get("actionname", "").strip()
@@ -409,14 +402,17 @@ class SCKeybindings():
             if not json_key:
                 continue  # Leer oder keine gültigen Zeichen, Eintrag überspringen
 
-            
-            json_data[json_key] = json_entry
+            if json_key == "actionname":
+                json_data[json_key] = action_name  # we always want the action name in our values
+            else:
+                json_data[json_key] = json_entry
 
         return json_data
 
-    def _write_json(self, actions, path, only_missing):
+    def _write_json(self, actions, path, inclusion_mode):
         content_keys = [
             "category",
+            "actionname",
             "activationMode",
             "keyboard-mapping",
             "action-label-en",
@@ -429,14 +425,14 @@ class SCKeybindings():
             "label-ui",
             "description-ui",
         ]
-        json_data = self._create_json_data(actions, only_missing, content_keys, "actionname")
+        json_data = self._create_json_data(actions, inclusion_mode, content_keys, "actionname")
 
         with open(path, mode="w", encoding="utf-8") as file:
             json.dump(json_data, file, indent=4, ensure_ascii=False)
 
         return path
 
-    def _write_openai_knowledge_json(self, actions, path, only_missing):
+    def _write_openai_knowledge_json(self, actions, path, inclusion_mode):
         content_keys = [
             "category",
             "actionname",
@@ -450,10 +446,31 @@ class SCKeybindings():
             f"keyboard-mapping-{self.player_language}",
             "command-phrases",
         ]
-        json_data = self._create_json_data(actions, only_missing, content_keys, "functionname")
+        json_data = self._create_json_data(actions, inclusion_mode, content_keys, "functionname")
 
+        # Lade bestehende Daten, falls vorhanden
+        if os.path.exists(path):
+            print_debug(f"actualizing data {path}")
+            with open(path, mode="r", encoding="utf-8") as file:
+                existing_data = json.load(file)
+            # Aktualisiere bestehende Daten basierend auf json_data
+            for key in list(existing_data.keys()):
+                print_debug(f"key: {key}")
+                if key in json_data:
+                    # the keybinding files already exist, and the action key are still the same-> we keep the first generated command-phrases (as the user is used to them)
+                    command_phrases = existing_data[key].get("command-phrases", "")
+                    existing_data[key] = json_data[key]  # this deletes the command-phrases ...
+                    existing_data[key]["command-phrases"] = command_phrases
+                else:
+                    # Entferne Schlüssel, die nicht in json_data vorhanden sind
+                    del existing_data[key]
+            merged_data = existing_data
+        else:
+            merged_data = json_data
+
+        # Schreibe die gemergten Daten zurück in die Datei
         with open(path, mode="w", encoding="utf-8") as file:
-            json.dump(json_data, file, indent=4, ensure_ascii=False)
+            json.dump(merged_data, file, indent=4, ensure_ascii=False)
 
         return path
 
@@ -474,12 +491,35 @@ class SCKeybindings():
         return "+".join(cleaned_parts)
 
     def parse_and_create_files(self):
-        if os.path.exists(self.json_path_knowledge):
-            print_debug(f"keybind files already exist, delete file for regeneration: {self.json_path_knowledge}")
+        if os.path.exists(self.json_path_knowledge) and self.config["update_keybindings"] is False:
+            print_debug(f"keybind files already exist, delete file for full regeneration: {self.json_path_knowledge}")
+            # we might want to correct some of the instant activation commands
+            # correction can only be made through implementation of this function + setting the boolean to true.
             self._correct_instant_activation_commands()
             return
-        
-        # Load the XML file
+        elif os.path.exists(self.json_path_knowledge) and os.path.exists(self.json_path) and self.config["update_keybindings"] is True:
+            print_debug(f"update keybinding information based on existing. ")
+            actions = self._load_sc_all_keybindings()
+            print_debug(f"loaded actions: {len(actions)}")
+        else:
+            # rebuild actions list from scratch
+            # Load the XML file
+            actions = self._build_sc_keybinding_default_actions()
+
+        # Load the custom player keybindings file
+        actions = self.load_custom_keybinds(actions)
+        print(f"updated with player keybindings: {len(actions)}")
+
+        if not os.path.exists(self.json_path):  # we only create this file, if it is not existing
+            self._write_json(actions, self.json_path, inclusion_mode="all")
+            print_debug(f"wrote actions to file: {len(actions)}")
+        self._write_openai_knowledge_json(actions, self.json_path_miss_knowledge, inclusion_mode="discarded_keybindings_only")
+        self._write_openai_knowledge_json(actions, self.json_path_knowledge, inclusion_mode="only_allowed_keybindings")
+
+        self._create_instant_activation_value()
+        self.keybindings = None 
+
+    def _build_sc_keybinding_default_actions(self):
         file_path = self.default_keybinds_file
         print_debug("loading default keybinds")
         tree = ET.parse(file_path)
@@ -503,13 +543,13 @@ class SCKeybindings():
                     continue
 
                 entry = {
-                    "category": category_code,
-                    "actionname": action_name,
-                    "activationMode": activation_mode,
-                    "keyboard-mapping": keyboard_mapping,
-                    "label-ui": label_ui,
-                    "description-ui": description_ui,
-                }
+                        "category": category_code,
+                        "actionname": action_name,
+                        "activationMode": activation_mode,
+                        "keyboard-mapping": keyboard_mapping,
+                        "label-ui": label_ui,
+                        "description-ui": description_ui,
+                    }
 
                 # Check for duplicate action names
                 if action_name in actions:
@@ -517,36 +557,7 @@ class SCKeybindings():
                 else:
                     actions[action_name] = entry
 
-        # for duplicate in duplicates:
-        #     print_debug(f"Duplikat: {duplicate}")
-
-        # Next, I will parse the layout_kalumet_3_19_exported.xml file to update the keybindings in the actions list.
-        # The structure of this file is different, so I'll adapt my parsing accordingly.
-
-        # Load the layout_kalumet_3_19_exported.xml file
-        file_path_layout = self.user_keybinding_file
-        print_debug("loading user keybinds")
-        tree_layout = ET.parse(file_path_layout)
-        root_layout = tree_layout.getroot()
-
-        # Creating a mapping of action names to their new keybindings from the layout file
-        layout_keybindings = {}
-        for actionmap in root_layout.findall(".//actionmap"):
-            for action in actionmap.findall(".//action"):
-                action_name = action.get("name")
-                rebind = action.find(".//rebind")
-                if rebind is not None:
-                    new_keybinding = self._remove_prefix(rebind.get("input"))
-                    layout_keybindings[action_name] = new_keybinding
-
-        # Updating the keybindings in the actions list with the new ones from the layout file
-        for action_name in actions:
-            if action_name in layout_keybindings:
-                actions[action_name]["keyboard-mapping"] = layout_keybindings[action_name]
-
-        # Now, I will parse the keybinding_localization.xml file to map the keybindings to their UI variable names.
-        # This is needed to replace the keybindings in our actions list with their respective localization strings.
-
+        print_debug(f"loaded keybindings from sc filed: {len(actions)}")
         # Load the keybinding_localization.xml file
         file_path_localization = self.keybindings_localization_file
         print_debug("loading keybinds localisations")
@@ -570,22 +581,34 @@ class SCKeybindings():
         translations_en = self._load_translations(self.sc_translations_en)
         self._update_actions_with_translations(actions, translations_en, "en")
 
-        # Load German translations and update actions
+        # Load Player-Language translations and update actions
         translations_de = self._load_translations(self.sc_translations_player_language)
         self._update_actions_with_translations(actions, translations_de, self.player_language)
 
-        # Creating the CSV file
-        # csv_file_path_miss = "data/keybindings/keybindings_missing.csv"
-        # csv_file_path = "data/keybindings/keybindings_existing.csv"
+        return actions
 
-        # writeCSV(csv_file_path_miss, actions, onlyMissing=True)
-        # writeCSV(csv_file_path, actions, onlyMissing=False)
-        self._write_json(actions, self.json_path_miss, only_missing=True)
-        self._write_json(actions, self.json_path, only_missing=False)
-        self._write_openai_knowledge_json(actions, self.json_path_miss_knowledge, only_missing=True)
-        self._write_openai_knowledge_json(actions, self.json_path_knowledge, only_missing=False)
-        self._create_instant_activation_value()
-        self.keybindings = None # reset buffer
+    def load_custom_keybinds(self, actions):
+        file_path_layout = self.user_keybinding_file
+        print_debug("loading user keybinds")
+        tree_layout = ET.parse(file_path_layout)
+        root_layout = tree_layout.getroot()
+
+        # Creating a mapping of action names to their new keybindings from the layout file
+        layout_keybindings = {}
+        for actionmap in root_layout.findall(".//actionmap"):
+            for action in actionmap.findall(".//action"):
+                action_name = action.get("name")
+                rebind = action.find(".//rebind")
+                if rebind is not None:
+                    new_keybinding = self._remove_prefix(rebind.get("input"))
+                    layout_keybindings[action_name] = new_keybinding
+
+        # Updating the keybindings in the actions list with the new ones from the layout file
+        for action_name in actions:
+            if action_name in layout_keybindings:
+                actions[action_name]["keyboard-mapping"] = layout_keybindings[action_name]# reset buffer
+
+        return actions
 
 
 if __name__ == "__main__":

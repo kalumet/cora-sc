@@ -1,4 +1,4 @@
-# Star-Citizen-AI
+# Cora-SC your Star-Citizen AI compagnion
 This is a fork of the great Wingmen-AI by ShipBit. Original notes are below.
 
 **Important**

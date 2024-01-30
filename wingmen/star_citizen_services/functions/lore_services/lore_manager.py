@@ -43,9 +43,11 @@ class LoreManager(FunctionManager):
     # @abstractmethod
     def get_function_prompt(self):
         return (
-                "When asked for star citizen game world lore information that are not related to trade related questions, you can call the following functions: "
-                f"- {self.get_news_of_the_day.__name__}: call this, if the player ask you to give him the latest news of the day."
-                f"- {self.get_more_information_about_topic.__name__}: call this, if the player wants to get information about a specific topic."
+                "When asked for star citizen game world lore information (Galactapedia) that are not related to trade related questions, you can call the following functions: "
+                f"- {self.get_news_of_the_day.__name__}: call this, if the player ask you to give him the latest news of the day. "
+                f"- {self.get_more_information_about_topic.__name__}: call this, if the player wants to get information about a specific topic. "
+                "Always try to match location or ship names to the provided list of names before executing this function. "
+                "If you don't have context informtion from previous searches, provide as search term a single word matching best the players question. "
         )
     
     # @abstractmethod

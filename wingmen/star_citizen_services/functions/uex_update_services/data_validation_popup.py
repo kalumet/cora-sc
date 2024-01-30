@@ -234,7 +234,11 @@ class OverlayPopup(tk.Toplevel):
             column = self.data_table.identify_column(event.x)
             if self.data_table.heading(column)["text"] == "Transmit":
                 self.toggle_checkbox(row_id)
-    
+            if self.data_table.heading(column)["text"] == "Multiplier":
+                self.toggle_multiplier(row_id, column)
+            if self.data_table.heading(column)["text"] == "Inventory State":
+                self.toggle_inventory_state(row_id, column)
+                
     def tradeport_update(self, event=None):
         updated_tradeport_name = self.tradeport_entry.get()
         
@@ -268,7 +272,7 @@ class OverlayPopup(tk.Toplevel):
 
     def adjust_entry_width(self, entry):
         text_length = len(entry.get())
-        entry.config(width=(text_length + 1) if text_length > 0 else 1)
+        entry.config(width=(text_length + 1) if text_length > 15 else 15)
 
     def toggle_operation(self, event=None):
 
@@ -296,6 +300,48 @@ class OverlayPopup(tk.Toplevel):
         # Aktualisieren des 'transmit'-Werts in self.updated_data
         index = int(row_id)
         self.updated_data[index]['transmit'] = (new_value == 'Yes')
+
+    def toggle_multiplier(self, row_id, column):
+        next_value_map = {"None": "k", "k": "M", "M": "None"}
+
+        item = self.data_table.item(row_id)
+        multiplier_value = item['values'][6]
+        new_value = next_value_map.get(multiplier_value, "None")
+        index = int(row_id)
+        item['values'][6] = new_value
+        self.update_price_by_multipler(new_value=new_value, row_index=index)
+        item['values'][7] = "user updated" # index of the validation result collumn...
+
+        self.updated_data[index]['multiplier'] = new_value
+        self.updated_data[index]["validation_result"] = "user updated"
+
+        self.data_table.item(row_id, values=item['values'])
+        
+
+    def toggle_inventory_state(self, row_id, column):
+        # ["MAX INVENTORY", "VERY HIGH INVENTORY", "HIGH INVENTORY", "MEDIUM INVENTORY", "LOW INVENTORY", "VERY LOW INVENTORY", "OUT OF STOCK"]
+        next_value_map = {
+            "OUT OF STOCK": "VERY LOW INVENTORY", 
+            "VERY LOW INVENTORY": "LOW INVENTORY", 
+            "LOW INVENTORY": "MEDIUM INVENTORY",
+            "MEDIUM INVENTORY": "HIGH INVENTORY",
+            "HIGH INVENTORY": "VERY HIGH INVENTORY",
+            "VERY HIGH INVENTORY": "MAX INVENTORY",
+            "MAX INVENTORY": "OUT OF STOCK"
+            }
+
+        item = self.data_table.item(row_id)
+        inventory_state = item['values'][4]
+        new_value = next_value_map.get(inventory_state, "None")
+        item['values'][4] = new_value
+        item['values'][7] = "user updated" # index of the validation result collumn...
+
+        # Aktualisieren des 'inventory_state'-Werts in self.updated_data
+        index = int(row_id)
+        self.updated_data[index]['inventory_state'] = new_value
+        self.updated_data[index]["validation_result"] = "user updated"
+
+        self.data_table.item(row_id, values=item['values'])
 
     def edit_item(self, item, column):
         # Get the bounds and value of the cell to edit
@@ -354,15 +400,7 @@ class OverlayPopup(tk.Toplevel):
                 self.updated_data[row_index]['uex_price'] = unit_price
 
             if column_key == "multiplier":
-                multiplier = new_value
-                unit_price = self.updated_data[row_index]["price_per_unit"]
-                if multiplier and multiplier.lower()[0] == "m":
-                    unit_price = unit_price * 1000000
-                
-                if multiplier and multiplier.lower()[0] == "k":
-                    unit_price = unit_price * 1000
-
-                self.updated_data[row_index]['uex_price'] = unit_price
+                self.update_price_by_multipler(new_value, row_index)
 
             if column_key == "commodity_name":
                 commodity_name = new_value
@@ -391,4 +429,15 @@ class OverlayPopup(tk.Toplevel):
         self.update()  # Update window to get size  
 
         entry_widget.destroy()
+
+    def update_price_by_multipler(self, new_value, row_index):
+        multiplier = new_value
+        unit_price = self.updated_data[row_index]["price_per_unit"]
+        if multiplier and multiplier.lower()[0] == "m":
+            unit_price = unit_price * 1000000
+                
+        if multiplier and multiplier.lower()[0] == "k":
+            unit_price = unit_price * 1000
+
+        self.updated_data[row_index]['uex_price'] = unit_price
                 

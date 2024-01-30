@@ -154,8 +154,7 @@ class TddManager(FunctionManager):
                 self.overlay.display_overlay_text(
                     function_response["message"] 
                 )
-            function_response = json.dumps(function_response)
-            printr.print(f'-> Resultat: {function_response}', tags="info") 
+            printr.print(f'-> Resultat: {json.dumps(function_response, indent=2)}', tags="info") 
             return function_response
 
         if request_type == "find_best_trade_route_between":
@@ -194,8 +193,7 @@ class TddManager(FunctionManager):
                 ))
             else:
                 print_debug(function_response["message"])
-            function_response = json.dumps(function_response)
-            printr.print(f'-> Resultat: {function_response}', tags="info")
+            printr.print(f'-> Resultat: {json.dumps(function_response, indent=2)}', tags="info")
             return function_response
 
         if request_type == "find_tradeport_at_location_to_sell_commodity":
@@ -234,8 +232,7 @@ class TddManager(FunctionManager):
                 ))
             else:
                 print_debug(function_response["message"])
-            function_response = json.dumps(function_response)
-            printr.print(f'-> Resultat: {function_response}', tags="info")
+            printr.print(f'-> Resultat: {json.dumps(function_response, indent=2)}', tags="info")
 
             return function_response
 
@@ -265,8 +262,7 @@ class TddManager(FunctionManager):
                 ))
             else:
                 print_debug(function_response["message"])
-            function_response = json.dumps(function_response)
-            printr.print(f'-> Resultat: {function_response}', tags="info")
+            printr.print(f'-> Resultat: {json.dumps(function_response, indent=2)}', tags="info")
             return function_response
 
         if request_type == "find_locations_to_sell_commodity":
@@ -319,8 +315,7 @@ class TddManager(FunctionManager):
                 ))
             else:
                 print_debug(function_response["message"])
-            function_response = json.dumps(function_response)
-            printr.print(f'-> Resultat: {function_response}', tags="info")
+            printr.print(f'-> Resultat: {json.dumps(function_response, indent=2)}', tags="info")
             return function_response
 
     def switch_tdd_employee(self, function_args):

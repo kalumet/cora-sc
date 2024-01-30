@@ -269,7 +269,7 @@ class UexDataRunnerManager(FunctionManager):
         
         function_response = self._get_data_from_screenshots(tradeport, function_args["operation"])
         
-        printr.print(f'-> Result: {function_response}', tags="info")
+        printr.print(f'-> Result: {json.dumps(function_response)}', tags="info")
 
         return function_response
 
@@ -419,7 +419,7 @@ class UexDataRunnerManager(FunctionManager):
             response, success = self.uex_service.update_tradeport_price(tradeport=validated_tradeport, commodity_update_info=validated_price, operation=operation)
 
             if not success:
-                print_debug(f'price could not be updated: {response}')
+                printr.print(f'price could not be updated: {json.dumps(response, indent=2)}', tags="info")
                 update_errors_uex_status.append(response)
                 validated_price["uex_rejection_reason"] = response
                 rejected_commodities.append(validated_price)
@@ -451,20 +451,22 @@ class UexDataRunnerManager(FunctionManager):
         
         self.overlay.display_overlay_text(f"UEX Corp: {len(updated_commodities_uex_id)} out of {number_of_extracted_prices} price information accepted.", display_duration=30000)
         
-        response = {
-                    "success": True,
-                    "instructions": "Prices where transmitted. Only if 'rejected_price_data_by_uex' is provided, ask the user if he wants details about the rejections.",
-                    "message": {
-                            "tradeport": validated_tradeport["name"],
-                            f"{operation}able_commodities_info": {
-                                "identified": number_of_extracted_prices,
-                                "transmitted": number_of_validated_prices
-                            }
-                        }
-                }
         if len(update_errors_uex_status) > 0:
+            response = {
+                        "success": True,
+                        "instructions": "Prices where transmitted but there are price updated not accepted by uex. ",
+                        "message": {
+                                "tradeport": validated_tradeport["name"],
+                                f"{operation}able_commodities_info": {
+                                    "identified": number_of_extracted_prices,
+                                    "transmitted": number_of_validated_prices
+                                }
+                            }
+                    }
             response["message"][f"{operation}able_commodities_info"]["rejected_price_data_by_uex"] = len(update_errors_uex_status)
             response["message"][f"{operation}able_commodities_info"]["rejected_commodity_price_infos"] = rejected_commodities
+        else:
+            return "OK"  # we don't want cora to repeat what we see on screen, if everything was fine
 
         return response
 

@@ -88,7 +88,7 @@ class TddManager(FunctionManager):
                                 ),
                                 "enum": ["find_best_trade_route_starting_at_location", 
                                          "find_best_trade_route_for_commodity_between_locations", "find_locations_to_sell_commodity", 
-                                         "find_best_trade_route_between, find_tradeport_at_location_to_sell_commodity"]
+                                         "find_best_trade_route_between, find_tradeport_at_location_to_sell_commodity, find_best_trade_routes_around_location"]
                             },
                         },
                         "required": ["request_type"]
@@ -121,7 +121,8 @@ class TddManager(FunctionManager):
                 "- find_best_trade_route_between: used, if the player wants to trade between locations. Requires both 'location_name_from' and 'location_name_to' "
                 "- find_tradeport_at_location_to_sell_commodity: used if the player wants to sell a specific commodity at a given location. Requires 'commodity_name' and 'location_name_to' "
                 "- find_best_trade_route_for_commodity_between_locations: used if the player wants to trade a given commodity without specifying any buying location or selling location. Requires only 'commodity_name' "
-                "- find_locations_to_sell_commodity: used if the player wants to know where where he can sell a given commodity independent of any location. Requires only 'commodity_name' "
+                "- find_locations_to_sell_commodity: used if the player wants to know where he can sell a given commodity independent of any location. Requires only 'commodity_name' "
+                "- find_best_trade_routes_around_location: used, if the player wants to trade at or around a given location. Requires only 'location_name_to' "
         )
 
     def get_trade_information_from_tdd_employee(self, function_args):
@@ -289,6 +290,32 @@ class TddManager(FunctionManager):
                 )
                 print_debug((
                     f'Sell {trade_route["commodity"]} at {trade_route["sell_at_tradeport_name"]} ({moon_or_planet_sell}) for {trade_route["sell_price"]} aUEC.'    
+                ))
+            else:
+                print_debug(function_response["message"])
+            function_response = json.dumps(function_response)
+            printr.print(f'-> Resultat: {function_response}', tags="info")
+            return function_response
+        
+        if request_type == "find_best_trade_routes_around_location":  
+            location_type, location = self.uex_service.get_location(function_args.get("location_name_to", None))
+            if not location:
+                return {"success": False, "instructions": "Missing location where the user wants to trade"}
+            
+            function_response = self.uex_service.find_best_trade_between_locations_code(location_code1=location["code"], location_code2=location["code"])
+
+            success = function_response.get("success", False)
+            if success:
+                trade_route = function_response["trade_routes"][0]
+                moon_or_planet_buy = trade_route["buy_satellite"] if trade_route["buy_satellite"] else trade_route["buy_planet"]
+                moon_or_planet_sell = trade_route["sell_satellite"] if trade_route["sell_satellite"] else trade_route["sell_planet"]
+                self.overlay.display_overlay_text(
+                    f'Buy {trade_route["commodity"]} at {trade_route["buy_at_tradeport_name"]} ({moon_or_planet_buy}). '
+                    f'Sell at {trade_route["sell_at_tradeport_name"]} ({moon_or_planet_sell}). Profit: {trade_route["profit"]} aUEC.'    
+                )
+                print_debug((
+                    f'Buy {trade_route["commodity"]} at {trade_route["buy_at_tradeport_name"]} ({moon_or_planet_buy}). '
+                    f'Sell at {trade_route["sell_at_tradeport_name"]} ({moon_or_planet_sell}).'    
                 ))
             else:
                 print_debug(function_response["message"])

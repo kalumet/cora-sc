@@ -95,6 +95,11 @@ Star-Citizen Profile: https://robertsspaceindustries.com/citizens/eXpG_kalumet
 
 Contact: Via Spectrum or through this project.
 
+## Copyright notice
+“This project is not endorsed by or affiliated with the Cloud Imperium or Roberts Space Industries group of companies. All game content and materials are copyright Cloud Imperium Rights LLC and Cloud Imperium Rights Ltd.. Star Citizen®, Squadron 42®, Roberts Space Industries®, and Cloud Imperium® are registered trademarks of Cloud Imperium Rights LLC. All rights reserved.”
+
+
+
 ## Open Source Acknowledgements
 
 This fork extends the usage of other Open Source projects internally (without modifying them in any way).
@@ -103,7 +108,6 @@ So in addition to the ones mentioned further below, I'd like to thank further cr
 - [opencv](https://github.com/opencv/opencv) - Apache-2.0
 - [pytesseract](https://github.com/madmaze/pytesseract) - Apache-2.0
 - [screeninfo](https://github.com/rr-/screeninfo) - MIT (c) 2015 Marcin Kurczewski
-- [openai](https://github.com/openai/openai-python) - Apache-2.0
 
 # Wingman AI
 

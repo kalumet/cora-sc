@@ -1,5 +1,6 @@
 import random
 import requests
+import json
 
 from services.printr import Printr
 
@@ -132,7 +133,7 @@ class LoreManager(FunctionManager):
     def get_more_information_about_topic(self, function_args):
         search_term = function_args.get("search_term", "")
         print_debug(f"{self.get_more_information_about_topic.__name__} called with '{search_term}'")
-        printr.print_info(f"Executing function '{self.get_more_information_about_topic.__name__}'. Search-Term: '{search_term}'")
+        printr.print(f"Executing function '{self.get_more_information_about_topic.__name__}'. Search-Term: '{search_term}'", tags="info")
         search_url = f"{self.wiki_base_url}/search"
         headers = {
             'accept': 'application/json',
@@ -172,6 +173,7 @@ class LoreManager(FunctionManager):
             if not articles:
                 return {"success": False, "instructions": "Make a joke about people not beeing able to speak all languages of the universe, like you do."}
 
+            printr.print(f"Response: \n{json.dumps(articles, indent=2)}\n", tags="info")
             return {"success": True, "instructions": "Based on the found_articles, make a once sentance summary of each article and ask the user about what of these he wants to get more details. Make than a short summary of the article. If the user asks for even more details, rephrase the article like a super intelligent AI would do it. Don't forget to mention, that you are bored to do this trivial task, but the players wish is your command.", "found_articles": articles}
 
         except requests.exceptions.RequestException as e:

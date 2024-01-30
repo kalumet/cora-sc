@@ -11,7 +11,7 @@ import time
 
 from services.secret_keeper import SecretKeeper
 
-DEBUG = False
+DEBUG = True
 
 
 def print_debug(to_print):
@@ -364,19 +364,21 @@ class SCKeybindings():
         if action_details.get("category") in self.keybind_categories_to_ignore and action_details.get("actionname") not in self.keybind_actions_to_include_from_category:
             excludedCategory = True
 
-        if inclusion_mode == "discarded_keybindings_only":
-            return not keybinding_exists or not_supported_activation_mode or excludedCategory  # True, if no keybinding set, activation mode not supported or if the category is excluded
-        elif inclusion_mode == "only_allowed_keybindings":
-            return not (keybinding_exists and not not_supported_activation_mode and not excludedCategory)  # True, if keybinding set, if activation mode is supported and it doesn't belong to an excluded category
+        if inclusion_mode == "discarded_keybindings_only":  # action should be written to file "missing"
+            return not (not keybinding_exists or not_supported_activation_mode or excludedCategory)
+        elif inclusion_mode == "only_allowed_keybindings":  # action should be written to file "existing"
+            return not (keybinding_exists and not not_supported_activation_mode and not excludedCategory) 
         
         return False  # all keybindings should be included
 
     def _create_json_data(self, actions, inclusion_mode, content_keys, mode):
         json_data = {}
+        print_debug("writing for inclusion mode {inclusion_mode}")
         for action_name, action_details in actions.items():
             if self._should_exclude_action(action_details, inclusion_mode):
+                print_debug(f" - excluding {action_name}")
                 continue
-
+            print_debug(f" + including {action_name}")
             key_value = action_details.get("actionname", "").strip()
 
             # we want to have the most descriptive functionname

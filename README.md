@@ -4,6 +4,7 @@ This is a fork of the great Wingmen-AI by [ShipBit](https://github.com/ShipBit/w
 The sole purpose of this fork is to provide a customized version of wingman-ai for the game Star-Citizen and deepen the immersion into the game.
 It shall help the player to enjoy the game.
 
+<img src='assets/fankit/STARCITIZEN_BLACK.png' width='100'>
 ![Star-Citizen-Logo](assets/fankit/STARCITIZEN_BLACK.png | width=100) ![Star-Citizen-Made-By-The-Community](assets/fankit/MadeByTheCommunity_Black.png | width=100)
 
 

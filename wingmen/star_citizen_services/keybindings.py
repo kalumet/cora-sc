@@ -97,7 +97,6 @@ class SCKeybindings():
         avoid_commands.difference_update(include_actions)
 
         for key, keybindingEntry in self.keybindings.items():
-            print_debug(f"keybind entry for key:{key}= {json.dumps(keybindingEntry, indent=2)}")
             if keybindingEntry["actionname"] in avoid_commands and not keybindingEntry["category"] in self.keybind_categories_to_ignore:
                 continue
             filtered.append(key)
@@ -122,7 +121,6 @@ class SCKeybindings():
                 if key in custom_commands or key not in commands_to_consider:
                     continue  # we skip actions that have been customized in config or that we don't consider
                 
-                print_debug(f'building instant activation command {key} -> {keybinding_entry["command-phrases"]}')
                 command = {}
                 command["name"] = key
                 
@@ -376,9 +374,7 @@ class SCKeybindings():
         print_debug(f"writing for inclusion mode {inclusion_mode}")
         for action_name, action_details in actions.items():
             if self._should_exclude_action(action_details, inclusion_mode):
-                print_debug(f" - excluding {action_name}")
                 continue
-            print_debug(f" + including {action_name}")
             key_value = action_details.get("actionname", "").strip()
 
             # we want to have the most descriptive functionname
@@ -499,7 +495,7 @@ class SCKeybindings():
             self._correct_instant_activation_commands()
             return
         elif os.path.exists(self.json_path_knowledge) and os.path.exists(self.json_path) and self.config["update_keybindings"] is True:
-            print_debug(f"update keybinding information based on existing. ")
+            print_debug("update keybinding information based on existing. ")
             actions = self._load_sc_all_keybindings()
             print_debug(f"loaded actions: {len(actions)}")
         else:

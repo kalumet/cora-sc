@@ -270,7 +270,7 @@ class DeliveryMissionManager(FunctionManager):
 
         return mission_count, package_count, revenue_sum, location_count, planetary_system_changes
 
-    def get_first_or_next_location_on_delivery_route(self):
+    def get_first_or_next_location_on_delivery_route(self, function_args):
         
         uexApi = UEXApi()
 

@@ -2,6 +2,12 @@
 This is a fork of the great Wingmen-AI by [ShipBit](https://github.com/ShipBit/wingman-ai). Original notes are below.
 
 The sole purpose of this fork is to provide a customized version of wingman-ai for the game Star-Citizen and deepen the immersion into the game.
+It shall help the player to enjoy the game.
+
+![Star-Citizen-Logo](assets/fankit/STARCITIZEN_BLACK.png) ![Star-Citizen-Made-By-The-Community](assets/fankit/MadeByTheCommunity_Black.png)
+
+
+
 
 **Important**
 This code is not provided currently as installable exe file. I don't know yet how to do it and not sure if I will try to provide a .exe for this.

@@ -280,6 +280,8 @@ class UEXApi():
                             buy_price = commodity.get('price_buy', 0)
                         
                             profit = round(sell_price - buy_price, ndigits=2)
+                            if profit <= 0:
+                                continue
                             commodity_in_heap = commodities_in_top_trades.get(commodity_code)
 
                             if commodity_in_heap:
@@ -316,7 +318,7 @@ class UEXApi():
         
         return {
             "success": True, 
-            "instructions": "Tell the user how many alternatives you have identified. Provide him the first trade route details.", 
+            "instructions": "Tell the user how many alternatives you have identified. Provide him the first trade route details. Make sure to write out all numbers! ", 
             "trade_routes": top_trades,
             "number_of_alternatives": len(top_trades)
         }
@@ -367,6 +369,9 @@ class UEXApi():
 
                 if best_buy and best_sell:
                     profit = max_sell_price - min_buy_price
+                    if profit <= 0:
+                        continue
+
                     if profit > best_profit or len(top_trades) < 3:
                         trade_info = self._create_trade_info(best_buy, best_sell, commodity_code, min_buy_price, max_sell_price, round(profit, ndigits=2))
                         # - profit as lowest value is always at top_trades[0]
@@ -383,7 +388,7 @@ class UEXApi():
 
         return {
             "success": True,
-            "instructions": "Tell the user how many alternatives you have identified. Provide him the first trade route details.", 
+            "instructions": "Tell the user how many alternatives you have identified. Provide him the first trade route details. Write all out numbers! ", 
             "trade_routes": best_trade_routes,
             "number_of_alternatives": len(best_trade_routes)
         }
@@ -467,7 +472,7 @@ class UEXApi():
 
         return {
             "success": True,
-            "instructions": "Tell the user how many alternatives you have identified. Provide him the first trade route details.", 
+            "instructions": "Tell the user how many alternatives you have identified. Provide him the first trade route details. Write out all numbers! ", 
             "trade_routes": best_trade_routes,
             "number_of_alternatives": len(best_trade_routes)
         }
@@ -520,7 +525,7 @@ class UEXApi():
 
                     # Berechne den Profit und prüfe, ob es die beste Option ist
                     profit = best_sell_price - buy_price
-                    if profit > max_profit:
+                    if profit > 0 and profit > max_profit:
                         trade_info = self._create_trade_info(start_trade, best_sell_location, commodity, buy_price, best_sell_price, round(profit, ndigits=2))
                         # - profit as lowest value is always at top_trades[0]
                         heapq.heappush(top_trades, (-profit, trade_id, trade_info))
@@ -537,7 +542,7 @@ class UEXApi():
 
         return {
             "success": True,
-            "instructions": "Tell the user how many alternatives you have identified. Provide him the first trade route details.", 
+            "instructions": "Tell the user how many alternatives you have identified. Provide him the first trade route details. Write out all numbers! ", 
             "trade_routes": best_trade_routes,
             "number_of_alternatives": len(best_trade_routes)
         }
@@ -667,7 +672,7 @@ class UEXApi():
     def update_tradeport_price(self, tradeport, commodity_update_info, operation):
         url = f"{self.api_endpoint}/sr/"
         
-        if not commodity_update_info["code"] or not commodity_update_info["uex_price"]:
+        if not ("code" in commodity_update_info) or not ("uex_price" in commodity_update_info) :
             return "missing code or uex_price, rejected", False
         update_data = {
             "commodity": commodity_update_info["code"],

@@ -1,6 +1,8 @@
 # Cora-SC your Star-Citizen AI compagnion
 This is a fork of the great Wingmen-AI by [ShipBit](https://github.com/ShipBit/wingman-ai). Original notes are below.
 
+The sole purpose of this fork is to provide a customized version of wingman-ai for the game Star-Citizen and deepen the immersion into the game.
+
 **Important**
 This code is not provided currently as installable exe file. I don't know yet how to do it and not sure if I will try to provide a .exe for this.
 
@@ -95,8 +97,12 @@ Star-Citizen Profile: https://robertsspaceindustries.com/citizens/eXpG_kalumet
 
 Contact: Via Spectrum or through this project.
 
-## Copyright notice
+## Acknowledgements and Copyright notice
 “This project is not endorsed by or affiliated with the Cloud Imperium or Roberts Space Industries group of companies. All game content and materials are copyright Cloud Imperium Rights LLC and Cloud Imperium Rights Ltd.. Star Citizen®, Squadron 42®, Roberts Space Industries®, and Cloud Imperium® are registered trademarks of Cloud Imperium Rights LLC. All rights reserved.”
+
+This project relies on data provided by other fan sites:
+- It uses the API provided by United Express Corporation (https://uexcorp.space/)
+- It uses the API provided by Star-Citizen Wiki (https://star-citizen.wiki/)
 
 
 

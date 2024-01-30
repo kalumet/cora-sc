@@ -373,7 +373,7 @@ class SCKeybindings():
 
     def _create_json_data(self, actions, inclusion_mode, content_keys, mode):
         json_data = {}
-        print_debug("writing for inclusion mode {inclusion_mode}")
+        print_debug(f"writing for inclusion mode {inclusion_mode}")
         for action_name, action_details in actions.items():
             if self._should_exclude_action(action_details, inclusion_mode):
                 print_debug(f" - excluding {action_name}")

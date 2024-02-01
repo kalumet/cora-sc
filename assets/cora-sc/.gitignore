@@ -1,0 +1,5 @@
+*.png
+*.xcf
+
+!Cora_icon_*.png
+!Cora_SC_Image.png

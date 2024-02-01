@@ -50,7 +50,8 @@ Based on UEX Data retrieved regularly. Provides information about:
 - find_tradeport_at_location_that_buys_commodity (You want to sell a commodity that you have and want to know if it can be sold near your current location)
 - find_best_trade_route_for_commodity_between_locations ( You want to trade a specific commodity between two locations ...)
 - find_best_sell_price_for_commodity (Where is the best selling option for a given commodity (not depending on where you are))
-- find_best_trade_route_between locations ( You want to go from A to B: Ask what commodity you could take with you for a little extra profit)
+- find_best_trade_route_between locations (You want to go from A to B: Ask what commodity you could take with you for a little extra profit)
+- find_best_trade_routes_around_location (You want to trade around an area, for example around Arcorp)
 
 You will get different employees respond to you :-)
 

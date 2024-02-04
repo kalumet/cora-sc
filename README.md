@@ -1,6 +1,6 @@
 # Cora-SC your Star-Citizen AI compagnion
 ![Cora SC Header](assets/cora-sc/Cora_SC_Image.png)
-This is a fork of the great Wingmen-AI by [ShipBit](https://github.com/ShipBit/wingman-ai). Original notes are below.
+This is a fork of the great Wingman-AI by [ShipBit](https://github.com/ShipBit/wingman-ai). Original notes are below.
 
 The sole purpose of this fork is to provide a customized version of wingman-ai for the game Star-Citizen and deepen the immersion into the game.
 It shall help the player to enjoy the game.

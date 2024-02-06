@@ -332,7 +332,7 @@ class OverlayPopup(tk.Toplevel):
 
         item = self.data_table.item(row_id)
         inventory_state = item['values'][4]
-        new_value = next_value_map.get(inventory_state, "None")
+        new_value = next_value_map.get(inventory_state, "OUT OF STOCK")
         item['values'][4] = new_value
         item['values'][7] = "user updated" # index of the validation result collumn...
 

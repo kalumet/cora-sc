@@ -281,31 +281,41 @@ class StarCitizenWingman(OpenAiWingman):
         Overwritten with context switch sensitive message buffers"""
         remember_messages = self.messages_buffer
 
-        if remember_messages is None:
-            return
+        if remember_messages is None or len(self.messages) == 0:
+            return 0  # Configuration not set, nothing to delete.
 
-        # Calculate the max number of messages to keep including the initial system message
-        # `remember_messages * 2` pairs plus one system message.
-        max_messages = (remember_messages * 2) + 1
+        # The system message aka `context` does not count
+        context_offset = (
+            1 if self.messages and self.messages[0]["role"] == "system" else 0
+        )
 
-        # every "AI interaction" is a pair of 2 messages: "user" and "assistant" or "tools"
-        deleted_pairs = 0
+        # Find the cutoff index where to end deletion, making sure to only count 'user' messages towards the limit starting with newest messages.
+        cutoff_index = len(self.messages) - 1
+        user_message_count = 0
+        for message in reversed(self.messages):
+            if self._get_message_role(message) == "user":
+                user_message_count += 1
+                if user_message_count == remember_messages:
+                    break  # Found the cutoff point.
+            cutoff_index -= 1
 
-        while len(self.messages) > max_messages:
-            if remember_messages == 0:
-                # Calculate pairs to be deleted, excluding the system message.
-                deleted_pairs += (len(self.messages) - 1) // 2
-                self.reset_conversation_history()
-            else:
-                while len(self.messages) > max_messages:
-                    del self.messages[1:3]
-                    deleted_pairs += 1
+        # If messages below the keep limit, don't delete anything.
+        if user_message_count < remember_messages:
+            return 0
 
-        if self.debug and deleted_pairs > 0:
+        total_deleted_messages = cutoff_index - context_offset  # Messages to delete.
+
+        # Remove the messages before the cutoff index, exclusive of the system message.
+        del self.messages[context_offset:cutoff_index]
+
+        # Optional debugging printout.
+        if self.debug and total_deleted_messages > 0:
             printr.print(
-                f"   Deleted {deleted_pairs} pairs of messages from the conversation history.",
+                f"Deleted {total_deleted_messages} messages from the conversation history.",
                 tags="warn",
             )
+
+        return total_deleted_messages
 
     def _build_tools(self) -> list[dict]:
         """

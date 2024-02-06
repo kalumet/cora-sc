@@ -1,5 +1,6 @@
 *.png
 *.xcf
+*.mp4
 
 !Cora_icon_*.png
 !Cora_SC_Image.png

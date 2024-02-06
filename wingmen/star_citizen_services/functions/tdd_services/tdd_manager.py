@@ -40,13 +40,13 @@ class TddManager(FunctionManager):
         
     # @abstractmethod
     def get_function_tools(self):
-        tradeport_names = self.uex_service.get_category_names("tradeports")
-        planet_names = self.uex_service.get_category_names("planets")
-        satellite_names = self.uex_service.get_category_names("satellites")
-        commodity_names = self.uex_service.get_category_names("commodities")
-        cities_names = self.uex_service.get_category_names("cities")
+        # tradeport_names = self.uex_service.get_category_names("tradeports")
+        # planet_names = self.uex_service.get_category_names("planets")
+        # satellite_names = self.uex_service.get_category_names("satellites")
+        # commodity_names = self.uex_service.get_category_names("commodities")
+        # cities_names = self.uex_service.get_category_names("cities")
 
-        combined_locations_names = planet_names + satellite_names + cities_names + tradeport_names
+        # combined_locations_names = planet_names + satellite_names + cities_names + tradeport_names
 
         # commands = all defined keybinding label names
         tools = [
@@ -289,8 +289,7 @@ class TddManager(FunctionManager):
                 ))
             else:
                 print_debug(function_response["message"])
-            function_response = json.dumps(function_response)
-            printr.print(f'-> Resultat: {function_response}', tags="info")
+            printr.print(f'-> Resultat: {json.dumps(function_response, indent=2)}', tags="info")
             return function_response
         
         if request_type == "find_best_trade_routes_around_location":  

@@ -318,7 +318,7 @@ class UEXApi():
         
         return {
             "success": True, 
-            "instructions": "Tell the user how many alternatives you have identified. Provide him the first trade route details. Make sure to write out all numbers! ", 
+            "instructions": "Tell the user how many alternatives you have identified. Provide him the first trade route details. Write out all numbers, especially prices. Example: instead of 24 write 'twentyfour'! ", 
             "trade_routes": top_trades,
             "number_of_alternatives": len(top_trades)
         }
@@ -340,13 +340,9 @@ class UEXApi():
     def _find_best_trade_for_commodity(self, tradeports_data, commodities_data, commodity_code, include_restricted_illegal=False):
         """
         Find the best trade route for a specific commodity.
+        TODO Fix this ... needs a second loop of tradeports ... similar to other method...
         """
-        best_buy = None
-        best_sell = None
-        min_buy_price = float('inf')
-        max_sell_price = 0
-        best_profit = 0
-        no_route = {"success": False, "message": f"No selling location found for commodity {commodity_code}."}
+        no_route = {"success": False, "message": f"No trade route found for commodity {commodity_code}."}
 
         allowedCommodities = self._filter_available_commodities(commodities_data, include_restricted_illegal, isOnlySellable=True)
         if commodity_code not in allowedCommodities:
@@ -355,28 +351,34 @@ class UEXApi():
         top_trades = []
         trade_id = 0
 
-        for trade in tradeports_data.values():
-            if commodity_code in trade.get('prices', {}):
-                details = trade['prices'][commodity_code]
-                buy_price = details.get('price_buy', 0)
+        for trade1 in tradeports_data.values():  # buy tradeport
+            if commodity_code not in trade1.get('prices', {}):
+                continue
+            
+            details = trade1['prices'][commodity_code]
+            if details['operation'].lower() != 'buy':
+                continue
+
+            buy_price = details.get('price_buy', 0)
+
+            for trade2 in tradeports_data.values():  # sell tradeport
+                
+                if commodity_code not in trade2.get('prices', {}):
+                    continue
+            
+                details = trade2['prices'][commodity_code]
+                if details['operation'].lower() != 'sell':
+                    continue
+
                 sell_price = details.get('price_sell', 0)
-                if details['operation'] == 'buy' and buy_price and buy_price < min_buy_price:
-                    min_buy_price = buy_price
-                    best_buy = trade
-                if details['operation'] == 'sell' and sell_price and sell_price > max_sell_price:
-                    max_sell_price = sell_price
-                    best_sell = trade
 
-                if best_buy and best_sell:
-                    profit = max_sell_price - min_buy_price
-                    if profit <= 0:
-                        continue
+                profit = sell_price - buy_price
+                if profit <= 0:
+                    continue
 
-                    if profit > best_profit or len(top_trades) < 3:
-                        trade_info = self._create_trade_info(best_buy, best_sell, commodity_code, min_buy_price, max_sell_price, round(profit, ndigits=2))
-                        # - profit as lowest value is always at top_trades[0]
-                        heapq.heappush(top_trades, (-profit, trade_id, trade_info))
-                        trade_id += 1
+                trade_info = self._create_trade_info(trade1, trade2, commodity_code, buy_price, sell_price, round(profit, ndigits=2))
+                heapq.heappush(top_trades, (-profit, trade_id, trade_info))
+                trade_id += 1
                 
         if not top_trades:
             return no_route
@@ -388,7 +390,7 @@ class UEXApi():
 
         return {
             "success": True,
-            "instructions": "Tell the user how many alternatives you have identified. Provide him the first trade route details. Write all out numbers! ", 
+            "instructions": "Tell the user how many alternatives you have identified. Provide him the first trade route details. Write out all numbers, especially prices. Example: instead of 24 write 'twentyfour'! ", 
             "trade_routes": best_trade_routes,
             "number_of_alternatives": len(best_trade_routes)
         }
@@ -408,7 +410,7 @@ class UEXApi():
         trade_id = 0
 
         for trade in tradeports_data.values():
-            print_debug(f"checking {trade}")
+            # print_debug(f"checking {trade}")
             if commodity_code in trade.get('prices', {}):
                 details = trade['prices'][commodity_code]
                 sell_price = details.get('price_sell', 0)
@@ -429,7 +431,7 @@ class UEXApi():
 
         return {
             "success": True,
-            "instructions": "Tell the user how many alternatives you have identified. Provide him the first trade route details.", 
+            "instructions": "Tell the user how many alternatives you have identified. Provide him the first trade route details. Write out all numbers, especially prices. Example: instead of 24 write 'twentyfour'!", 
             "trade_routes": best_trade_routes,
             "number_of_alternatives": len(best_trade_routes)
         }
@@ -472,7 +474,7 @@ class UEXApi():
 
         return {
             "success": True,
-            "instructions": "Tell the user how many alternatives you have identified. Provide him the first trade route details. Write out all numbers! ", 
+            "instructions": "Tell the user how many alternatives you have identified. Provide him the first trade route details. Write out all numbers, especially prices. Example: instead of 24 write 'twentyfour'! ", 
             "trade_routes": best_trade_routes,
             "number_of_alternatives": len(best_trade_routes)
         }
@@ -542,7 +544,7 @@ class UEXApi():
 
         return {
             "success": True,
-            "instructions": "Tell the user how many alternatives you have identified. Provide him the first trade route details. Write out all numbers! ", 
+            "instructions": "Tell the user how many alternatives you have identified. Provide him the first trade route details. Write out all numbers, especially prices. Example: instead of 24 write 'twentyfour'! ", 
             "trade_routes": best_trade_routes,
             "number_of_alternatives": len(best_trade_routes)
         }
@@ -652,7 +654,7 @@ class UEXApi():
     
     def get_commodity_for_tradeport(self, commodity_mapping_name, tradeport):
         code = self.name_mapping[CATEGORY_COMMODITIES].get(commodity_mapping_name, None)
-        print_debug(f'uex: {commodity_mapping_name}-> {code} @ {tradeport["name_short"]}')
+        # print_debug(f'uex: {commodity_mapping_name}-> {code} @ {tradeport["name_short"]}')
         if not code:
             return None
         
@@ -697,28 +699,3 @@ class UEXApi():
         print_debug(f'Fehler beim updaten von Preis-Daten - reason: {response.json()["status"]}')
         return response.json()["status"], False # error reason
     
-    def test(self):
-        self._fetch_data()
-        if not self.data:
-            exit("No Data available")
-
-        # Test the functions with sample data
-        test_location_1 = "CRU"
-        test_location_2 = "ARC"
-        test_commodity_code = "AGRI" # Agricium
-        test_location_code = "HUR"
-
-        test_best_trade_systems = self._find_best_trade_between_locations(data['tradeports'].get("data"), data['commodities'].get("data"), test_location_1, test_location_2)
-        test_best_trade_commodity = self._find_best_trade_for_commodity(data['tradeports'].get("data"), data['commodities'].get("data"), test_commodity_code)
-        test_best_trade_location = self._find_best_trade_from_location(data['tradeports'].get("data"), data['commodities'].get("data"), test_location_code)
-        test_best_sell_location = self._find_best_sell_price_at_location(data['tradeports'].get("data"), data['commodities'].get("data"), location_code=test_location_code, commodity_code=test_commodity_code)
-
-        print_debug(f"best traderoute between {test_location_1} and {test_location_2}: {json.dumps(test_best_trade_systems)}")
-        print_debug(f"best route for commodity {test_commodity_code}: {json.dumps(test_best_trade_commodity)}")
-        print_debug(f"best trade from location {test_location_code}: {json.dumps(test_best_trade_location)}")
-        print_debug(f"best sell price at location {test_location_code}: {json.dumps(test_best_sell_location)}")
-
-
-if __name__ == "__main__":
-    uex = UEXApi()
-    uex.test()

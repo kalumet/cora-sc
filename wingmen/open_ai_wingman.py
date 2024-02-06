@@ -704,7 +704,7 @@ class OpenAiWingman(Wingman):
         )
         return answer
 
-    def __get_message_role(self, message):
+    def _get_message_role(self, message):
         """Helper method to get the role of the message regardless of its type."""
         if isinstance(message, Mapping):
             return message.get("role")

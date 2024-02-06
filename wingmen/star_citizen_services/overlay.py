@@ -91,7 +91,7 @@ class StarCitizenOverlay:
 
             self.overlay_shown = True
             root = WingmanUI.get_instance()
-            overlay_root = Toplevel()
+            overlay_root = Toplevel(root)
             overlay_root.overrideredirect(True)
             overlay_root.attributes('-topmost', True)
 

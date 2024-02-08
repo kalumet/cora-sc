@@ -327,11 +327,11 @@ class UEXApi():
         return {
             "commodity": self.code_mapping.get(CATEGORY_COMMODITIES, {}).get(commodity_code, ''),
             "buy_at_tradeport_name": buy_tradeport.get("name", ''),
-            "buy_satellite": self.code_mapping.get(CATEGORY_SATELLITES, {}).get(buy_tradeport.get("satellite", ''), ''),
-            "buy_planet": self.code_mapping.get(CATEGORY_PLANETS, {}).get(buy_tradeport.get("planet", ''), ''),
+            "buy_moon": self.code_mapping.get(CATEGORY_SATELLITES, {}).get(buy_tradeport.get("satellite", ''), ''),
+            "buy_orbit": self.code_mapping.get(CATEGORY_PLANETS, {}).get(buy_tradeport.get("planet", ''), ''),
             "sell_at_tradeport_name": sell_tradeport.get("name", ''),
-            "sell_satellite": self.code_mapping.get(CATEGORY_SATELLITES, {}).get(sell_tradeport.get("satellite", ''), ''),
-            "sell_planet": self.code_mapping.get(CATEGORY_PLANETS, {}).get(sell_tradeport.get("planet", ''), ''),
+            "sell_moon": self.code_mapping.get(CATEGORY_SATELLITES, {}).get(sell_tradeport.get("satellite", ''), ''),
+            "sell_orbit": self.code_mapping.get(CATEGORY_PLANETS, {}).get(sell_tradeport.get("planet", ''), ''),
             "buy_price": buy_price,
             "sell_price": sell_price,
             "profit": profit
@@ -340,7 +340,6 @@ class UEXApi():
     def _find_best_trade_for_commodity(self, tradeports_data, commodities_data, commodity_code, include_restricted_illegal=False):
         """
         Find the best trade route for a specific commodity.
-        TODO Fix this ... needs a second loop of tradeports ... similar to other method...
         """
         no_route = {"success": False, "message": f"No trade route found for commodity {commodity_code}."}
 
@@ -483,8 +482,8 @@ class UEXApi():
         return {
                 "commodity": self.code_mapping.get(CATEGORY_COMMODITIES, {}).get(commodity_code, ''),
                 "sell_at_tradeport_name": best_sell.get("name", ''),
-                "sell_satellite": self.code_mapping.get(CATEGORY_SATELLITES, {}).get(best_sell.get("satellite", ''), ''),
-                "sell_planet": self.code_mapping.get(CATEGORY_PLANETS, {}).get(best_sell.get("planet", ''), ''),
+                "sell_moon": self.code_mapping.get(CATEGORY_SATELLITES, {}).get(best_sell.get("satellite", ''), ''),
+                "sell_orbit": self.code_mapping.get(CATEGORY_PLANETS, {}).get(best_sell.get("planet", ''), ''),
                 "sell_price": max_sell_price
             }
 
@@ -549,35 +548,80 @@ class UEXApi():
             "number_of_alternatives": len(best_trade_routes)
         }
 
-    def find_best_trade_between_locations_code(self, location_code1, location_code2):
-        printr.print(text=f"Suche beste Handelsoption für die Reise {location_code1} -> {location_code2}", tags="info")
-        if (location_code1 and location_code2):
-            return self._find_best_trade_between_locations(self.data['tradeports'].get("data"), self.data['commodities'].get("data"), location_code1, location_code2)
-        return {"success": False, "message": f"Could not identify locations {location_code1}) or {location_code2})"}
+    def find_best_trade_between_locations_code(self, location_name_from, location_name_to):
+        printr.print(text=f"Suche beste Handelsoption für die Reise {location_name_from} -> {location_name_to}", tags="info")
+        _, location_from = self.get_location(location_name_from)
+        _, location_to = self.get_location(location_name_to)
+        
+        if not location_from: 
+            return {
+                "success": False, 
+                "instructions": f"Start location not recognised: {location_name_from}"
+            }
+        
+        if not location_to:
+            return {
+                "success": False, 
+                "instructions": f"Target location not recognised: {location_name_to}"
+            }   
+        
+        return self._find_best_trade_between_locations(self.data['tradeports'].get("data"), self.data['commodities'].get("data"), location_from["code"], location_to["code"])
 
-    def find_best_trade_from_location_code(self, location_code):
-        printr.print(text=f"Suche beste Handelsoption ab {location_code}", tags="info")
-        if (location_code):
-            return self._find_best_trade_from_location(self.data['tradeports'].get("data"), self.data['commodities'].get("data"), location_code)
-        return {"success": False, "message": f"Could not identify location {location_code}"}
+    def find_best_trade_from_location_code(self, location_name_from):
+        printr.print(text=f"Suche beste Handelsoption ab {location_name_from}", tags="info")
+        _, location = self.get_location(location_name_from)
+        if not location:
+            return {"success": False, "instructions": "Missing starting location"}
+        
+        return self._find_best_trade_from_location(self.data['tradeports'].get("data"), self.data['commodities'].get("data"), location["code"])
 
-    def find_best_trade_for_commodity_code(self, commodity_code):
-        printr.print(text=f"Suche beste Route für {commodity_code}", tags="info")
-        if (commodity_code):
-            return self._find_best_trade_for_commodity(self.data['tradeports'].get("data"), self.data['commodities'].get("data"), commodity_code)
-        return {"success": False, "message": f"Could not identify commodity {commodity_code}"}
+    def find_best_trade_for_commodity_code(self, commodity_name):
+        printr.print(text=f"Suche beste Route für {commodity_name}", tags="info")
+        
+        commodity = self.get_commodity(commodity_name)
+            
+        if not commodity:
+            return {
+                "success": False, 
+                "instructions": "Ask the player for the commodity that he wants to trade."
+            }
+        
+        return self._find_best_trade_for_commodity(self.data['tradeports'].get("data"), self.data['commodities'].get("data"), commodity["code"])   
     
-    def find_best_selling_location_for_commodity_code(self, commodity_code):
-        printr.print(text=f"Suche beste Verkaufsort für {commodity_code}", tags="info")
-        if (commodity_code):
-            return self._find_best_selling_location_for_commodity(self.data['tradeports'].get("data"), self.data['commodities'].get("data"), commodity_code)
-        return {"success": False, "message": f"Could not identify commodity {commodity_code}"}
+    def find_best_selling_location_for_commodity_code(self, commodity_name):
+        printr.print(text=f"Suche beste Verkaufsort für {commodity_name}", tags="info")
+        commodity = self.get_commodity(commodity_name)
+            
+        if not commodity:
+            return {
+                "success": False, 
+                "instructions": "Ask the player the commodity that he wants to sell."
+            }
     
-    def find_best_sell_price_at_location_codes(self, commodity_code, location_code):
-        printr.print(text=f"Suche beste Verkaufsoption für {commodity_code} bei {location_code}", tags="info")
-        if (commodity_code and location_code):
-            return self._find_best_sell_price_at_location(self.data['tradeports'].get("data"), self.data['commodities'].get("data"), commodity_code=commodity_code, location_code=location_code)
-        return {"success": False, "message": f"Could not identify commodity {commodity_code} or location {location_code}"}
+        return self._find_best_selling_location_for_commodity(self.data['tradeports'].get("data"), self.data['commodities'].get("data"), commodity["code"])
+    
+    def find_best_sell_price_at_location_codes(self, commodity_name, location_name):
+        printr.print(text=f"Suche beste Verkaufsoption für {commodity_name} bei {location_name}", tags="info")
+        
+        _, location_to = self.get_location(location_name)
+
+        commodity = self.get_commodity(commodity_name)
+        
+        if not location_to:
+            print(f"find_tradeport_at_location_to_sell_commodity - location {location_name} not found.")
+            return {
+                "success": False, 
+                "instructions": f"The location {location_name} could not be found. User should try again speaking clearly. "
+            }
+        
+        if not commodity:
+            print(f"find_tradeport_at_location_to_sell_commodity - commodity {commodity_name} not found.")
+            return {
+                "success": False, 
+                "instructions": f"The commodity {commodity_name} could not be identified. Ask the user to repeat the name clearly. "
+            }
+        
+        return self._find_best_sell_price_at_location(self.data['tradeports'].get("data"), self.data['commodities'].get("data"), commodity_code=commodity["code"], location_code=location_to["code"])
       
     def get_commodity_name(self, code):
         self._refresh_data()

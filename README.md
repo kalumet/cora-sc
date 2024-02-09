@@ -93,6 +93,9 @@ This functionality makes ingame screenshots.
 - allow access to wingman UI threads for extensions -> In Game Overlay Display
 - more debug statements
 
+## Short Demo (Youtube)
+[![Feature Demonstration of Cora](https://img.youtube.com/vi/5eE5VLuKtTw/0.jpg)](https://youtu.be/5eE5VLuKtTw)
+
 ## If you want to refer to this project
 Use the following information:
 

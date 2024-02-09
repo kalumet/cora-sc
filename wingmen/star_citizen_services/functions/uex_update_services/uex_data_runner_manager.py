@@ -25,6 +25,7 @@ from services.audio_player import AudioPlayer
 
 from wingmen.star_citizen_services.location_name_matching import LocationNameMatching
 from wingmen.star_citizen_services.uex_api import UEXApi
+from wingmen.star_citizen_services.functions.uex_v2.uex_api_module import UEXApi2
 from wingmen.star_citizen_services.overlay import StarCitizenOverlay
 from wingmen.star_citizen_services.function_manager import FunctionManager
 from wingmen.star_citizen_services.ai_context_enum import AIContext
@@ -64,6 +65,23 @@ class UexDataRunnerManager(FunctionManager):
 
         self.screenshots_path = f"{self.data_dir_path}/screenshots"
         self.uex_service = UEXApi()
+
+        self.uex2_api_key = secret_keeper.retrieve(
+            requester="UexDataRunnerManager",
+            key="uex2_api_key",
+            friendly_key_name="UEX2 API key",
+            prompt_if_missing=True
+        )
+        self.uex2_secret_key = secret_keeper.retrieve(
+            requester="UexDataRunnerManager",
+            key="uex2_secret_key",
+            friendly_key_name="UEX2 secret user key",
+            prompt_if_missing=True
+        )
+        self.uex2_service = UEXApi2.init(
+            uex_api_key=self.uex2_api_key,
+            user_secret_key=self.uex2_secret_key
+        )
         self.overlay = StarCitizenOverlay()
         self.audio_player = AudioPlayer()
         self.current_timestamp = None
@@ -415,6 +433,13 @@ class UexDataRunnerManager(FunctionManager):
         rejected_commodities = []
 
         self.overlay.display_overlay_text("Now transmitting to UEX.")
+        response2, success2 = self.uex2_service.update_tradeport_prices(tradeport=validated_tradeport, commodity_update_infos=manually_confirmed_data, operation=operation)
+        if not success2:
+            # Write JSON data to a file
+            json_file_name = f'{self.data_dir_path}/debug_data/uex2_rejected_price_information_{operation}_{validated_tradeport["code"]}_{self.current_timestamp}.json'
+            with open(json_file_name, 'w') as file:
+                json.dump(response2, file, indent=4)
+
         for validated_price in manually_confirmed_data:
             response, success = self.uex_service.update_tradeport_price(tradeport=validated_tradeport, commodity_update_info=validated_price, operation=operation)
 
@@ -466,7 +491,7 @@ class UexDataRunnerManager(FunctionManager):
             response["message"][f"{operation}able_commodities_info"]["rejected_price_data_by_uex"] = len(update_errors_uex_status)
             response["message"][f"{operation}able_commodities_info"]["rejected_commodity_price_infos"] = rejected_commodities
         else:
-            return "OK"  # we don't want cora to repeat what we see on screen, if everything was fine
+            return "Ok"  # we don't want cora to repeat what we see on screen, if everything was fine
 
         return response
 

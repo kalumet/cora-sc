@@ -2,6 +2,7 @@
 *-route.json
 *.jpg
 *.png
+*.excalidraw
 
 !template_accept_offer_2.jpg
 !template_payment.jpg

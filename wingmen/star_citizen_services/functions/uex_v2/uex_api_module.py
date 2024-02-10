@@ -101,11 +101,28 @@ class UEXApi2():
 
             self.code_mapping = {}
             self.name_mapping = {}
-            self.code_to_id_mapping = {}
             self.uex1_tradeport_name_to_uex2_id_mapping = {  # TODO Temporary mapping until v2 live
                 "Area 18 - Trade & Development Division": 12,
                 "New Babbage - Trade & Development Division": 89,
-                "Orison - Trade & Development Division": 90
+                "Orison - Trade & Development Division": 90,
+                "ARC-L1 Wide Forest Station": 1,
+                "ARC-L2 Liveley Pathway Station": 2,
+                "ARC-L3 Modern Express Station": 3,
+                "ARC-L4 Faint Glen Station": 4,
+                "ARC-L5 Yellow Core Station": 5,
+                "MIC-L1 Shallow Frontier Station": 54,
+                "MIC-L2 Long Forest Station": 55,
+                "MIC-L3 Endless Odyssey Station": 56,
+                "MIC-L4 Red Crossroads Station": 57,
+                "MIC-L5 Modern Icarus Station": 58,
+                "HUR-L1 Green Glade Station": 44,
+                "HUR-L2 Faithful Dream Station": 45,
+                "HUR-L3 Thundering Express Station": 46,
+                "HUR-L4 Melodic Fields Station": 47,
+                "HUR-L5 High Course Station": 48,
+                "CRU-L1 Ambitious Dream Station": 19,
+                "CRU-L4 Shallow Fields Station": 20,
+                "CRU-L5 Beautiful Glen Station": 22
             }
             self.data = {}
 
@@ -241,7 +258,6 @@ class UEXApi2():
         if category not in self.code_mapping:
             self.code_mapping[category] = {}
             self.name_mapping[category] = {}
-            self.code_to_id_mapping[category] = {}
 
         # Erstellen eines Dictionarys zur Speicherung der JSON-Daten
         json_data = {}
@@ -251,7 +267,6 @@ class UEXApi2():
             entry_id = category_entry.get(export_code_field_name, "")
             self.code_mapping[category][entry_id] = entry_name
             self.name_mapping[category][entry_name] = entry_id
-            self.code_to_id_mapping[category][entry_code] = entry_id
             json_data[entry_name] = {
                 export_code_field_name: entry_id,
                 export_value_field_name: entry_name,
@@ -805,9 +820,9 @@ class UEXApi2():
         if not ("code" in tradeport):
             return "missing code, rejected", False
         
-        terminal_id = self.name_mapping[CATEGORY_TERMINALS][tradeport["name"]]
+        terminal_id = self.name_mapping[CATEGORY_TERMINALS][tradeport["name"]] if tradeport["name"] in self.name_mapping[CATEGORY_TERMINALS] else None
         if not terminal_id:  # TODO temporary try to find best matching name for uex2 based on uex1
-            terminal_id = self.uex1_tradeport_name_to_uex2_id_mapping[tradeport["name"]]
+            terminal_id = self.uex1_tradeport_name_to_uex2_id_mapping[tradeport["name"]] if tradeport["name"] in self.uex1_tradeport_name_to_uex2_id_mapping else None
 
             if not terminal_id:
                 print_debug(f"Unknown uex2 terminal id for tradeport['name']={tradeport['name']}")
@@ -831,10 +846,14 @@ class UEXApi2():
             # }
             if commodity_info["transmit"] is False:
                 continue
+
+            if commodity_info["commodity_name"] not in self.name_mapping[CATEGORY_COMMODITIES]:
+                print_debug(f'unknown commodity id for {commodity_info["commodity_name"]}. Skipping update.')
+                continue
             
             prices.append(
                 {
-                    "id_commodity": self.code_to_id_mapping[CATEGORY_COMMODITIES][commodity_info["code"]],
+                    "id_commodity": self.name_mapping[CATEGORY_COMMODITIES][commodity_info["commodity_name"]],
                     f"price_{operation}": commodity_info["uex_price"],
                     f"scu_{operation}": commodity_info["available_SCU_quantity"],
                     f"status_{operation}": self.inventory_state_mapping[commodity_info["inventory_state"]]

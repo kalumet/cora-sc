@@ -105,6 +105,8 @@ class UEXApi2():
                 "Area 18 - Trade & Development Division": 12,
                 "New Babbage - Trade & Development Division": 89,
                 "Orison - Trade & Development Division": 90,
+                "Central Business District": 18,
+                "L19 Residences Admin Office": 51,
                 "ARC-L1 Wide Forest Station": 1,
                 "ARC-L2 Liveley Pathway Station": 2,
                 "ARC-L3 Modern Express Station": 3,

@@ -317,7 +317,6 @@ class OverlayPopup(tk.Toplevel):
 
         self.data_table.item(row_id, values=item['values'])
         
-
     def toggle_inventory_state(self, row_id, column):
         # ["MAX INVENTORY", "VERY HIGH INVENTORY", "HIGH INVENTORY", "MEDIUM INVENTORY", "LOW INVENTORY", "VERY LOW INVENTORY", "OUT OF STOCK"]
         next_value_map = {
@@ -389,7 +388,18 @@ class OverlayPopup(tk.Toplevel):
             table_values[7] = "user updated" # index of the validation result collumn...
 
             if column_key == "price_per_unit":
-                unit_price = new_value
+                try:
+                    unit_price = float(new_value)  # Convert to float (for decimal prices)
+                except ValueError:
+                    # Handle the case where the user's input is not a valid number
+                    self.updated_data[row_index]["validation_result"] = "Invalid price format"
+                    table_values[7] = "Invalid price format"
+                    self.data_table.item(item, values=table_values)
+                    self.update()  # Update window to get size  
+
+                    entry_widget.destroy()
+                    return 
+
                 multiplier = self.updated_data[row_index]["multiplier"]
                 if multiplier and multiplier.lower()[0] == "m":
                     unit_price = unit_price * 1000000

@@ -460,6 +460,9 @@ class StarCitizenWingman(OpenAiWingman):
                 f"   Executing command: {command_message}",
                 tags="info",
             )
+        print_debug(
+                f"   Executing command: {command_message}"
+            )
 
         try: 
             if len(keys) > 1:
@@ -490,6 +493,7 @@ class StarCitizenWingman(OpenAiWingman):
                 if hold == "unknown":
                     print_debug("unknown activationMode assuming press: " + key)
                     key_module.press(key)
+                    continue
 
                 if hold > 1:
                     print_debug("hold and release: " + key)

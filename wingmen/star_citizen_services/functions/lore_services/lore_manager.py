@@ -47,7 +47,8 @@ class LoreManager(FunctionManager):
                 f"- {self.get_news_of_the_day.__name__}: call this, if the player ask you to give him the latest news of the day. "
                 f"- {self.get_more_information_about_topic.__name__}: call this, if the player wants to get information about a specific topic. "
                 "Always try to match location or ship names to the provided list of names before executing this function. "
-                "If you don't have context informtion from previous searches, provide as search term a single word matching best the players question. "
+                "If you don't have context information from previous searches, provide as search term a single word matching best the players question. When summarizing a topic, never refer URLs. "
+                "Write out any numbers in your response, especially dates. Example, instead of writing 'in the year 2439' you write 'in the year twothousendfourhundertandthirtynine'. "
         )
     
     # @abstractmethod

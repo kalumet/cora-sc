@@ -471,10 +471,10 @@ class UexDataRunnerManager(FunctionManager):
         
         self.overlay.display_overlay_text(f'UEX Corp: {response_data["accepted_count"]} out of {response_data["send_count"]} price information accepted.', display_duration=30000)
         
-        if response_data["accepted_count"] > 0:
+        if response_data["rejected_count"] > 0:
             result_data = {
                         "success": True,
-                        "instructions": "Prices where transmitted but there are price updated not accepted by uex. ",
+                        "instructions": "Prices where transmitted. ",
                         "message": {
                                 "tradeport": validated_tradeport["name"],
                                 f"{operation}able_commodities_info": {

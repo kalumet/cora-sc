@@ -687,6 +687,10 @@ class UEXApi():
         if code:
             return "planet", self.data[CATEGORY_PLANETS].get("data", []).get(code, None)
         
+        code = self.name_mapping[CATEGORY_CITIES].get(location_mapping_name, None)
+        if code:
+            return "city", self.data[CATEGORY_CITIES].get("data", []).get(code, None)
+        
         return None, None
     
     def get_commodity(self, commodity_mapping_name):

@@ -204,7 +204,7 @@ class TddManager(FunctionManager):
 
         if request_type == "find_best_trade_route_for_commodity_between_locations":
                        
-            function_response = self.uex_service.find_best_trade_for_commodity_code(commoditcommodity_namey_code=function_args.get("commodity_name", None))
+            function_response = self.uex_service.find_best_trade_for_commodity_code(commodity_name=function_args.get("commodity_name", None))
             
             success = function_response.get("success", False)
             if success:

@@ -715,31 +715,68 @@ class UEXApi():
         
         return list(self.name_mapping[category].keys())
         
-    def update_tradeport_price(self, tradeport, commodity_update_info, operation):
-        url = f"{self.api_endpoint}/sr/"
-        
-        if not ("code" in commodity_update_info) or not ("uex_price" in commodity_update_info) :
-            return "missing code or uex_price, rejected", False
-        update_data = {
-            "commodity": commodity_update_info["code"],
-            "tradeport": tradeport["code"],
-            "operation": operation,
-            "price": commodity_update_info["uex_price"],
-            "access_code": self.uex_access_code,
+    def update_tradeport_prices(self, tradeport, commodity_update_infos, operation):
+        url = f"{self.api_endpoint}/srm/"
+
+        encoded_data = {}
+        result_data = {
+            "ignored_count": 0,
+            "send_count": 0,
+            "accepted_count": 0,
+            "rejected_count": 0,
+            "response": ""
         }
-        
+        ignored_count = 0
+        send_count = 0
+        accepted_count = 0
+        rejected_count = 0
+
+        for index, commodity_update_info in enumerate(commodity_update_infos):
+            if not ("code" in commodity_update_info) or not ("uex_price" in commodity_update_info):
+                print_debug(f"uex1: missing code or uex_price, not submitting {json.dumps(commodity_update_info,indent=2)}")
+                ignored_count += 1
+                continue
+            
+            send_count += 1
+            accepted_count += 1  # TODO temporary, until I know how the response looks like
+            update_data = {
+                "commodity": commodity_update_info["code"],
+                "tradeport": tradeport["code"],
+                "operation": operation,
+                "price": commodity_update_info["uex_price"],
+            }
+            for key, value in update_data.items():
+                encoded_data[f'{key}[{index}]'] = value
+
+        encoded_data["access_code"] = self.uex_access_code
+        headers = {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            "api_key": f"{self.api_key}"
+        }
+       
         if not CALL_UEX_SR_ENDPOINT:
-            possible_strings = ["2423", "1234", "5678", "53249", "5294"]
+            possible_values = [1, 2, 4, 5, 7]
             possible_bools = [True, True, True, False]
-            return random.choice(possible_strings), random.choice(possible_bools)
+            return random.choice(possible_values), random.choice(possible_bools)
 
         if not TEST:
-            update_data["production"] = "1"
+            encoded_data["production"] = "1"
 
-        response = requests.post(url, headers=self.headers, data=update_data, timeout=30)
+        print_debug(f"calling uex1 with data={json.dumps(encoded_data, indent=2)}")
+
+        response = requests.post(url, headers=headers, data=encoded_data, timeout=360)
+        result_data["accepted_count"] = accepted_count
+        result_data["ignored_count"] = ignored_count
+        result_data["rejected_count"] = rejected_count
+        result_data["send_count"] = send_count
+        result_data["response"] = response.json()
         if response.status_code == 200:
-            return response.json()["data"], True # report id received
+            print_debug(f"UEX1: Success Response: {json.dumps(response.json(), indent=2)}")
+            return result_data, True # report id received
         
-        print_debug(f'Fehler beim updaten von Preis-Daten - reason: {response.json()["status"]}')
-        return response.json()["status"], False # error reason
+        print_debug(f'Fehler beim updaten von Preis-Daten - reason: {json.dumps(response.json(), indent=2)}')
+        # es scheint nur ein alles oder nichts verfahren zu geben, daher überschreiben wir im Fehlerfall:
+        result_data["accepted_count"] = 0
+        result_data["rejected_count"] = send_count
+        return result_data, False # error reason
     

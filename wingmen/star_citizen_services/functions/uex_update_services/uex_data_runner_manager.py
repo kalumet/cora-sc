@@ -31,7 +31,7 @@ from wingmen.star_citizen_services.function_manager import FunctionManager
 from wingmen.star_citizen_services.ai_context_enum import AIContext
 
 
-DEBUG = False
+DEBUG = True
 SHOW_SCREENSHOTS = False
 TEST = False
 
@@ -257,7 +257,7 @@ class UexDataRunnerManager(FunctionManager):
             "uex_price": new_price
         }
 
-        message, success = self.uex_service.update_tradeport_price(tradeport=tradeport, commodity_update_info=commodity_update_info, operation=operation)
+        message, success = self.uex_service.update_tradeport_prices(tradeport=tradeport, commodity_update_info=commodity_update_info, operation=operation)
 
         if not success:
             return {"success": False, "instructions": "Request was not accepted by uex.", "reason": message}
@@ -427,11 +427,6 @@ class UexDataRunnerManager(FunctionManager):
         with open(json_file_name, 'w') as file:
             json.dump(manually_confirmed_data, file, indent=4)
         
-        updated_commodities_uex_id = []
-        updated_commodities = []
-        update_errors_uex_status = []
-        rejected_commodities = []
-
         self.overlay.display_overlay_text("Now transmitting to UEX.")
         response2, success2 = self.uex2_service.update_tradeport_prices(tradeport=validated_tradeport, commodity_update_infos=manually_confirmed_data, operation=operation)
         if not success2:
@@ -440,26 +435,28 @@ class UexDataRunnerManager(FunctionManager):
             with open(json_file_name, 'w') as file:
                 json.dump(response2, file, indent=4)
 
-        for validated_price in manually_confirmed_data:
-            response, success = self.uex_service.update_tradeport_price(tradeport=validated_tradeport, commodity_update_info=validated_price, operation=operation)
 
-            if not success:
-                printr.print(f'price could not be updated: {json.dumps(response, indent=2)}', tags="info")
-                update_errors_uex_status.append(response)
-                validated_price["uex_rejection_reason"] = response
-                rejected_commodities.append(validated_price)
-                continue
+        response_data, success = self.uex_service.update_tradeport_prices(tradeport=validated_tradeport, commodity_update_infos=manually_confirmed_data, operation=operation)
 
-            print_debug(f'price successfully updated')
-            updated_commodities_uex_id.append(response)
-            updated_commodities.append(validated_price)
+        if not success:
+            printr.print(f'price could not be updated: {json.dumps(response_data, indent=2)}', tags="info")
+            # update_errors_uex_status.append(response)
+            # validated_price["uex_rejection_reason"] = response
+            # rejected_commodities.append(validated_price)
+            # continue
+
+        # print_debug(f'price successfully updated')
+        # updated_commodities_uex_id.append(response)
+        # updated_commodities.append(validated_price)
 
         # Write JSON data to a file
-        json_file_name = f'{self.data_dir_path}/debug_data/rejected_price_information_{operation}_{validated_tradeport["code"]}_{self.current_timestamp}.json'
-        with open(json_file_name, 'w') as file:
-            json.dump(rejected_commodities, file, indent=4)
+        
+        if response_data["rejected_count"] > 0:
+            json_file_name = f'{self.data_dir_path}/debug_data/uex1_price_rejected_information_{operation}_{validated_tradeport["code"]}_{self.current_timestamp}.json'
+            with open(json_file_name, 'w') as file:
+                json.dump(response_data, file, indent=4)
 
-        if len(updated_commodities_uex_id) == 0:
+        if not success or response_data["accepted_count"] == 0:
             self.overlay.display_overlay_text(f"Error UEX: no price information accepted.", display_duration=30000)
             return {
                         "success": False,
@@ -467,33 +464,33 @@ class UexDataRunnerManager(FunctionManager):
                         "message": {
                             "tradeport": validated_tradeport["name"],
                             f"{operation}able_commodities_info": {
-                                "identified": number_of_extracted_prices,
-                                "rejected_price_data_by_uex": len(update_errors_uex_status),
-                                "rejected_commodity_price_infos": rejected_commodities
+                                "result_information": response_data["response"]
                             }
                         }
                     }
         
-        self.overlay.display_overlay_text(f"UEX Corp: {len(updated_commodities_uex_id)} out of {number_of_extracted_prices} price information accepted.", display_duration=30000)
+        self.overlay.display_overlay_text(f'UEX Corp: {response_data["accepted_count"]} out of {response_data["send_count"]} price information accepted.', display_duration=30000)
         
-        if len(update_errors_uex_status) > 0:
-            response = {
+        if response_data["accepted_count"] > 0:
+            result_data = {
                         "success": True,
                         "instructions": "Prices where transmitted but there are price updated not accepted by uex. ",
                         "message": {
                                 "tradeport": validated_tradeport["name"],
                                 f"{operation}able_commodities_info": {
-                                    "identified": number_of_extracted_prices,
-                                    "transmitted": number_of_validated_prices
+                                    "extracted_prices_from_screenshot": number_of_extracted_prices,
+                                    "sent_prices_count": response_data["send_count"],
+                                    "accepted_prices_count": response_data["accepted_count"],
+                                    "ignored_prices_count": response_data["ignored_count"],
+                                    "rejected_prices_count": response_data["rejected_count"],
+                                    "uex_response": response_data["response"]
                                 }
                             }
                     }
-            response["message"][f"{operation}able_commodities_info"]["rejected_price_data_by_uex"] = len(update_errors_uex_status)
-            response["message"][f"{operation}able_commodities_info"]["rejected_commodity_price_infos"] = rejected_commodities
         else:
             return "Ok"  # we don't want cora to repeat what we see on screen, if everything was fine
 
-        return response
+        return result_data
 
     def _take_screenshot(self, operation, tradeport):
         if TEST:

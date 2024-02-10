@@ -851,6 +851,10 @@ class UEXApi2():
                 print_debug(f'unknown commodity id for {commodity_info["commodity_name"]}. Skipping update.')
                 continue
             
+            if "uex_price" not in commodity_info:
+                print_debug(f'no valid price for {commodity_info["commodity_name"]}. Skipping update.')
+                continue
+            
             prices.append(
                 {
                     "id_commodity": self.name_mapping[CATEGORY_COMMODITIES][commodity_info["commodity_name"]],

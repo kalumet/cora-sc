@@ -8,7 +8,7 @@ from wingmen.star_citizen_services.model.mission_action import DeliveryMissionAc
 from wingmen.star_citizen_services.model.mission_package import MissionPackage
 
 
-DEBUG = True
+DEBUG = False
 
 
 def print_debug(to_print):
@@ -58,7 +58,7 @@ class PackageDeliveryPlanner:
                     f"{mission_action}") 
 
         # Step 3
-        self.mission_actions_list =  self.plan_delivery_route(self.mission_actions_list)
+        self.mission_actions_list = self.plan_delivery_route(self.mission_actions_list)
 
         if DEBUG:
             print_debug("===SORTED===")
@@ -331,24 +331,24 @@ class PackageDeliveryPlanner:
 
         # now set the priority of each action
         for mission_action in mission_actions_list:
-            print(f'-- for {mission_action}')
+            print_debug(f'-- for {mission_action}')
             mission_action: DeliveryMissionAction
             prio = 0
             prio = 1 if mission_action.action == "pickup" else 0 # the pickup location for this package needs to be visited before the drop-off location
-            print(f'   start with {prio} for action type {mission_action.action}')
+            print_debug(f'   start with {prio} for action type {mission_action.action}')
             
             location_code = mission_action.location_ref["code"]
             location_count = count_location_code.get(location_code, 0)
-            print(f'   + {location_count} for number of packages on same location')
+            print_debug(f'   + {location_count} for number of packages on same location')
 
             only_pickup_prio = 20 * location_count if location_has_only_pickup_set.get(location_code) is True else 0
-            print(f'   + {only_pickup_prio} for only pickups at location')
+            print_debug(f'   + {only_pickup_prio} for only pickups at location')
 
             satellite_planet = "_".join(
                 [mission_action.location_ref["planet"], 
                  mission_action.location_ref["satellite"]])
             same_sapl_count = count_satellite_planet.get(satellite_planet, 0)
-            print(f'   + {same_sapl_count} for packages on the same moon or planet')
+            print_debug(f'   + {same_sapl_count} for packages on the same moon or planet')
 
             prio += only_pickup_prio + location_count + same_sapl_count
             
@@ -361,13 +361,13 @@ class PackageDeliveryPlanner:
             if not location or location["outlaw"] == "1":
                 dangerous = True
                 prio += 50  
-                print('   + 50 as outlaw location')
+                print_debug('   + 50 as outlaw location')
 
             # same logic, if there is no armistice at this location, potentially more dangerous as other locations
             if not location or location["armistice"] == "0":
                 dangerous = True
                 prio += 75
-                print(f'   + 75 as location without armistice')
+                print_debug(f'   + 75 as location without armistice')
 
             if dangerous:
                 # our location is dangerous. If we are dropoff action, we want to pickup our package as early as possible:
@@ -434,29 +434,29 @@ class PackageDeliveryPlanner:
         # now set the priority of each action
         for mission_action in actions_list:
             mission_action: DeliveryMissionAction
-            print(f'-- for {mission_action}')
+            print_debug(f'-- for {mission_action}')
             prio = 0
             prio = 1 if mission_action.action == "pickup" else 0 # the pickup location for this package needs to be visited before the drop-off location
-            print(f'   start with {prio} for action type {mission_action.action}')
+            print_debug(f'   start with {prio} for action type {mission_action.action}')
 
             location_code = mission_action.location_ref["code"]
             location_count = count_location_code.get(location_code, 0)
-            print(f'   + {location_count} for number of packages on same location')
+            print_debug(f'   + {location_count} for number of packages on same location')
 
             only_pickup_prio = 20 * location_count if location_has_only_pickup_set.get(location_code) is True else 0
-            print(f'   + {only_pickup_prio} because this location has only pickups')
+            print_debug(f'   + {only_pickup_prio} because this location has only pickups')
 
             satellite_planet = "_".join(
                 [mission_action.location_ref["planet"], 
                  mission_action.location_ref["satellite"]])
             same_sapl_count = count_satellite_planet.get(satellite_planet, 0)
-            print(f'   + {same_sapl_count} for packages on the same moon or planet')
+            print_debug(f'   + {same_sapl_count} for packages on the same moon or planet')
 
             prio += location_count + same_sapl_count
 
             if satellite_planet == current_location_sapl:
                 prio += 30  # increase the priority of locations on the same planet / satellite
-                print('   + 30 as this location is on same planet or satellite we are currently')
+                print_debug('   + 30 as this location is on same planet or satellite we are currently')
 
             location = tradeports.get(location_code, None)
             # outlaw locations should be visited as early as possible to reduce
@@ -467,13 +467,13 @@ class PackageDeliveryPlanner:
             if not location or location["outlaw"] == "1":
                 dangerous = True
                 prio += 50
-                print('   + 50 as outlaw location')  
+                print_debug('   + 50 as outlaw location')  
 
             # same logic, if there is no armistice at this location, potentially more dangerous as other locations
             if not location or location["armistice"] == "0":
                 dangerous = True
                 prio += 75
-                print('   + 70 as location without armistice')
+                print_debug('   + 70 as location without armistice')
 
             if dangerous:
                 # our location is dangerous. If we are dropoff action, we want to pickup our package as early as possible:

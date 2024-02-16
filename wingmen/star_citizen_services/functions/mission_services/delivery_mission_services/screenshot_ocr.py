@@ -38,8 +38,6 @@ class TransportMissionAnalyzer:
 
     def identify_mission(self):
 
-        self.overlay.display_overlay_text("Analyising delivery mission data now.", vertical_position_ratio=8)
-        time.sleep(10)
         filename = self.take_screenshot()
 
         if not filename:
@@ -52,7 +50,7 @@ class TransportMissionAnalyzer:
         if not delivery_mission or len(delivery_mission.packages) == 0:
             return None
 
-        LocationNameMatching.validate_location_names(delivery_mission)
+        LocationNameMatching.validate_location_names(delivery_mission, self.data_dir_path)
 
         print_debug(delivery_mission)
         return delivery_mission
@@ -178,6 +176,13 @@ class TransportMissionAnalyzer:
 
         # Extract text using pytesseract
         text = pytesseract.image_to_string(preprocessed_cropped_screenshot_pil)
+
+        now = datetime.datetime.now()
+        current_timestamp = now.strftime(
+                    "%Y%m%d_%H%M%S_%f"
+                )  # Format: JahrMonatTag_StundeMinuteSekunde_Millisekunden
+        filename = f'{self.data_dir_path}/screenshots/cropped_screenshot_{current_timestamp}.png'
+        cv2.imwrite(filename, preprocessed_cropped_screenshot)
         # print_debug(text)
         # print_debug("---------------------")
         return text, max_loc_offer

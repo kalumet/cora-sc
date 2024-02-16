@@ -24,7 +24,7 @@ class TextAnalyzer:
         mission = DeliveryMission()
 
         # Define regular expression patterns
-        revenue_pattern = re.compile(r"Payment ([\d,]+) a[U|V]?[U|V]?EC")
+        revenue_pattern = re.compile(r"Payment ([\d,]+) a.{0,2}ec", re.IGNORECASE)
         pickups_pattern = re.compile(r"P.ck.ge #(\d+) fr.m (.+) .n (.+)")
         dropoffs_pattern = re.compile(r"P.ck.ge #(\d+) t. (.+) .n (.+)")
 

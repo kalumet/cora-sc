@@ -13,7 +13,7 @@ from wingmen.star_citizen_services.function_manager import FunctionManager
 from wingmen.star_citizen_services.ai_context_enum import AIContext
 
 
-DEBUG = True
+DEBUG = False
 TEST = False
 printr = Printr()
 
@@ -43,7 +43,8 @@ class DeliveryMissionManager(FunctionManager):
         self.mission_screen_upper_left_template = f'{self.mission_data_path}/{self.config["box-mission-configs"]["upper-left-region-template"]}'
         self.mission_screen_lower_right_template = f'{self.mission_data_path}/{self.config["box-mission-configs"]["lower-right-region-template"]}'
 
-        self.overlay = StarCitizenOverlay()
+        self.overlay1 = StarCitizenOverlay()
+        self.overlay2 = StarCitizenOverlay()
         self.delivery_manager = PackageDeliveryPlanner()
         self.mission_recognition_service = TransportMissionAnalyzer(
             upper_left_template=self.mission_screen_upper_left_template, 
@@ -307,7 +308,7 @@ class DeliveryMissionManager(FunctionManager):
             
             index += 1
 
-        self.overlay.display_overlay_text(
+        self.overlay1.display_overlay_text(
             (
                 f'Next location: {next_location.get("name")}  '
                 f'on  {moon_or_planet}  '
@@ -337,13 +338,12 @@ class DeliveryMissionManager(FunctionManager):
     def get_new_mission(self):
 
         delivery_mission: DeliveryMission = self.mission_recognition_service.identify_mission()
-        self.overlay.display_overlay_text(
+        self.overlay1.display_overlay_text(
             (
                 f"Identified mission with a payout of {delivery_mission.revenue} aUEC and {len(delivery_mission.packages)} packages to deliver."
             ),
             vertical_position_ratio=10
         )
-        time.sleep(10)
 
         self.missions[delivery_mission.id] = delivery_mission
         print_debug(f"new mission: {delivery_mission.to_json()}")
@@ -352,19 +352,19 @@ class DeliveryMissionManager(FunctionManager):
         
         mission_count, package_count, revenue_sum, location_count, planetary_system_changes = self.get_missions_information()
 
-        self.overlay.display_overlay_text(
+        self.overlay2.display_overlay_text(
             (
                 f"Total missions: #{mission_count}  "
                 f"for {revenue_sum} αUEC   "
                 f"packages: {package_count}."
             ),
-            vertical_position_ratio=10
+            vertical_position_ratio=8
         )
 
         # 3 return new mission and active missions + instructions for ai
         return {
             "success": "True", 
-            "instructions": "Provide the user with all provided information based on your calculation of the best delivery route considering risk, and least possible location-switches. Do not provide any information, if there is no value or 0.",
+            "instructions": "Provide the user with all provided information based on your calculation of the best delivery route considering risk, and least possible location-switches. Do not provide any information, if there is no value or 0. Any numbers in your response must be written out. ",
             "missions_count": mission_count,
             "all_mission_ids": self.get_mission_ids(),
             "total_revenue": revenue_sum,
@@ -386,28 +386,37 @@ class DeliveryMissionManager(FunctionManager):
     def discard_mission(self, mission_id):
         """Discard a specific mission by its ID."""
         uexApi = UEXApi()
+
+        try:
+            mission_id = int(mission_id)
+        except ValueError:
+            return {
+                "success": False, 
+                "instructions": "The id of the mission provided is not a number. ",
+            }
+        if mission_id not in self.missions:
+            return {
+                "success": False, 
+                "instructions": f"The id of the mission provided is not valid. Valid numbers: {self.get_mission_ids()} ",
+            }
         
         self.missions.pop(mission_id, None)
         
         self.calculate_delivery_route()
-
-        pickup_count, dropoff_count = self.get_next_actions()
-        next_action: DeliveryMissionAction = self.delivery_actions[self.current_delivery_action_index]
-        next_location = self.current_delivery_location
         
         mission_count, package_count, revenue_sum, location_count, planetary_system_changes = self.get_missions_information()
 
-        self.overlay.display_overlay_text(
+        self.overlay1.display_overlay_text(
             f"Discarded Mission #{mission_id}   "
             f"Total missions: #{mission_count}  "
             f"for {revenue_sum} αUEC   "
-            f"packages: {package_count}. Next Location: {self.delivery_actions[0].location_ref.get('name')}", 
+            f"packages: {package_count}. ",
             vertical_position_ratio=10
         )
         
         return {
             "success": "True", 
-            "instructions": "Provide the user with all provided information based on your calculation of the best delivery route considering risk, and least possible location-switches. Do not provide any information, if there is no value or 0.",
+            "instructions": "Provide the user with all provided information based on your calculation of the best delivery route considering risk, and least possible location-switches. Do not provide any information, if there is no value or 0. Any numbers in your response must be written out. ",
             "missions_count": mission_count,
             "all_mission_ids": self.get_mission_ids(),
             "total_revenue": revenue_sum,
@@ -423,7 +432,7 @@ class DeliveryMissionManager(FunctionManager):
         self.delivery_actions.clear()
         self.mission_started = False
 
-        self.overlay.display_overlay_text(
+        self.overlay1.display_overlay_text(
             "Discarded all mission, reject them ingame.",
             vertical_position_ratio=10
         )

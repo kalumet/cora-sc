@@ -17,7 +17,7 @@ from wingmen.star_citizen_services.uex_api import UEXApi
 from wingmen.star_citizen_services.overlay import StarCitizenOverlay
 from wingmen.star_citizen_services.function_manager import StarCitizensAiFunctionsManager, FunctionManager
 
-DEBUG = True
+DEBUG = False
 
 
 def print_debug(to_print):

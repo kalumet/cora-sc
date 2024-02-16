@@ -1,0 +1,30 @@
+{
+   "Clear View Emergency Shelter": {
+      "name": "Clear View Emergency Shelter",
+      "satellite": "",
+      "code": "CVES360",
+      "planet": "MIC",
+      "city": ""
+   },
+   "Nuiqsut Emergency Shelter": {
+      "name": "Nuiqsut Emergency Shelter",
+      "satellite": "",
+      "code": "NES312",
+      "planet": "MIC",
+      "city": ""
+   },
+   "Point Wain Emergency Shelter": {
+      "name": "Point Wain Emergency Shelter",
+      "satellite": "",
+      "code": "PWES350",
+      "planet": "MIC",
+      "city": ""
+   },
+   "Calhoun Pass Emergency Shelter": {
+      "name": "Calhoun Pass Emergency Shelter",
+      "satellite": "",
+      "code": "CPES348",
+      "planet": "MIC",
+      "city": ""
+   }
+}

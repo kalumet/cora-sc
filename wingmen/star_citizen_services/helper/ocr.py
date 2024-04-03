@@ -27,11 +27,9 @@ class OCR:
         self.data_dir = data_dir
         self.openai_api_key = openai_api_key
         self.overlay = overlay
-
+  
     def get_screenshot_texts(self, image, *subdirectories, **filename_placeholders):
-
-        screenshot = cv2.imread(image)
-        gray_screenshot = cv2.cvtColor(screenshot, cv2.COLOR_BGR2GRAY)
+        gray_screenshot = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
         subdir_path = "/".join(subdirectories)
         # Process placeholders in the filename
@@ -143,3 +141,9 @@ class OCR:
         except BaseException:
             traceback.print_exc()
             return "Some exception raised during screenshot analysis", False
+
+    def get_screenshotfile_texts(self, image_path, *subdirectories, **filename_placeholders):
+        screenshot = cv2.imread(image_path)
+
+        return self.get_screenshot_texts(self, screenshot, *subdirectories, **filename_placeholders)
+        

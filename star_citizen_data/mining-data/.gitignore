@@ -1,0 +1,5 @@
+*.json
+*.jpg
+*.png
+!template_*.png
+!examples/response_structure_refinery.json*

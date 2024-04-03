@@ -36,6 +36,7 @@ CATEGORY_ITEMS = "items"
 PRICES_COMMODITIES = "commodities_prices"
 PRICES_VEHICLES = "vehicles_purchases_prices"
 PRICES_ITEMS = "items_prices"
+CATEGORY_REFINERY_METHODS = "refineries_methods"
 
 # System IDs
 STANTON = 68
@@ -71,6 +72,7 @@ class UEXApi2():
             self.vehicle_prices_max_age = 864090  # ~10 days (UEX refresh)(prices)
             self.commodities_prices_max_age = 1210  # ~20 min (UEX 1h refresh)(prices)
             self.item_prices_max_age = 7210  # ~2h (UEX refresh)(prices)
+            self.refinery_methods_max_age = 864780  # ~10 days
 
             self.max_ages = {
                 CATEGORY_VEHICLES: self.vehicles_max_age,
@@ -83,7 +85,8 @@ class UEXApi2():
                 CATEGORY_OUTPOSTS: self.outposts_max_age,
                 PRICES_COMMODITIES: self.commodities_prices_max_age,
                 PRICES_ITEMS: self.item_prices_max_age,
-                PRICES_VEHICLES: self.item_prices_max_age
+                PRICES_VEHICLES: self.item_prices_max_age,
+                CATEGORY_REFINERY_METHODS: self.refinery_methods_max_age
             }
 
             self.inventory_state_mapping = {
@@ -153,7 +156,8 @@ class UEXApi2():
                 CATEGORY_OUTPOSTS: f"{CATEGORY_OUTPOSTS}/id_star_system/{system_id}/",
                 PRICES_COMMODITIES: f"{PRICES_COMMODITIES}/",
                 PRICES_ITEMS: f"{PRICES_ITEMS}/",  # filter applied later
-                PRICES_VEHICLES: f"{PRICES_VEHICLES}/"  # filter applied later
+                PRICES_VEHICLES: f"{PRICES_VEHICLES}/",  # filter applied later
+                CATEGORY_REFINERY_METHODS: f"{CATEGORY_REFINERY_METHODS}/"
             }
         
         if category:
@@ -215,7 +219,7 @@ class UEXApi2():
         :param additional_category_filters: only relevant, if the category is provided (usually a price category request that should be filtered to something)
         :return: Data either from the file or the API
         """
-        categories = [CATEGORY_CITIES, CATEGORY_COMMODITIES, CATEGORY_ITEMS, CATEGORY_MOONS, CATEGORY_ORBITS, CATEGORY_OUTPOSTS, CATEGORY_TERMINALS, CATEGORY_VEHICLES]
+        categories = [CATEGORY_CITIES, CATEGORY_COMMODITIES, CATEGORY_ITEMS, CATEGORY_MOONS, CATEGORY_ORBITS, CATEGORY_OUTPOSTS, CATEGORY_TERMINALS, CATEGORY_VEHICLES, CATEGORY_REFINERY_METHODS]
         
         for check_category in categories:
             if self._needs_refresh(check_category):
@@ -241,7 +245,7 @@ class UEXApi2():
         category_key = category
         for attribute, value in additional_category_filters:
             category_key += f"_{attribute}-{value}"
-        return self.data[category_key].get("age") > self.max_ages[category_key]
+        return self.data[category_key].get("age") > self.max_ages[category]
 
     def _write_code_mapping_to_file(self, data, category, api_value_field, export_code_field_name, export_value_field_name):
         """
@@ -772,6 +776,11 @@ class UEXApi2():
         category = CATEGORY_TERMINALS
         return self.data[category].get("data", [])
     
+    def get_refineries(self):
+        category = CATEGORY_TERMINALS
+        data, age = self._fetch_from_file_or_api(category, self.max_ages[category], self.get_api_endpoints_per_category(self.system_code, category), type="refinery")
+        return data 
+    
     def get_tradeport(self, tradeport_mapping_name):
         terminal_id = self.name_mapping[CATEGORY_TERMINALS].get(tradeport_mapping_name, None)
         if not terminal_id:
@@ -886,4 +895,23 @@ class UEXApi2():
             return response.json(), True  # report id received
         
         print_debug(f"Fehler beim Abrufen von Daten von {url} mit params {json.dumps(update_data, indent=2)}: with response: {json.dumps(response.json(), indent=2)}")
+        return response.json(), False  # error reason
+
+    def add_refinery_job(self, work_order):
+        url = f"{self.base_url}user_refineries_jobs_add/"
+
+        if not CALL_UEX_SR_ENDPOINT:
+            possible_strings = ["2423", "1234", "5678", "53249", "5294"]
+            possible_bools = [True, True, True, False]
+            return random.choice(possible_strings), random.choice(possible_bools)
+
+        if not TEST:
+            work_order["is_production"] = "1"
+
+        response = self.session.post(url, data=json.dumps(work_order), timeout=360)
+        if response.status_code == 200:
+            print_debug(f"UEX refinery job added: {json.dumps(response.json(), indent=2)}")    
+            return response.json(), True  # report id received
+        
+        print_debug(f"Fehler beim Abrufen von Daten von {url} mit params {json.dumps(work_order, indent=2)}: with response: {json.dumps(response.json(), indent=2)}")
         return response.json(), False  # error reason

@@ -913,5 +913,28 @@ class UEXApi2():
             print_debug(f"UEX refinery job added: {json.dumps(response.json(), indent=2)}")    
             return response.json(), True  # report id received
         
-        print_debug(f"Fehler beim Abrufen von Daten von {url} mit params {json.dumps(work_order, indent=2)}: with response: {json.dumps(response.json(), indent=2)}")
+        print_debug(f"Error retrieving data from {url} mit params {json.dumps(work_order, indent=2)}: with response: {json.dumps(response.json(), indent=2)}")
+        return response.json(), False  # error reason
+    
+    def get_refinery_jobs(self):
+        url = f"{self.base_url}user_refineries_jobs/"
+
+        response = self.session.get(url, timeout=360)
+        if response.status_code == 200:
+            print_debug(f"UEX refinery jobs retrieved: {json.dumps(response.json(), indent=2)}")    
+            return response.json()["data"], True  # report id received
+        
+        print_debug(f"Error retrieving data from {url}: with response: {json.dumps(response.json(), indent=2)}")
+        return response.json(), False  # error reason
+    
+    def delete_refinery_job(self, job_id):
+        print_debug(f"UEX refinery job deleting: '{job_id}'")   
+        url = f"{self.base_url}user_refineries_jobs_remove/id/{job_id}/is_production/1/"
+
+        response = self.session.delete(url, timeout=360)
+        if response.status_code == 200:
+            print_debug(f"UEX refinery jobs deleted: {json.dumps(response.json(), indent=2)}")    
+            return response.json()["data"], True  # report id received
+        
+        print_debug(f"Error deleting job from {url}: with response: {json.dumps(response.json(), indent=2)}")
         return response.json(), False  # error reason

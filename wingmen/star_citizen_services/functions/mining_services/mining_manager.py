@@ -1,8 +1,12 @@
 import json
 import os
 import traceback
+import time
+
+from apscheduler.schedulers.background import BackgroundScheduler
 
 from services.printr import Printr
+from services.audio_player import AudioPlayer
 
 from wingmen.star_citizen_services.function_manager import FunctionManager
 from wingmen.star_citizen_services.ai_context_enum import AIContext
@@ -37,8 +41,6 @@ class MiningManager(FunctionManager):
         self.mining_data_path = f'{self.config["data-root-directory"]}/mining-data'
         self.mining_file_path = f'{self.mining_data_path}/active-refinery-jobs.json'
 
-        self.active_work_orders = {}
-
         self.openai_api_key = secret_keeper.retrieve(
             requester="MiningManager",
             key="openai",
@@ -67,15 +69,18 @@ class MiningManager(FunctionManager):
             openai_api_key=self.openai_api_key
         )
 
+        self.overlay = StarCitizenOverlay()
+        self.audio_player = AudioPlayer()
+        self.scheduler = BackgroundScheduler()
+
         self.refineries = self.uex2_service.get_refineries()
         self.refinery_methods = self.uex2_service.get_data(uex_api_module.CATEGORY_REFINERY_METHODS)
         commodities = self.uex2_service.get_data(uex_api_module.CATEGORY_COMMODITIES)
         self.ores = {key: value for key, value in commodities.items() if value.get('is_raw') == 1}
 
         self.refinery_names = [details["space_station_name"] for details in self.refineries.values() if "space_station_name" in details]
-        
-        self.overlay = StarCitizenOverlay()
-
+        self.refinery_jobs = []
+            
         with open(f'{self.mining_data_path}/examples/response_structure_refinery.json', 'r', encoding="UTF-8") as file:
             file_content = file.read()
 
@@ -142,11 +147,7 @@ class MiningManager(FunctionManager):
                             "type": {
                                 "type": "string",
                                 "description": "The type of operation that the player wants to execute",
-                                "enum": ["add_work_order", "remove_work_order", "get_all_work_orders", None]
-                            },
-                            "work_order_index": {
-                                "type": "number",
-                                "description": "The work order, the player wants to delete",
+                                "enum": ["add_work_order", "delete_processed_work_orders", "get_all_work_orders", None]
                             },
                             "confirm_deletion": {
                                 "type": "string",
@@ -160,6 +161,14 @@ class MiningManager(FunctionManager):
         ]
 
         return tools
+
+    #@abstractmethod
+    def after_init(self):
+        self.scheduler.start()
+
+        self.refinery_jobs, success = self.uex2_service.get_refinery_jobs()
+        if success:
+            self.activate_refinery_job_monitoring(self.refinery_jobs)
 
     def refinery_work_order_management(self, function_args):
         work_order_index = function_args.get("work_order_index", None)
@@ -180,7 +189,70 @@ class MiningManager(FunctionManager):
                 return {"success": False, "error": retrieved_json, "instructions": "Explain the player the reason for the work order not beeing able to be extracted. "}
 
             return self.add_work_order(retrieved_json)
+        
+        if type == "get_all_work_orders":
+            self.refinery_jobs, success = self.uex2_service.get_refinery_jobs()
+            if not success:
+                return {"success": False, "error": self.refinery_jobs, 
+                        "instructions": "There has been an error trying retrieving current refinery work orders."}
+            if len(self.refinery_jobs) <= 0:
+                return {"success": False, "instructions": "No current refinery work orders."}
+            
+            self.activate_refinery_job_monitoring(self.refinery_jobs)
+            terminal_counts = {}
+            jobs_done_message = "No finished refinery jobs."
+            
+            if len(self.processed_jobs) > 0:
+                for job in self.processed_jobs:
+                    terminal_name = job["terminal_name"]
+                    if terminal_name in terminal_counts:
+                        terminal_counts[terminal_name] += 1
+                    else:
+                        terminal_counts[terminal_name] = 1
+                
+                jobs_done_message = f"{len(self.processed_jobs)} jobs have completed. jobs={json.dumps(terminal_counts)}. "
+            
+            active_jobs_message = "No active jobs."
+            if len(self.active_jobs) > 0:
+                current_time = int(time.time())
+                next_job = min(
+                    [job for job in self.active_jobs if job["date_expiration"] > current_time],
+                    key=lambda job: job["date_expiration"],
+                    default=None
+                )
+                next_job_terminal = next_job["terminal_name"]
+                duration = convert_to_minutes.convert_to_str(next_job["date_expiration"] - current_time)
+
+                active_jobs_message = f"{len(self.active_jobs)} active jobs, the next being finished in {duration} at '{next_job_terminal}'. "
+            
+            return {"success": True, "instructions": f"summarize in natural language of the player: {active_jobs_message} {jobs_done_message}"}
+        
+        if type == "delete_processed_work_orders":
+            self.refinery_jobs, success = self.uex2_service.get_refinery_jobs()
+            if not success:
+                return {"success": False, "error": self.refinery_jobs, 
+                        "instructions": "There has been an error trying retrieving current refinery work orders."}
+            if len(self.refinery_jobs) <= 0:
+                return {"success": False, "instructions": "No current refinery work orders."}
+            
+            current_time = int(time.time())
+            deleted_ids = []
+            errors = []
+            for job in self.refinery_jobs:
+                if job["date_expiration"] <= current_time:
+                    response, success = self.uex2_service.delete_refinery_job(job["id"])
+                    if success:
+                        deleted_ids.append(job["id"])
+                    else: 
+                        errors.append((job["id"], response))
+                                      
+            deleted_ids_str = ", ".join(str(id) for id in deleted_ids)
+            errors_str = "; ".join(f"ID {job_id}: {error}" for job_id, error in errors)
+
+            return {"instructions": f"Sumarize in a consize sentence in natural language of the player: Deleted Job IDs: {deleted_ids_str}. Errors: {errors_str}. "}
+
         return "Ok"
+    
 
     def add_work_order(self, work_order):
         station = work_order["work_order"]["station_name"]
@@ -225,56 +297,28 @@ class MiningManager(FunctionManager):
 
         return self.uex2_service.add_refinery_job(uex_refinery_order)
 
-    def save_missions(self):
-        """Save mission data to a file."""
-        filename = self.mining_file_path
-        with open(filename, 'w') as file:
-            missions_data = {}
-            for mission_id, mission in self.missions.items():
-                mission_dict = mission.to_dict()
-                
-                # mission_dict = mission.__dict__.copy()
-                mission_dict['packages'] = list(mission_dict['packages'])  # Convert set to list
+    def activate_refinery_job_monitoring(self, refinery_jobs):
+        self.scheduler.remove_all_jobs()
+        
+        if len(refinery_jobs) <= 0:
+            print_debug("No refinery jobs to activate")
+            return
+        
+        current_time = int(time.time())
+        # Filter for active jobs
+        self.active_jobs = [job for job in refinery_jobs if job["date_expiration"] - current_time > 0]
 
-                # Convert pickup and drop-off locations to a serializable format if needed
-                # Depending on how they are stored, you might need similar conversion
-                
-                missions_data[mission_id] = mission_dict
-            json.dump(missions_data, file, indent=3)
+        # processed jobs
+        self.processed_jobs = [job for job in refinery_jobs if job["date_expiration"] - current_time <= 0]
 
-    def load_missions(self):
-        """Load mission data from a file."""
-        filename = self.mining_file_path
-        try:
-            if os.path.exists(filename):
-                with open(filename, 'r') as file:
-                    data = json.load(file)
-                    for mid, mission_data in data.items():
-                        print_debug(f"loading mission: {mission_data}")
-                        mission = DeliveryMission()
+        for job in self.active_jobs:
+            # Schedule the action to be executed once the job expires
+            self.scheduler.add_job(self.execute_action, 'date', run_date=time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(job["date_expiration"])), args=[job])
+        
+    def execute_action(self, job):
+        print(f"Executing action for job {job['id']}")
 
-                        # Grundlegende Attribute aktualisieren
-                        mission.id = mission_data['id']
-                        mission.revenue = mission_data['revenue']
+        self.overlay.display_overlay_text(f"Refinery job {job['id']} finished @{job['terminal_name']}.", display_duration=10000)
 
-                        # Sets und Listen rekonstruieren
-                        mission.packages = set(mission_data['packages'])
-                        
-                        # Dictionaries für pickup und drop-off locations rekonstruieren
-                        mission.pickup_locations = {int(k): v for k, v in mission_data['pickup_locations'].items()}
-                        mission.drop_off_locations = {int(k): v for k, v in mission_data['drop_off_locations'].items()}
+        # maybe voice ?
 
-                        # MissionPackages für jede package_id erstellen
-                        for package_id in mission.packages:
-                            mission_package = MissionPackage()
-                            mission_package.mission_id = mission.id
-                            mission_package.package_id = package_id
-                            mission_package.pickup_location_ref = mission.pickup_locations.get(package_id)
-                            mission_package.drop_off_location_ref = mission.drop_off_locations.get(package_id)
-                            mission.mission_packages.append(mission_package)
-
-                        self.missions[mission.id] = mission  
-                        print_debug(f"loaded mission: {mission.to_json()}")
-        except Exception as e:
-            print(f"Error loading missions: {e}")
-            traceback.print_exc()

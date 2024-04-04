@@ -90,6 +90,12 @@ class FunctionManager(ABC):
         self.config = config
         self.secret_keeper = secret_keeper
 
+    def after_init(self):
+        """  
+            This method can be implemented to execute logic that needs to be run after all initialization steps.
+        """
+        pass
+    
     @abstractmethod
     def register_functions(self, function_register):
         """  

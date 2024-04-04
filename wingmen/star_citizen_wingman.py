@@ -17,7 +17,7 @@ from wingmen.star_citizen_services.uex_api import UEXApi
 from wingmen.star_citizen_services.overlay import StarCitizenOverlay
 from wingmen.star_citizen_services.function_manager import StarCitizensAiFunctionsManager, FunctionManager
 
-DEBUG = False
+DEBUG = True
 
 
 def print_debug(to_print):
@@ -207,6 +207,7 @@ class StarCitizenWingman(OpenAiWingman):
             for ai_function_manager in self.ai_functions_manager.get_managers(new_context):
                 ai_function_manager: FunctionManager
                 functions_prompt += ai_function_manager.get_function_prompt()
+                ai_function_manager.after_init()
             
             context_prompt += functions_prompt
 

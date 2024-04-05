@@ -383,17 +383,18 @@ class Wingman(FileCreator):
                         printr.print(f"modifier down {modifier}",console_only=True)
                     key_module.keyDown(modifier)
                     active_modifiers.insert(0, modifier)  # we build a reverse list, as we want to release in the opposite order
+
                     
             if entry.get("hold"):
                 if self.debug or DEBUG:
-                    printr.print(f"press and hold{entry['hold']}: {modifier}",console_only=True)
+                    printr.print(f"press and hold ({entry['hold']}s): {key}",console_only=True)
                 key_module.keyDown(key)
                 time.sleep(entry["hold"])
                 key_module.keyUp(key)
             elif entry.get("typewrite"):  # added very buggy, as it is keyboard-layout sensitive :(
                 if self.debug or DEBUG:
                     printr.print(f"typewrite: {entry.get('typewrite')}",console_only=True)
-                key_module.typewrite(entry["typewrite"], interval=0.01)
+                key_module.typewrite(entry["typewrite"], interval=0.005)
             else:
                 if self.debug or DEBUG:
                     printr.print(f'press {key}',console_only=True)
@@ -401,7 +402,7 @@ class Wingman(FileCreator):
 
             if entry.get("modifier"):
                 if self.debug or DEBUG:
-                    printr.print(f'down {entry.get("modifier")}',console_only=True)
+                    printr.print(f'up {entry.get("modifier")}',console_only=True)
                 key_module.keyUp(entry.get("modifier"))
 
             if len(active_modifiers) > 0:

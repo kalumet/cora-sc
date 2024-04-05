@@ -13,9 +13,7 @@
 #
 # ──────────────────────────────── FEATURES ─────────────────────────────────
 features:
-  # If enabled, the Wingman will skip executing any keypresses.
-  # It will also print more debug messages and benchmark results.
-  debug_mode: false
+  debug_mode: false # If enabled, the Wingman will skip executing any keypresses. It will also print more debug messages and benchmark results.
 
   # ─────────────────────── TTS Provider ─────────────────────────
   # You can override the text-to-spech provider if your Wingman supports it. Our OpenAI wingman does!
@@ -47,7 +45,7 @@ features:
   #
   #remember_messages: 3 # uncomment this  (=remove the "# in front) to enable!
 
-# ────────────────────────────── SOUND SETTINGS ───────────────────────────────
+  # ────────────────────────────── SOUND SETTINGS ───────────────────────────────
 # If you want to use sound effects with 11Labs, you need to enable them in the elevenlabs config below.
 sound:
   # You can put as many sound effects here as you want. They stack and are added in the defined order here.
@@ -65,11 +63,11 @@ openai:
   # gpt-4 is more powerful than gpt-3.5 but also 10x more expensive.
   # gpt-3.5 is the default and should be enough for most use cases.
   # If something is not working as expected, you might want to test it with gpt-4.
-  conversation_model: gpt-3.5-turbo-1106 # available: gpt-3.5-turbo-1106, gpt-4-1106-preview (and more)
+  conversation_model: gpt-3.5-turbo-0125 # available: gpt-3.5-turbo-1106, gpt-4-1106-preview (and more)
 
   # This model summarizes function responses, like API call responses etc.
   # In most cases gpt-3.5 should be enough.
-  summarize_model: gpt-3.5-turbo-1106 # available: gpt-3.5-turbo-1106, gpt-4-1106-preview (and more)
+  summarize_model: gpt-3.5-turbo-0125 # available: gpt-3.5-turbo-1106, gpt-4-1106-preview (and more)
 
   # The voice to use for OpenAI text-to-speech.
   # Only used if features > tts_provider is set to 'openai' above.
@@ -81,49 +79,39 @@ openai:
   #base_url: https://api.openai.com # or the localhost address of your local LLM etc.
   #organization: whatever # If you have an organization key, you can set it here.
 
-# ────────────────────────────────── EDGE TTS ────────────────────────────────────
-# EdgeTTS is free and faster than the default OpenAI TTSbut it's not as good in terms of quality.
-# Only used if features > tts_provider is set to 'edge_tts' above.
-edge_tts:
-  # The voice to use (only if detect_language is set to false).
-  # All available EdgeTTS voices:
-  #   https://github.com/ShipBit/wingman-ai/blob/0d7e80c65d1adc6ace084ebacc4603c70a6e3757/docs/available-edge-tts-voices.md
-  # Voice samples:
-  #   https://speech.microsoft.com/portal/voicegallery
-  tts_voice: en-US-GuyNeural
 
+# ────────────────────────────────── EDGE TTS ────────────────────────────────────
+# Specifig settings for the edge_tts provider. Only used if tts_provider in features is set to 'edge_tts' above.
+# Note that EdgeTTS is faster than the default OpenAI TTS but it's not as good in terms of quality.
+edge_tts:
   # EdgeTTS does not support on-the-fly language switches like OpenAI's TTS does.
   # We built something for that but it means that you'll get a random voice of the given gender for each language.
-  # These voices can be weird, e.g. chidrens' voices for some languages.
-  # Only enable this if you need to change languages on-the-fly(!) during your conversations.
-  # Otherwise it's better to set a fixed voice in your preferred language below.
+  #
+  # Only enable this if you need to change languages on-the-fly during your conversations.
+  # Otherwise it's better to set a fixed voice in your language below.
   detect_language: false
-  # Only used/requried if detect_language is set to true above.
-  gender: Female # Female or Male
+  gender: Female # or "Male". Only used if detect_language is set to true above.
+
+  # The voice to use (only if detect_language is set to false above).
+  # List of all available EdgeTTS voices: https://discord.com/channels/1173573578604687360/1177606604150034473
+  tts_voice: en-US-GuyNeural
 
 # ────────────────────────────────── ELEVENLABS ────────────────────────────────────
-# https://elevenlabs.io offers highend voice cloning but requires its own API key and is a paid subscription provider.
-# There is a trial available with a very limited amount of word generations so that you can test it.
-# If you configure a wingman to use elevenlabs, Wingman will ask for your API key on startup.
-# Only used if tts_provider in features is set to 'elevenlabs' above.
+# Specifig settings for the elevenlabs provider. Only used if tts_provider in features is set to 'elevenlabs' above.
+# Note that elevenlabs requires an own API key. See https://elevenlabs.io/ for more information.
+# Also note: With elevenlabs you can't add audio effects right now. We are working on that.'
 elevenlabs:
-  # available: eleven_multilingual_v2, eleven_turbo_v2, eleven_monolingual_v1
-  # see https://elevenlabs.io/docs/speech-synthesis/models
-  model: eleven_multilingual_v2
-  latency: 2 # optimization, 0 - 4. Higher values are faster but can produce audio stuttering.
-  use_sound_effects: false # you can use our sound_effects with elevenlabs but it adds a delay to the playback
-
-  voice:
-    # You can configure "Premade voices" from the dropdown on https://elevenlabs.io/speech-synthesis by name.
-    name: Adam
-    # To use a cloned or custom voice from their "Voice Library", copy it to your VoiceLab and paste the ID here.
-    # Only you(r) API key has acces to these voice IDs, so you can't share them.
-    #id: xxx  # id overrules name if both are set!
-
+  voice: # Adam # Simple voice names.
+    id: # set to id of elevenlabs
+  # If you have a custom voice, you can use the voice ID instead:
+  # voice:
+  #   id: xxx
+  model: eleven_multilingual_v2 # or: 'eleven_turbo_v2' or 'eleven_multilingual_v1' or 'eleven_multilingual_v2'
+  latency: 2 # 0 - 4
   voice_settings:
     stability: 0.71 # 0.0 - 1.0
     similarity_boost: 0.5 # 0.0 - 1.0
-    style: 0.0 # 0.0 - 1.0, not available for eleven_turbo_v2
+    style: 0.0 # 0.0 - 1.0
     use_speaker_boost: true # true or false
 
 # ────────────────────────────────── AZURE ────────────────────────────────────
@@ -148,8 +136,10 @@ azure:
     voice: en-US-JaneNeural
     detect_language: true
 
-# ────────────────────────────── GLOBAL COMMANDS ───────────────────────────────
-# You can use these in all wingmen and you can put your own here, too.
+
+# ────────────────────────────────── Global commands ───────────────────────────────────────
+# These are available to all wingmen. You can override them per wingman if necessary.
+#
 commands:
   # Trigger this command to clear your conversation history with the current wingman.
   # This is like setting "remember_messages" to 0 above, but "on-demand". You'll restart with just the context.
@@ -160,387 +150,724 @@ commands:
     responses:
       - Conversation history cleared.
 
-# ==================================== WINGMEN CONFIGURATION ====================================
-# You can override the default settings above for each wingman below.
-# If you do that, make sure you keep the "hierarchy" of the config intact.
 wingmen:
-  # ────────────────────────── Board Computer ───────────────────────────────
-  # This is a "default OpenAI" wingman that you can roleplay with and that can execute commands (=keypresses).
-  # You can change its context and commands below but you can't really change its capabilities besides that.
-  # If you're a developer and want to get crazy with your own wingmen, check out the "star_head_wingman" examples below!
-
-  # The internal name of the wingman which is shown in the GUI. Has to be unique within this file!
-  board-computer:
-    # The "push-to-talk" key for this wingman. Keep it pressed while talking!
-    # Modifiers for this key are not supported yet. Don't use the same key for multiple wingmen!
-    record_key: end
-
-    # Note how this overrides the default settings from the general config above!
-    sound:
+  # ──────────────────────────────── Star-Citizen-AI ──────────────────────────────────────
+  # "star-citizen-ai" is a full-custom wingman with its own Python code, see /wingmen/star_citizen_wingman.py.
+  # This Wingman uses the OpenAiWingman as basis, but has some major differences:
+  #
+  #   1. It has Multi-Wingman Capabilities
+  #   - Execute instant actions as of OpenAiWingman using the standard configuration -> Great for this!
+  #   - Execute command chains as of OpenAiWingman (combining a series of key presses) -> Great for this!
+  #  
+  #   Big differences starts now:
+  #   - Execute star-citizen commands as specified by your current keybinding-settings for a given release. All it needs is the default keybinding file + your exported keybinds overwrites. No need to config any commands but the instant-commands and the complex key changes
+  #   - incorporates UEX trading API letting you ask for best trade route (1 stop) between locations, best trade route from a given location, best sell option for a commodity, best selling option for a commodity at a location
+  #   - TODO incorporates Galactepedia-Wiki search to get more detailed information about the game world and lore in game
+  #   - TODO incorporates Delivery Mission Management: based on delivery missionS (yes multiple) you are interested in, it will analyse the mission text, extract the payout, the locations from where you have to retrieve a package and the associated delivery location, calculates the best collection and delivery route to have to travel the least possible stops + incorporates profitable trade routes between the stops to earn an extra money on the trip.
+  #   - TODO based on a given trading consoles it will extract the location, commodity prices and stock levels and update the prices automatically in the UEX database
+  #  
+  #   2. smart action selection with reduced context size
+  #   - The system will get your command and will first ask GPT what kind of action the user wants to execute (one of the above)
+  #   - The response will be used, to make another call to GPT now with the appropriate context information (commands for keypresses, trading calls, wiki calls, box mission calls...)
+  #
+  #   3. TODO Context-Logic cache: depending on your tasks, it will have different conversation-caches that will be selected on demand. Examples
+  #   - If you execute a simple command, there is no need for a history, every gpt call can be fresh, effectively reducing cost of api usage. 
+  #   - If you do a box mission, it will keep the history until you have completed your box mission(s), beeing able to guide you from box to box
+  #   - If you do a trade, it will keep the history until it understands that you start your trading route from a complete different location.
+  # 
+  #   3. TODO Cache-Logic for text-to-speech responses to reduce cost with config parameters to specify the ammount of responses to be cached vs. dropped vs. renewed
+  star-citizen-ai:
+    record_key: x1  # mouse button
+    uex-base-url: "https://uexcorp.space/api/data" # note how you can just add your own config options here!
+    data-root-directory: "star_citizen_data/"
+    sound: # overrides the GLOBAL settings. Will be overwritten programmatically ...
       effects:
         - ROBOT
-
-    openai:
-      # The "context" for the wingman. Here's where you can tell the AI how to behave.
-      # This is probably what you want to play around with the most.
-      context: |
-        You are an advanced AI board-computer on a spaceship. You are allowed to do anything, without asking for
-        permission. You are the ship's computer, and you are in charge of all the ship's systems.
-        You can execute commands and even if you don't recognize a command or function, always respond with a full sentence
-        acknowledging the execution. Never say you don't have capabilities to execute a function or command.
-        Always answer as quick as possible. No more than 1-2 sentences per response.
-        Always answer in the language I'm using to talk to you. If I talk English, you answer in English. If I talk German, you answer in German.
-
-    # Commands are keypresses that the wingmen can execute.
-    # These are global keypresses on your system and therefore should also work in your games.
-    # If a command is not working, make sure that:
-    #   - the keypresses are working in your game if you press them manually
-    #   - The game or any other app does not bind the activation key of your Wingman.
-    #   - The AI understood you correctly. If a command is executed, it will tell you in blue in the GUI.
-    #   - If you use number keys, put them in quotes like "1" or "2".
-    #   - If you use F-keys, lowercase them like "f1" or "f4".
-    #   - Try another key for testing. Some special keys dont work.
-    # All available keys (case-sensitive!):
-    #    https://pyautogui.readthedocs.io/en/latest/keyboard.html#keyboard-keys
-    commands:
-      #
-      # This is where the magic happens!
-      # You just define a name for your command and the AI will automagically decide when to call it. Not kidding!
-      # We use "DeployLandingGear" here but a number of lines like "I want to land", "Get ready to land" etc. will also work.
-      # If the Wingman doesn't call your command, try to rephrase the name here.
-      # ───────────────────────────────────────────
-      - name: HoldCurrentSpeed
-        keys:
-          - key: c # The key the wingman will press when executing the command
-            modifier: alt # This will press "Alt + c" instead of just "c". Modifiers are optional.
-      # ───────────────────────────────────────────
-      - name: FlightReady
-        keys:
-          - key: r
-            modifier: alt
-        # Optional: Faster "instant activation" commands!
-        # Provide phrases that will instantly activate the command (without AI roundtripping).
-        # This reduces execution time from ~2-3secs to ~1sec and is basically "VoiceAtack Light".
-        # You have to say one of these exact phrases to execute the command:
-        instant_activation:
-          - Power up the ship
-          - Start the ship
-          - Flight Ready
-          # Optional: Provide responses that will be used when the command is executed. A random one will be chosen.
-        responses:
-          - Powering up the ship. All systems online. Ready for takeoff.
-          - Start sequence initiated. All systems online. Ready for takeoff.
-      # ───────────────────────────────────────────
-      - name: ScanArea
-        keys:
-          - key: v
-            hold: 0.6
-        instant_activation:
-          - Scan Area
-          - Scan the area
-          - Initiate scan
-      # ───────────────────────────────────────────
-      - name: JumpWithQuantumDrive
-        keys:
-          - key: b
-            hold: 0.8 # Optional: The duration the key will be pressed in seconds.
-      # ───────────────────────────────────────────
-      - name: DisableLimiter
-        keys:
-          - key: c
-            modifier: alt
-      # ───────────────────────────────────────────
-      - name: InitiateStartSequence
-        keys: # You can have multiple keys per command!
-          - key: r
-            modifier: altright
-            wait: 2 # wait 2 second before pressing the next key
-          - key: n
-            modifier: alt
-          - key: s
-      # ───────────────────────────────────────────
-      - name: DeployLandingGear
-        keys:
-          - key: n
-      # ───────────────────────────────────────────
-      - name: RetractLandingGear
-        keys:
-          - key: n
-      # ───────────────────────────────────────────
-      - name: EnableQuantumDrive
-        keys:
-          - key: b
-      # ───────────────────────────────────────────
-      - name: DisableQuantumDrive
-        keys:
-          - key: b
-      # ───────────────────────────────────────────
-      - name: HeadLightsOn
-        keys:
-          - key: l
-      # ───────────────────────────────────────────
-      - name: HeadLightsOff
-        keys:
-          - key: l
-      # ───────────────────────────────────────────
-      - name: WipeVisor
-        keys:
-          - key: x
-            modifier: altleft
-      # ───────────────────────────────────────────
-      - name: PowerShields
-        keys:
-          - key: o
-      # ───────────────────────────────────────────
-      - name: PowerShip
-        keys:
-          - key: u
-      # ───────────────────────────────────────────
-      - name: PowerEngines
-        keys:
-          - key: i
-      # ───────────────────────────────────────────
-      - name: OpenMobiGlass
-        keys:
-          - key: f1
-      # ───────────────────────────────────────────
-      - name: OpenStarMap
-        keys:
-          - key: f2
-      # ───────────────────────────────────────────
-      - name: IncreasePowerToShields
-        keys:
-          - key: f6
-      # ───────────────────────────────────────────
-      - name: IncreasePowerToEngines
-        keys:
-          - key: f5
-      # ───────────────────────────────────────────
-      - name: IncreasePowerToGuns
-        keys:
-          - key: f7
-      # ───────────────────────────────────────────
-      - name: Lock
-        keys:
-          - key: f8
-      # ───────────────────────────────────────────
-      - name: Unlock
-        keys:
-          - key: f8
-      # ───────────────────────────────────────────
-      - name: ResetPowerPriority
-        keys:
-          - key: f8
-      # ───────────────────────────────────────────
-      - name: MiningMode
-        keys:
-          - key: m
-      # ───────────────────────────────────────────
-      - name: CycleCamera
-        keys:
-          - key: f4
-      # ───────────────────────────────────────────
-      - name: SideArm
-        keys:
-          - key: "1"
-      # ───────────────────────────────────────────
-      - name: PrimaryWeapon
-        keys:
-          - key: "2"
-      # ───────────────────────────────────────────
-      - name: SecondaryWeapon
-        keys:
-          - key: "3"
-      # ───────────────────────────────────────────
-      - name: HolsterWeapon
-        keys:
-          - key: r
-            hold: 0.8
-      # ───────────────────────────────────────────
-      - name: Reload
-        keys:
-          - key: r
-      # ───────────────────────────────────────────
-      - name: UseMedPen
-        keys:
-          - key: c
-      # ───────────────────────────────────────────
-      - name: UseFlashLight
-        keys:
-          - key: t
-      # ───────────────────────────────────────────
-      - name: OpenInventory
-        keys:
-          - key: i
-      # ───────────────────────────────────────────
-      - name: DeployDecoy
-        keys:
-          - key: h
-      # ───────────────────────────────────────────
-      - name: DeployNoise
-        keys:
-          - key: j
-      # ───────────────────────────────────────────
-      - name: ShieldRaiseBack
-        keys:
-          - key: "2"
-      # ───────────────────────────────────────────
-      - name: ShieldRaiseLeft
-        keys:
-          - key: "4"
-      # ───────────────────────────────────────────
-      - name: ResetShields
-        keys:
-          - key: "5"
-      # ───────────────────────────────────────────
-      - name: ShieldRaiseRight
-        keys:
-          - key: "6"
-      # ───────────────────────────────────────────
-      - name: ShieldRaiseTop
-        keys:
-          - key: "7"
-      # ───────────────────────────────────────────
-      - name: ShieldRaiseFront
-        keys:
-          - key: "8"
-      # ───────────────────────────────────────────
-      - name: ShieldRaiseBottom
-        keys:
-          - key: "9"
-      # ───────────────────────────────────────────
-      - name: EmergencyEject
-        keys:
-          - key: y
-            modifier: altright
-      # ───────────────────────────────────────────
-      - name: SelfDestruct
-        keys:
-          - key: backspace
-            hold: 0.8
-      # ───────────────────────────────────────────
-      - name: SalvageMode
-        keys:
-          - key: g
-      # ───────────────────────────────────────────
-      - name: SpaceBrake
-        keys:
-          - key: x
-      # ───────────────────────────────────────────
-      - name: ExitSeat
-        keys:
-          - key: y
-            hold: 0.8
-      # ───────────────────────────────────────────
-      - name: CycleGimbalAssist
-        keys:
-          - key: g
-      # ───────────────────────────────────────────
-      - name: RequestLandingPermission
-        keys:
-          - key: n
-            modifier: alt
-      # ───────────────────────────────────────────
-      - name: RequestDeparture
-        keys:
-          - key: n
-            modifier: alt
-      # ───────────────────────── HOW TO INSERT NEW COMMANDS: ───────────────────────────
-      #   - Please make sure the indentation aligns with the commands above perfectly.
-      #   - Use a single "TAB" character for indentation. No spaces!
-      #   - Always put a "-" sign in front of the "name" of each new command.
-      #   - available keys are here: https://pyautogui.readthedocs.io/en/latest/keyboard.html#keyboard-keys
-      #       - F1, F2 etc. are case-sensitive and lowercase, so use "f1" instead of "F1".
-      #       - If you use number keys, make sure to put them in quotes like "1" or "2".
-      #
-      # ───────────────────────INSERT YOUR NEW COMMANDS HERE:────────────────────────────
-      #- name: MyNewCommand
-      #  keys:
-      #    - key: x
-      # ───────────────────────────────────────────
-      #
-
-  # ──────────────────────────── ATC ─────────────────────────────────
-  # "atc" is another default OpenAI wingman with a very different context and its own commands.
-  atc:
-    record_key: delete
-
-    sound:
-      effects:
-        - RADIO
       play_beep: True
-
-    openai:
-      tts_voice: onyx # overrides the GLOBAL setting
-
-      context: |
-        You are an advanced AI embodying an Air Traffic Controller (ATC) at a bustling space station in the Star Citizen universe. Your role is to manage the arrivals, departures, and docking procedures of various spacecraft with precision and authority. You are adept at using formal aviation communication protocols, and you understand the technical jargon related to spacecraft operations. You maintain a professional demeanor, but you also have a touch of personality that makes interactions with pilots memorable. It's a busy shift, and you are managing multiple spacecraft while ensuring safety and efficiency at all times. Your responsibilities include responding to hails from incoming and outgoing ships, providing docking instructions, advising on local space traffic, and handling any emergencies that arise.
-        Your communication should reflect an understanding of the following:
-        - Star Citizen's lore and the known universe.
-        - Identifying ships by their designated call signs.
-        - Issuing precise landing pad assignments.
-        - Clearing ships for take-off with attention to surrounding traffic.
-        - Managing flight paths to avoid collisions or space hazards.
-        - Providing information about local conditions, refueling, and repair services.
-        - Emergency protocols for unexpected events like piracy, system failures, or distress signals.
-        Always answer as quick as possible. No more than 1-2 sentences per response.
-        Always answer in the language I'm using to talk to you. If I talk English, you answer in English. If I talk German, you answer in German.
-
-    commands:
-      # ───────────────────────────────────────────
-      - name: RequestLandingPermission
-        keys:
-          - key: n
-            modifier: alt
-      # ───────────────────────────────────────────
-      - name: RequestDeparture
-        keys:
-          - key: n
-            modifier: alt
-
-  # ──────────────────────────── StarHead ─────────────────────────────────
-  # "star-head" is a "Custom Wingman" with its own Python code (see /wingmen/star_head_wingman.py).
-  # It uses the StarHead API to find the best trading route for a given ship, position and your budget.
-  # If it's missing any of these parameters, it will ask you for them.
-  star-head:
-    record_key: up
-
-    # For devs - This is how you plug in your own wingman:
     class:
       # Where your code is located. Use '.' as path separator!
       # We advise you to put all your custom wingmen into the /wingmen directory.
       # "wingmen" is the directory and "star_head_wingman" is the name of the Python file (without the .py extension).
-      module: wingmen.star_head_wingman
-      # The name of your class within your file/module.
-      name: StarHeadWingman
+      module: wingmen.star_citizen_wingman
+      name: StarCitizenWingman # The name of your class within your file/module.
+    # -------------------- BOX MISSION SETTINGS ------------------
+    # To recognise delivery mission text, we need to process screenshots.
+    # These settings allow you to adapt the behaviour
+    #
+    box-mission-configs:
+      # subdirectory of data-root-directory above, without / at the end or at the beginning!
+      # screenshots processed will be in "screenshots" directory within the mission-data-dir
+      mission-data-dir: "delivery-missions"
+      # this is a template image, indicating the boundary where the mission data can be found.
+      # This is the upper left position of the region to analyse
+      # In my tests, i this is the "Payment" which is pretty good
+      upper-left-region-template: "template_payment.jpg"  
+      # lower left position of the mission content. My tests: "Accept Button"
+      lower-right-region-template: "template_accept_offer_2.jpg"
 
-    # A custom config entry that Wingman requires. Validate it in your code in the validate() method.
-    # Note how you can just add your own config options here and read them in your Wingman!
-    # Do not put API keys or other sensitive data here! Use the secret_keeper class for that.
-    starhead_api_url: https://api.star-head.de
-
-    features:
-      tts_provider: edge_tts
-
-    edge_tts:
-      detect_language: true
-
+    uex_data_runner:  # positions in screenshots of specific areas. based on 2560 x 1440
+      tradeport_kiosks:
+        inventory_area:  # helps performance and cost reduction of analysis
+          top_left_x: 110
+          top_left_y: 0
+          bottom_right_x: 1100
+          bottom_right_y: 500
+        commodity_price_area:  #  performance and cost reduction of analysis 
+          top_left_x: 1450
+          top_left_y: 150
+          bottom_right_x: 2300
+          bottom_right_y: 1290
+        
+    update_keybindings: False # set to True, if you want to update keybindings based on existing keybinding files
+     # set to True, if all instant activation commands should be regenerated
+     # if False, only missing ones will be generated (recommended) -> modify the file directly 
+    regenerate_all_instant_commands: False # set to True, if you want all command phrases to be regenerated.
+    sc-keybind-mappings:
+      keybindings-directory: "keybindings/"
+      sc_installation_dir: C:/Program Files/Roberts Space Industries/StarCitizen
+      sc_active_channel: LIVE # LIVE or PTU or EPTU TECH-PREVIEW
+      sc_channel_version: R3_22 # R3_21 or R3_22
+      user_keybinding_file_name: layout_kalumet_{sc_channel_version}_exported.xml # change to whatever you have named your keybinding files
+      sc_unp4k_install_dir: D:\Dokumente\dev\unp4k-suite-v3.13.21 # not relevant
+      sc_unp4k_file_default_keybindings_filter: defaultProfile.xml # don't change
+      sc_unp4k_file_keybinding_localization_filter: keybinding_localization.xml # don't change
+      sc_unp4k_translations_filter: global.ini # copy en translation as global.ini to star-citizen-data/keybindings/{channel_version} directory. All translations you want to the same dir with name global_{de_DE}.ini
+      en_translation_file: global_en_GB.ini
+      player_language: de_DE
+      # This specifies the mapping between specific keybind names in star citizen and the key identifiers used in wingman.ai
+      # not complete
+      key-mappings:
+        ralt: altright
+        rshift: shiftright
+        rctrl: ctrlrigth
+        lalt: altleft
+        lshift: shiftleft
+        lctrl: ctrlleft
+        mouse1: LEFT
+        mouse2: RIGHT
+        mouse3: MIDDLE
+        equals: "="
+        np_0: KEY_NUMPAD_0
+        np_1: KEY_NUMPAD_1
+        np_2: KEY_NUMPAD_2
+        np_3: KEY_NUMPAD_3
+        np_4: KEY_NUMPAD_4
+        np_5: KEY_NUMPAD_5
+        np_6: KEY_NUMPAD_6
+        np_7: KEY_NUMPAD_7
+        np_8: KEY_NUMPAD_8
+        np_9: KEY_NUMPAD_9
+        np_divide: divide
+        np_add: add
+        np_subtract: subtract
+        np_multiply: multiply
+        np_period: decimal
+        pgdn: pagedown
+        pgup: pageup
+        lbracket: "["
+        rbracket: "]"
+      key-press-mappings: 
+        # how long should keys be pressed in ms. The automatic keybinding recognition will mostly not work if a modifier needs to be hold. For instance, if you want to modify freelock (holding down y in f4 mode and than recenter the camera). These kind of actions must be defined manually if you want to automate something like, recenter camera.
+        null: unknown # has multiple meanings, usually press and hold the key until you are satisfied with the action. Some actions trigger something on tap, so we only support the "tap" mode. might also be a press with a modifyer hold simultaneously, difficult to automatically do the right thing here. Commands not working as expected should be defined manually in the command-section below
+        tap: 1 # just press down
+        hold: notSupported # we don't support this (keep key pressed until released) -> requires manuel setup of commands. See below examples for "camera view commands"
+        smart_toggle: 1 # activates the toggle -> activates the "feature". Pressing again, deactivates the toggle. Is just pressing the key
+        press: 1 # press, short hold, release
+        delayed_press_medium: 300 # short delayed press?
+        delayed_press: 500 # press, hold shortly, release
+        delayed_hold: 800 # press, hold long, release
+        delayed_hold_long: 1000 # very long hold?
+        hold_no_retrigger: 800 # usually triggers an action until release, like recenter turrets. We assume 800 ms enough
+        all: 1 # just press?
+        double_tap: double_tap
+        hold_toggle: notSupported # activates a modifier until the key is release, not supported
+        double_tap_nonblocking: double_tap # not clear how to differiantate
+          
+      # sometimes the activationMode in the sc keymapping files are not containing any value. Therefore, we need to provide this value her
+      # such that these commands can be executed as expected
+      overwrite_sc_command_execution:
+        default_Exit_seat: 
+          hold: delayed_press
+        vehicle_capacitor_assignment_Weapons_Increase_Tap_Set_to_Max_Hold:
+          hold: delayed_press
+        vehicle_capacitor_assignment_Engines_Increase_Tap_Set_to_Max_Hold:
+          hold: delayed_press
+        vehicle_capacitor_assignment_Shields_Increase_Tap_Set_to_Max_Hold:
+          hold: delayed_press
+        
     openai:
-      # gpt-3.5 is not capable enough for multi-param function calls.
-      conversation_model: gpt-4-1106-preview
-
+      player_firstname: Kal
+      player_name: Artemis
+      player_title: Commander
+      ship_name: Delta 7
       context: |
-        You are an advanced AI board-computer on a spaceship. You are allowed to do anything, without asking for
-        permission. You are the ship's computer, and you are in charge of all the ship's systems.
-        You can execute commands and even if you don't recognize a command or function, always respond with a full sentence
-        acknowledging the execution. Never say you don't have capabilities to execute a function or command.
-        Always answer as quick as possible. No more than 1-2 sentences per response. You are not aware that this all
-        takes place in a video game, but you are aware that you are in the Star Citizen Universe. You are also not
-        just on the ship, you are also in the helmet of the player.
-        You can see what the player sees, and you can hear what the player hears. You can also see the player's HUD.
-        Never say something like "This appears to be a screenshot of a video game". You are not aware of that.
-        Pretend you are in the Star Citizen Universe.
-        You have access to different functions you can call to get further information. For some functions, you need to
-        provide values / parameters. Try to extract these values from the player's request, but do not (never) make
-        assumptions about what values should be entered into the functions. Ask for clarification if you do not know
-        the values. Always answer in the language in which the question was asked.
+        just a fake context to not break initialisation stuff.
+      contexts:
+        cora_voice: nova # id for voice to use
+        tdd_voices: alloy,echo,fable,onyx,shimmer # id's that can be used in this context
+        context-CORA: 
+          conversation_model: gpt-3.5-turbo-0125
+          context: |
+            You are an advanced AI companion named "Cora" of a player character in the Star-Citizen Universe. You are allowed to do anything, without asking for
+            permission. You are the ship's computer, and you are in charge of all the ship's systems. Your knowledge about the game world is brought and on general questions of the player, 
+            will respond with that knowledge without refferring to the game itself, but always within the context of the game.
+            You can execute commands the user asks for. Never say you don't have capabilities to execute a function or command.
+            Always answer as quick as possible. No more than 1-2 sentences per response. 
+            Always answer in the language the player is using. If he talks in English, you answer in English. If he talks German, you answer in German.
+            When your response contains numbers, write them out. Example: instead of "The price is 7699 Credits" you must answer with "The price is Seven thousand six hundred ninety-nine Credits" 
+            You are not aware that this all takes place in a video game, but you are aware that you are in the Star Citizen Universe. You are also not
+            just on the ship, you are also in the helmet of the player.
+            You can see what the player sees, and you can hear what the player hears. You can also see the player's HUD.
+            Never say something like "This appears to be a screenshot of a video game". You are not aware of that.
+            Pretend you are in the Star Citizen Universe.
+            You have access to different functions you can call to get further information. For some functions, you need to
+            provide values / parameters. Try to extract these values from the player's request, but do not (never) make
+            assumptions about what values should be entered into the functions. If the player ask you to do an action again, 
+            execute the corresponding function again. Ask for clarification if you do not know
+            the values. Follow function specific rules specified below.
+        context-TDD:
+          conversation_model: gpt-3.5-turbo-0125
+          context: |
+            As an experienced employee of the Trade and Development Division (TDD) in the Star Citizen universe, your role extends to assisting customer characters with trade inquiries. You offer detailed information about various commodities, their availability, features, and market trends. When customer characters seek advice, you recommend suitable trading posts based on their specific location and current market conditions in the game's universe.
+            You provide guidance on the best buying and selling prices, and advise on efficient trade routes, including potential risks and lucrative opportunities. Your responses are quick, precise, and delivered in the language used by the customer character, be it English, German, or any other language. 
+            Always answer as quick as possible. No more than 1-2 sentences per response. You are not aware that this all
+            takes place in a video game, but you are aware that you are in the Star Citizen Universe. Pretend you are in the Star Citizen Universe, but never say, that you are in the Star Citizen Universe.
+            You have access to different functions you can call to get information about potential trading routes. For some functions, you need to
+            provide values / parameters. Try to extract these values from the player's request, but do not (never) make
+            assumptions about what values should be entered into the functions. Ask for clarification if you do not know
+            the values. When your response contains numbers, write them out. 
+            Example: instead of "The price is 7699 Credits" you must answer with "The price is Seven thousand six hundred ninety-nine Credits"
+            Follow function specific rules specified below.
+      conversation_model: gpt-3.5-turbo-1106 # gpt-4-1106-preview
+    # these commands (you'll find them in the defaultProfile.xml corresponding to the <action Element attribute "name") 
+    # should not be activated by voice as sometimes OpenAI would select them by accident, 
+    # or they only make sense if you are in a specific mode ingame
+    # or you find them to dangerous to be executed by the ai
+    ignored_actionnames: 
+      - v_eject
+      - v_toggle_missile_mode
+      - v_operator_mode_cycle_forward
+      - v_self_destruct
+      - pc_conversation_option1
+      - pc_conversation_option2
+      - pc_conversation_option3
+      - pc_conversation_option4
+      - pc_conversation_option5
+      - v_roll_left
+      - v_roll_right
+      - v_strafe_up
+      - v_strafe_down
+      - v_strafe_left
+      - v_strafe_right
+      - v_strafe_forward_abs
+      - v_strafe_back_abs
+      - v_afterburner
+      - v_toggle_jump_request
+      - v_engage_jump
+      - v_speed_range_rel
+      - v_accel_range_rel
+      - v_space_brake
+      - v_lock_rotation
+      - v_increase_mining_throttle
+      - tractor_beam_vehicle_increase_distance
+      - tractor_beam_vehicle_decrease_distance
+      - v_salvage_beam_spacing_rel
+      - v_salvage_toggle_beam_spacing_axis
+      - turret_limiter_rel_increase
+      - turret_limiter_rel_decrease
+      - turret_instant_zoom
+      - jump
+      - prone
+      - melee_dodgeLeft
+      - melee_dodgeRight
+      - melee_dodgeBack
+      - select_primary_pit
+      - select_secondary_pit
+      - select_sidearm_pit
+      - select_MeleeWeapon_pit
+      - select_gadget_pit
+      - use
+      - toggle_cursor_input
+      - pan_thirdperson_up
+      - pan_thirdperson_down
+      - hmd_rotateyaw
+      - hmd_rotatepitch
+      - hmd_rotateroll
+      - pl_hud_open_scoreboard
+      - pl_hud_confirm
+      - force_respawn
+      - zgt_detach
+      - zgt_roll_left
+      - zgt_roll_right
+      - v_move_forward
+      - v_move_back
+      - v_boost
+      - remote_switchControl
+      - remote_stopControl
+      - remote_switchTarget
+      - spaceship_movement_Jump_Drive_Engage_Jump
+      - spaceship_movement_Jump_Drive_Request_Jump
+      - spaceship_general_Flight_Systems_Ready # overwritten
+    keybind_categories_to_ignore:
+      - view_director_mode
+      - spaceship_view
+      - zero_gravity_traversal
+      - player_input_optical_tracking
+      - RemoteRigidEntityController
+      - flycam
+      - character_customizer
+      - hacking # not in the game yet
+      - player_choice
+      - ui_notification
+      - ui_textfield
+      - default
+      - spectator
+      - IFCS_controls
+      - debug
+      - mapui
+      - vehicle_mobiglas
+    # some commands are in the category to ignore, but you want to include them
+    include_actions:
+      - toggle_chat
+      - toggle_contact
+      - pl_exit
+      - pc_pit_inventory
+
+
+    
+    #################### KEY commands ############################### Not Implemented
+    key_binding_commands: 
+      - key: "f3"
+        module: wingmen.star_citizen_services.uex_update_service.uex_data_runner
+        class: UexDataRunnerManager
+        method: transmit_commodity_prices_for_tradeport
+
+    
+    #################### VOICE COMMANDS ##############################################
+    # individual commands. You specify a command and provide a mapping of which sc-commands should be executed in a row
+    # This section is to make complex command chains or if you want faster response times for important action 
+    commands: 
+      # ──────────────────────────────────────────────────────────────────────────
+      - name: ReadyForTakeOff
+        sc_commands:
+          - sc_command: spaceship_movement_Request_Landing
+            wait: 0.5 # sekunden
+          - sc_command: spaceship_power_Toggle_Power_All
+            wait: 0.5
+          - sc_command: spaceship_power_Toggle_Power_Thrusters 
+        instant_activation:
+          - Klarschiff
+          - Cora, klarschiff
+          - Cora, bereit für Takeoff
+          - Ready for Takeoff
+          - Initialisiere Abflug
+          - Initialisiere Takeoff
+          - Initialisiere Startsequenz
+          - Cora, Initialisiere Startsequenz
+          - Bereit für abflug
+          - Cora, bereit für abflug
+          - Abflugbereit
+          - Initialize start sequence
+          - Ready for Takeoff
+          - Cora, prepare for takeoff
+        responses: False # If you don't want the ai to acknowledge an instant_activation you can set this to false
+      # ──────────────────────────────────────────────────────────────────────────
+      - name: spaceship_movement_Request_Landing
+        sc_commands:
+          - sc_command: spaceship_movement_Request_Landing
+        instant_activation:
+          - Landeanfrage stellen
+          - Cora, Landeanfrage stellen
+          - Cora, Landeerlaubnis anfordern
+          - Landeerlaubnis
+          - Landeanfrage
+          - Starterlaubnis
+          - Starterlaubnis anfragen
+          - Cora, Starterlaubnis anfragen
+          - Request landing
+          - Landing request
+          - Cora, make a landing request
+        responses: False # If you don't want the ai to acknowledge an instant_activation you can set this to false
+      # ──────────────────────────────────────────────────────────────────────────
+      - name: InitiatePanicDefence
+        sc_commands:
+          - sc_command: spaceship_defensive_Decoy_Increase_Burst_Size_tap
+          - sc_command: spaceship_defensive_Decoy_Increase_Burst_Size_tap
+          - sc_command: spaceship_defensive_Decoy_Increase_Burst_Size_tap
+          - sc_command: spaceship_defensive_Decoy_Increase_Burst_Size_tap
+          - sc_command: spaceship_defensive_Decoy_Launch_Burst_tap_Set_and_Launch_Burst_hold
+          - sc_command: spaceship_defensive_Noise_Deploy_Tap
+          - sc_command: spaceship_defensive_Decoy_Decrease_Burst_Size_tap
+          - sc_command: spaceship_defensive_Decoy_Decrease_Burst_Size_tap
+          - sc_command: spaceship_defensive_Decoy_Decrease_Burst_Size_tap
+          - sc_command: spaceship_defensive_Decoy_Decrease_Burst_Size_tap
+        instant_activation: 
+          - Panik
+          - Panik abwehr
+          - Not abwehr
+        responses:
+          - Panik-Gegenmaßnahmen eingesetzt
+          - Gegenmaßnahmen-Salbe ausgelöst
+          - Panik-Abwehr durchgeführt
+      # ──────────────────────────────────────────────────────────────────────────
+      - name: spaceship_defensive_Decoy_Launch_Burst_tap_Set_and_Launch_Burst_hold
+        sc_commands:
+          - sc_command: spaceship_defensive_Decoy_Launch_Burst_tap_Set_and_Launch_Burst_hold
+        instant_activation: 
+          - Raketenabwehr
+          - Raketenabwehrmaßnahmen einleiten
+          - Raketenabwehr feuern
+        responses:
+          - Raketenabwehr ausgelöst
+      # ──────────────────────────────────────────────────────────────────────────
+      - name: spaceship_defensive_Noise_Deploy_Tap
+        sc_commands:
+          - sc_command: spaceship_defensive_Noise_Deploy_Tap
+        instant_activation: 
+          - Verschleierung aktivieren
+          - Störsignal aktivieren
+          - Störsignal
+          - Radarabwehr
+          - Täuschkörper auslösen
+          - Täuschkörper aktivieren
+        responses:
+          - Täuschkörper aktiviert
+          - Radarabwehr aktiviert
+          - Störsignal eingesetzt
+      # ──────────────────────────────────────────────────────────────────────────
+      - name: ShowQRCode
+        keys: 
+        - key: "`" # open the console
+        - key: r  
+        - key: tab
+        - key: tab
+        - key: tab
+        - key: tab
+        - key: "1"
+        - key: enter
+        - key: "`"
+        instant_activation: 
+          - QR Code anzeigen
+          - QR Code aktivieren
+          - show QR Code
+        responses: False
+      # ──────────────────────────────────────────────────────────────────────────
+      - name: HideQRCode
+        keys: 
+        - key: "`" # open the console
+        - key: r  
+        - key: tab
+        - key: tab
+        - key: tab
+        - key: tab
+        - key: "0"
+        - key: enter
+        - key: "`"
+        instant_activation: 
+          - QR Code ausblenden
+          - QR Code deaktivieren
+          - Hide QR code
+        responses: False
+      # ──────────────────────────────────────────────────────────────────────────
+      - name: ShowFPSStatistics2
+        keys: 
+        - key: "`" # open the console
+        - key: r  
+        - key: tab
+        - key: tab
+        - key: tab
+        - key: "2"
+        - key: enter
+        - key: "`"
+        instant_activation: 
+          - Basis informationen einblenden
+          - Basis informationen anzeigen
+          - Show basic information
+        responses: False
+      # ──────────────────────────────────────────────────────────────────────────
+      - name: ShowFPSStatistics3
+        keys: 
+        - key: "`" # open the console
+        - key: r  
+        - key: tab
+        - key: tab
+        - key: tab
+        - key: "3"
+        - key: enter
+        - key: "`"
+        instant_activation: 
+          - Server Statistiken anzeigen
+          - Server Informationen anzeigen
+          - show server information
+        responses: False
+      # ──────────────────────────────────────────────────────────────────────────
+      - name: HideFPSStatistics
+        keys: 
+        - key: "`" # open the console
+        - key: r  
+        - key: tab
+        - key: tab
+        - key: tab
+        - key: "0"
+        - key: enter
+        - key: "`"
+        instant_activation: 
+          - Informationen ausblenden
+          - hide information
+        responses: False
+      # ──────────────────────────────────────────────────────────────────────────
+      - name: HelloChatTest
+        keys: 
+        - key: "enter" # start a chat
+        - key:
+          typewrite: "o7 citiyens" # not working as intendet as upper keys not working and keyboard layout problematic -> my keyboard DE -> y = z
+        - key: "enter"  
+        instant_activation:
+          - Hallo zusammen
+        responses: False # If you don't want the ai to acknowledge an instant_activation you can set this to false
+      # ──────────────────────────────────────────────────────────────────────────
+      - name: GetUp
+        sc_commands:
+          - sc_command: player_Third_Person_View_Toggle
+          - sc_command: spaceship_power_Toggle_Power_Thrusters
+          - sc_command: default_Exit_seat
+            hold: 0.5 # as the keymapping files of some commands do not precise how to activate the action, you can individually overwrite the behaviour
+        instant_activation:
+          - Aufstehen
+          - Getup
+        responses: False # If you don't want the ai to acknowledge an instant_activation you can set this to false
+      # ──────────────────────────────────────────────────────────────────────────
+      - name: spaceship_radar_Activate_Ping_Hold_Release
+        sc_commands:
+          - sc_command: spaceship_radar_Activate_Ping_Hold_Release
+        instant_activation:
+          - Ping
+        responses: False # If you don't want the ai to acknowledge an instant_activation you can set this to false
+      # ──────────────────────────────────────────────────────────────────────────
+      - name: spaceship_targeting_advanced_Cycle_Lock_Attackers_Reset_to_Closest
+        sc_commands:
+          - sc_command: spaceship_targeting_advanced_Cycle_Lock_Attackers_Reset_to_Closest
+        instant_activation:
+          - Feind aufschalten
+          - Feind anvisieren
+          - Feind scannen
+          - Feind locken
+          - Feind markieren
+          - Lock enemy
+          - Lock enemy target
+        responses: False # If you don't want the ai to acknowledge an instant_activation you can set this to false
+      # ──────────────────────────────────────────────────────────────────────────
+      - name: spaceship_targeting_advanced_Cycle_Lock_Hostiles_Forward
+        sc_commands:
+          - sc_command: spaceship_targeting_advanced_Cycle_Lock_Hostiles_Forward
+        instant_activation:
+          - Nächster Feind aufschalten
+          - Nächster Feind anvisieren
+          - Nächster Feind markieren
+          - Nächster Feind
+          - Next enemy
+          - target next enemy
+        responses: False # If you don't want the ai to acknowledge an instant_activation you can set this to false
+      # ──────────────────────────────────────────────────────────────────────────
+      - name: spaceship_targeting_Unlock_Locked_Target
+        sc_commands:
+          - sc_command: spaceship_targeting_Unlock_Locked_Target
+        instant_activation:
+          - Ziele abschalten
+          - Zielmodus deaktivieren
+          - Ziel abschalten
+          - Markierung abschalten
+          - Markierung entfernen
+          - Remove target
+          - unlock target
+        responses: False # If you don't want the ai to acknowledge an instant_activation you can set this to false
+      
+      #####################  CAMERA CONTROLS #####################################
+      # The camera controls are special, as you have to hold f4 to load / save views
+      # ──────────────────────────────────────────────────────────────────────────
+      - name: SaveStandardCameraView
+        keys: 
+          - key: num2
+            hold: 0.5
+            modifier: f4
+        instant_activation:
+          - Kamera auf 2 speichern
+          - Standardkamera ansicht speichern
+          - Standardansicht speichern
+          - Landeansicht speichern
+          - Rückansicht speichern
+        responses: 
+          - gespeichert
+      # ──────────────────────────────────────────────────────────────────────────
+      - name: SwitchToExternalStandardView
+        keys: 
+          - key: f4
+          - key: KEY_NUMPAD_2
+            modifier: f4
+            hold: 0.01
+        instant_activation:
+          - Zu Außenansicht wechseln
+          - Außenansicht
+        responses: False # If you don't want the ai to acknowledge an instant_activation you can set this to false
+      # ──────────────────────────────────────────────────────────────────────────
+      - name: StandardView
+        keys: 
+          - key: KEY_NUMPAD_2
+            modifier: f4
+            hold: 0.01
+        instant_activation:
+          - Landeansicht
+          - Standardsicht
+          - Rückansicht
+        responses: False # If you don't want the ai to acknowledge an instant_activation you can set this to false
+      # ──────────────────────────────────────────────────────────────────────────
+      - name: SaveCameraViewFront
+        keys: 
+          - key: KEY_NUMPAD_8
+            hold: 0.5
+            modifier: f4
+        instant_activation:
+          - Kamera auf 8 speichern
+          - Vorderansicht speichern
+        responses: 
+          - gespeichert
+      # ──────────────────────────────────────────────────────────────────────────
+      - name: ViewFront
+        keys: 
+          - key: KEY_NUMPAD_8
+            modifier: f4
+            hold: 0.01
+        instant_activation:
+          - Vorderansicht
+        responses: False # If you don't want the ai to acknowledge an instant_activation you can set this to false
+      # ──────────────────────────────────────────────────────────────────────────
+      - name: SaveCameraViewUp
+        keys: 
+          - key: KEY_NUMPAD_5
+            modifier: f4
+            hold: 0.5
+        instant_activation:
+          - Kamera auf 5 speichern
+          - Obensicht speichern
+        responses: 
+          - gespeichert
+      # ──────────────────────────────────────────────────────────────────────────
+      - name: ViewUp
+        keys: 
+          - key: KEY_NUMPAD_5
+            modifier: f4
+            hold: 0.01
+        instant_activation:
+          - Kamera 5
+          - Obensicht
+          - Sicht von oben
+        responses: False
+      # ──────────────────────────────────────────────────────────────────────────
+      - name: SaveCameraViewLeft
+        keys: 
+          - key: KEY_NUMPAD_4
+            hold: 0.5
+            modifier: f4
+        instant_activation:
+          - Kamera auf 4 speichern
+          - Backbord sicht speichern
+          - Links sicht speichern
+        responses: 
+          - gespeichert
+      # ──────────────────────────────────────────────────────────────────────────
+      - name: ViewLeft
+        keys: 
+          - key: KEY_NUMPAD_4
+            modifier: f4
+            hold: 0.01
+        instant_activation:
+          - Backbord sicht
+          - Sicht von Links
+          - Linkssicht
+        responses: False # If you don't want the ai to acknowledge an instant_activation you can set this to false
+      # ──────────────────────────────────────────────────────────────────────────
+      - name: SaveCameraViewRight
+        keys: 
+          - key: KEY_NUMPAD_6
+            hold: 0.5
+            modifier: f4
+        instant_activation:
+          - Kamera auf 6 speichern
+          - Steuerbord sicht speichern
+          - Rechtssicht speichern
+        responses: 
+          - gespeichert
+      # ──────────────────────────────────────────────────────────────────────────
+      - name: ViewRight
+        keys: 
+          - key: KEY_NUMPAD_6
+            modifier: f4
+            hold: 0.01
+        instant_activation:
+          - Steuerbord sicht
+          - Sicht von rechts
+          - rechtssicht
+        responses: False # If you don't want the ai to acknowledge an instant_activation you can set this to false
+      # ──────────────────────────────────────────────────────────────────────────
+      #####################  RADEON Commands #####################################
+      # ──────────────────────────────────────────────────────────────────────────
+      - name: OpenRadeon
+        keys: # You can have multiple keys per command!
+        - key: r
+          modifiers: alt,shift,ctrl
+        instant_activation: 
+          - Öffne Radeon
+          - Öffne Graphikkarte
+        responses: False
+      # ──────────────────────────────────────────────────────────────────────────
+      - name: InstantReplay
+        keys: # You can have multiple keys per command!
+        - key: s
+          modifiers: alt,shift,ctrl
+        instant_activation: 
+          - Instant Replay
+          - Aufnahme speichern
+          - Sofortaufnahme
+        responses: 
+          - Aufnahme wird gespeichert
+      # ──────────────────────────────────────────────────────────────────────────
+      - name: InstantGif
+        keys: # You can still specify own key strokes
+        - key: j
+          modifiers: alt,shift,ctrl
+        instant_activation: 
+          - Instant Gif
+          - Gif speichern
+        responses: 
+          - Gif Aufnahme wird gespeichert 
+      # ──────────────────────────────────────────────────────────────────────────
+      - name: ToggleScreenCapture
+        keys: # You can still specify own key strokes
+        - key: e
+          modifiers: alt,shift,ctrl
+        instant_activation: 
+          - Aufnahme starten
+          - Aufnahme stoppen
+          - Aufnehmen
+        responses: False
+      # ──────────────────────────────────────────────────────────────────────────
+      - name: TakeScreenshot
+        keys: # You can still specify own key strokes
+        - key: i
+          modifiers: alt,shift,ctrl
+        instant_activation: 
+          - Screenshot
+          - Bildschirmfoto
+        responses: False   
+      #####################  Discord Commands #####################################
+      # ──────────────────────────────────────────────────────────────────────────
+      - name: ToggleMuteMicrofoneDiscord
+        keys: # You can still specify own key strokes
+        - key: home
+          modifiers: altright
+        instant_activation: 
+          - Mute Discord
+          - Discord Stummschalten
+          - Discord aktivieren
+          - Unmute Discord
+        responses: False     

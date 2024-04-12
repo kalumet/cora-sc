@@ -1,8 +1,8 @@
 import json
-from fuzzywuzzy import process
+import Levenshtein
 
 
-DEBUG = True
+DEBUG = False
 
 
 def print_debug(to_print):
@@ -10,7 +10,7 @@ def print_debug(to_print):
         print(to_print)
 
 
-def find_best_match(search_term, search_space, attribute=None, score_cutoff=80):
+def find_best_match(search_term: str, search_space, attribute=None, score_cutoff=80):
     if search_term is None:
         return "No search term", False
 
@@ -18,43 +18,18 @@ def find_best_match(search_term, search_space, attribute=None, score_cutoff=80):
         return "No search space available", False
 
     if DEBUG:
-
         serialized_object = json.dumps(search_space, indent=2)
-        # Now, slicing the string to only include the first N characters
         truncated_serialized_object = serialized_object[:150]
         print(f'Searching "{search_term}" within attribute "{attribute}" of search space \n{truncated_serialized_object}...')
 
-    best = __find_best_match(search_term, search_space, attribute=attribute, score_cutoff=score_cutoff)
-    if best is None:
+    best = __find_best_match(search_term.lower(), search_space, attribute=attribute, score_cutoff=score_cutoff)
+    if best["matched_value"] is None:
         return f"No match for {search_term} found", False
 
     return best, True
 
 
 def __find_best_match(search_term, search_space, attribute=None, path=None, current_best=None, score_cutoff=80):
-    """
-    Recursively searches through a nested data structure (dictionary or list) to find the best match for a given search term.
-    The search can be optionally focused on a specific attribute within dictionaries in the data structure.
-    
-    Parameters:
-    - search_term (str): The term to search for within the search space.
-    - search_space (dict or list): The data structure to search through. It can be a nested combination of dictionaries and lists.
-    - attribute (str, optional): The specific attribute within dictionaries to match against the search term. If None, all values are considered.
-    - path (list, optional): Used internally to track the recursive path of keys/indexes to the current point in the search space.
-    - current_best (dict, optional): Used internally to track the best match found so far during the search. It stores:
-    - score_cutoff (number, optional, default=80) -> allows to control how exact a match should be (0 - 100)
-
-    Returns:
-    A dictionary with details of the best match found in the search space, including:
-    - The root object containing the match ('root_object')
-    - The similarity score of the match ('score')
-    - The path to the matched attribute/value ('matching_path')
-    - The matched value ('matched_value')
-    - The key or index of the root object in the immediate enclosing structure ('key_or_index')
-
-    The function utilizes fuzzy string matching to compare the search term with values or specified attributes in the search space.
-    It recursively explores nested dictionaries and lists to identify the most similar match based on the provided search term.
-    """
     if current_best is None:
         current_best = {'score': 0, 'matching_path': '', 'matched_value': None, 'key_or_index': None, 'root_object': None}
     if path is None:
@@ -64,58 +39,51 @@ def __find_best_match(search_term, search_space, attribute=None, path=None, curr
         for key, value in search_space.items():
             current_path = path + [str(key)]
 
-            if isinstance(value, dict):
-                if attribute in value:
-                    # Ensure we only search where the attribute exists
-                    match = process.extractOne(search_term, [str(value.get(attribute, ''))], score_cutoff=score_cutoff)
-                    if match:
-                        score = match[1]
-                        if score > current_best['score']:
-                            current_best.update({
-                                'score': score,
-                                'matching_path': '.'.join(current_path + [attribute]),
-                                'matched_value': value[attribute],
-                                'key_or_index': key,
-                                'root_object': value
-                            })
+            if isinstance(value, dict) or isinstance(value, list):
                 __find_best_match(search_term, value, attribute, current_path, current_best, score_cutoff)
-                
-            elif attribute is None or key == attribute:
-                # Handle non-dictionary values directly when no specific attribute is targeted
-                targets = [str(value)] if not isinstance(value, (dict, list)) else []
-                match = process.extractOne(search_term, targets, score_cutoff=score_cutoff)
-                if match:
-                    score = match[1]
-                    if score > current_best['score']:
+            else:
+                if attribute is None or key == attribute:
+                    compare = str(value).lower()
+                    lev_distance = Levenshtein.distance(search_term, compare)
+                    score = __normalized_score(lev_distance, search_term, compare)
+                    print_debug(f"comparing: {search_term} <-> {compare}, score: {score}")
+                    if score >= score_cutoff and score > current_best['score']:
                         current_best.update({
                             'score': score,
                             'matching_path': '.'.join(current_path),
                             'matched_value': value,
-                            'key_or_index': path[0] if path else key,
+                            'key_or_index': key,
                             'root_object': search_space
                         })
- 
+    
     elif isinstance(search_space, list):
         for index, item in enumerate(search_space):
             current_path = path + [str(index)]
-            if isinstance(item, dict) and attribute and attribute in item:
-                # Direct search within list items if they are dictionaries with the target attribute
-                match = process.extractOne(search_term, [str(item.get(attribute, ''))], score_cutoff=score_cutoff)
-                if match:
-                    score = match[1]
-                    if score > current_best['score']:
-                        current_best.update({
-                            'score': score,
-                            'matching_path': '.'.join(current_path + [attribute]),
-                            'matched_value': item[attribute],
-                            'key_or_index': index,
-                            'root_object': item
-                        })
-            else:
-                # Recursive search for items that are dictionaries or lists themselves
+            if isinstance(item, list) or isinstance(item, dict):
                 __find_best_match(search_term, item, attribute, current_path, current_best, score_cutoff)
+            elif isinstance(item, str):
+                compare = item.lower()
+                lev_distance = Levenshtein.distance(search_term, compare)
+                score = __normalized_score(lev_distance, search_term, compare)
+                print_debug(f"comparing: {search_term} <-> {compare}, score: {score}")
+                if score >= score_cutoff and score > current_best['score']:
+                    current_best.update({
+                        'score': score,
+                        'matching_path': str(index),
+                        'matched_value': item,
+                        'key_or_index': index,
+                        'root_object': search_space
+                    })
 
     return current_best
+
+
+def __normalized_score(lev_distance, search_term, target):
+    max_length = max(len(search_term), len(target))
+    if max_length == 0:
+        return 100  # Perfekte Übereinstimmung, wenn beide Strings leer sind
+    score = max(0, (1 - lev_distance / max_length) * 100)
+    return score
 
 
 # Example usage
@@ -195,13 +163,19 @@ if __name__ == "__main__":
         }
     }
     search_term = "MIC-L2 Long Forest Station"
-    best_test = __find_best_match(search_term, data, "space_station_name")
-    print(f"Key/Index of the root object: {best_test['key_or_index']}")
-    print(f"Root Object: {best_test['root_object']}")
-    print(f"Score of match: {best_test['score']}")
-    print(f"Path to the matched attribute: {best_test['matching_path']}")
-    print(f"Matched value: {best_test['matched_value']}")
 
+    print(f"\n======Test 1========")
+    best_test, success = find_best_match(search_term, data, "space_station_name")
+    if success:
+        print(f"Key/Index of the root object: {best_test['key_or_index']}")
+        print(f"Root Object: {best_test['root_object']}")
+        print(f"Score of match: {best_test['score']}")
+        print(f"Path to the matched attribute: {best_test['matching_path']}")
+        print(f"Matched value: {best_test['matched_value']}")
+    else:
+        print("Error test 1")
+
+    print(f"\n======Test 2========")
     data = [
         {
             "id": 242,
@@ -277,10 +251,50 @@ if __name__ == "__main__":
         }
     ]
 
-    best_test = __find_best_match(search_term, data, "space_station_name")
-    print(f"Key/Index of the root object: {best_test['key_or_index']}")
-    print(f"Root Object: {best_test['root_object']}")
-    print(f"Score of match: {best_test['score']}")
-    print(f"Path to the matched attribute: {best_test['matching_path']}")
-    print(f"Matched value: {best_test['matched_value']}")
+    best_test, success = find_best_match(search_term, data, "space_station_name")
+    if success:
+        print(f"Key/Index of the root object: {best_test['key_or_index']}")
+        print(f"Root Object: {best_test['root_object']}")
+        print(f"Score of match: {best_test['score']}")
+        print(f"Path to the matched attribute: {best_test['matching_path']}")
+        print(f"Matched value: {best_test['matched_value']}")
+    else:
+        print("Error test 2")
 
+    print(f"\n======Test 3========")
+
+    best_test, success = find_best_match(search_term, data)
+    if success:
+        print(f"Key/Index of the root object: {best_test['key_or_index']}")
+        print(f"Root Object: {best_test['root_object']}")
+        print(f"Score of match: {best_test['score']}")
+        print(f"Path to the matched attribute: {best_test['matching_path']}")
+        print(f"Matched value: {best_test['matched_value']}")
+    else:
+        print("Error test 3.")
+
+    print(f"\n======Test 4========")
+    data = [
+        "ARCL1",
+        "ARCL2",
+        "ARCL4",
+        "CRUL1",
+        "HURL1",
+        "HURL2",
+        "MAGNG",
+        "MICL1",
+        "MICL2",
+        "MICL5",
+        "PYROG",
+        "TERRG",
+    ]
+
+    best_test, success = find_best_match(search_term, data, score_cutoff=0)
+    if success:
+        print(f"Key/Index of the root object: {best_test['key_or_index']}")
+        print(f"Root Object: {best_test['root_object']}")
+        print(f"Score of match: {best_test['score']}")
+        print(f"Path to the matched attribute: {best_test['matching_path']}")
+        print(f"Matched value: {best_test['matched_value']}")
+    else:
+        print("Error test 4.")

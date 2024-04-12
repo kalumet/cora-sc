@@ -1,3 +1,11 @@
+DEBUG = False
+
+
+def print_debug(str):
+    if DEBUG:
+        print(str)
+
+
 def convert_to_minutes(time_str):
     # Definieren der Multiplikatoren für die Umrechnung in Minuten
     multipliers = {'d': 24*60, 'h': 60, 'm': 1}
@@ -16,7 +24,12 @@ def convert_to_minutes(time_str):
     return total_minutes
 
 
-def convert_to_str(seconds):   
+def convert_to_seconds(time_str):
+    return convert_to_minutes(time_str) * 60
+
+
+def convert_seconds_to_str(seconds):   
+    
     # Berechnung der Tage, Stunden und Minuten
     days, remainder = divmod(seconds, 86400)
     hours, remainder = divmod(remainder, 3600)
@@ -25,17 +38,19 @@ def convert_to_str(seconds):
     # Erstellung des formatierten Strings, ohne Werte gleich 0 auszugeben
     time_parts = []
     if days > 0:
-        time_parts.append(f"{days}d")
+        time_parts.append(f"{days} days")
     if hours > 0:
-        time_parts.append(f"{hours}h")
+        time_parts.append(f"{hours} hours")
     if minutes > 0:
-        time_parts.append(f"{minutes}m")
+        time_parts.append(f"{minutes} minutes")
     
     # Zusammenfügen der Zeitteile zu einem String, Trennzeichen ist ein Leerzeichen
     formatted_time = " ".join(time_parts)
     
     # Rückgabe des formatierten Strings, oder "0m", falls alle Teile 0 sind
+    print_debug(f"Converting {seconds} seconds to {formatted_time}")
     return formatted_time if formatted_time else "completed"
+
 
 # Example usage
 if __name__ == "__main__":

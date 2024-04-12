@@ -59,7 +59,7 @@ class OCR:
                     "Authorization": f"Bearer {self.openai_api_key}",
                 }
                 payload = {
-                    "model": "gpt-4-vision-preview",
+                    "model": "gpt-4-turbo-2024-04-09",
                     #"response_format": { "type": "json_object" },  #  not supported on this model
                     "messages": [
                         {

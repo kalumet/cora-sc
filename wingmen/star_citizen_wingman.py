@@ -207,7 +207,6 @@ class StarCitizenWingman(OpenAiWingman):
             for ai_function_manager in self.ai_functions_manager.get_managers(new_context):
                 ai_function_manager: FunctionManager
                 functions_prompt += ai_function_manager.get_function_prompt()
-                ai_function_manager.after_init()
             
             context_prompt += functions_prompt
 

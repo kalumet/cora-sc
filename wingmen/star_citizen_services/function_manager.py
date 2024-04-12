@@ -68,6 +68,7 @@ class StarCitizensAiFunctionsManager:
                         manager_instance.register_functions(self.function_registry)
                         print(f"{attribute.__name__} registered")
                         self.register_manager(manager_instance.get_context_mapping(), manager_instance)
+                        manager_instance.after_init()
                     else:
                         print_debug(f"     -> NO")
                         
@@ -93,6 +94,12 @@ class FunctionManager(ABC):
     def after_init(self):
         """  
             This method can be implemented to execute logic that needs to be run after all initialization steps.
+        """
+        pass
+
+    def start_information(self):
+        """  
+            This method can be implemented to retrieve information from the manager, that Cora should provide to the user on startup.
         """
         pass
     

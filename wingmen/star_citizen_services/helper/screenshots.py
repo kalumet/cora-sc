@@ -6,8 +6,8 @@ import cv2
 import pygetwindow
 import pyautogui
 
-DEBUG = True
-TEST = True
+DEBUG = False
+TEST = False
 
 
 def print_debug(to_print):

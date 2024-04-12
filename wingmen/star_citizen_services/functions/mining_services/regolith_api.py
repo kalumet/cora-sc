@@ -12,7 +12,7 @@ from wingmen.star_citizen_services.helper import time_string_converter
 
 
 DEBUG = True
-TEST = True
+TEST = False
 
 
 def print_debug(to_print):

@@ -72,6 +72,27 @@ This functionality makes ingame screenshots.
 - The screenshot is only taken, if the active window is Star Citizen, nothing else.
 - Analysis is made locally on your pc.
 
+### Mining Manager - Track your refinery orders with Regolith
+You are into mining like me? Than you certainly now Regolith (https://regolith.rocks/).
+Cora now handles refinery orders:
+- Add new refinery orders in game to Regolith. Just say something like "Cora, I have a new refinery job to add"
+  - The refinery job terminal is processed and all relevant information is sent to your session at regolith
+  - A new ship mining session is created if none is active
+  - Cora will ask you, if she should open the new session created directly in your standard browser. You can answer "Yes" if you want ...
+- Want to know, if you have any refinery jobs ready to be delivered? Just ask Cora: "Hey, do I have any refinery work orders ready?"
+  - Cora will tell give you all necessary details. She will give you the the refinery to head to, where most of your work orders are ready for pickup.
+  - If you have still refinery jobs on the go, she will let you know when the next is ready.
+  - Again, she will ask you if you want to open the session at Regolith in your browser directly.
+- Do you want to clean up your data? Ask Cora to remove all processed / finalised mining sessions and they are gone. Keep your data clean.
+  - She will only delete sessions where all work orders are processed and sold.
+
+**Important** 
+This functionality makes ingame screenshots.
+- It will only make a screenshot on your voice command ("Add new refinery job", "Create a refinery job for me" or something similar)
+- The screenshot is only taken, if the active window is Star Citizen, nothing else.
+- Only the left part of the refinery terminal is analysed. Text extraction done with OpenAI. 
+- Important: First Get a Quote of your refinery process. Ask Cora before you confirm manually the work order in game.
+
 ### UEX Data Runner
 - Get ingame kiosk information analysed and transmitted to UEX (https://uexcorp.space/) and uses their API v1.
 - manual validation of the data in a popup, no need to switch / tab out
@@ -87,7 +108,7 @@ This functionality makes ingame screenshots.
 
 ## Major technical differences to the 1.1.2b1 from 21.01.2024 main branch - core changes
 - improved instant commands selection (find the best match, not the first match)
-- allow **multiple modifiers** to be pressed
+- allow **multiple modifiers** to be pressed (Alt+Shift+R)
 - allow **mouse button** activation
 - allow to not have spoken responses for commands
 - allow access to wingman UI threads for extensions -> In Game Overlay Display

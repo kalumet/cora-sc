@@ -16,7 +16,7 @@ from wingmen.star_citizen_services.location_name_matching import LocationNameMat
 
 
 class OverlayPopup(tk.Toplevel):
-    def __init__(self, master, validated_tradeport, operation, all_prices, cropped_screenshot_prices, cropped_screenshot_location_pil):
+    def __init__(self, master, validated_tradeport, operation, all_prices, cropped_screenshot_prices, cropped_screenshot_location):
         super().__init__(master)
         
         self.current_tradeport = validated_tradeport
@@ -46,8 +46,10 @@ class OverlayPopup(tk.Toplevel):
         # Create the screenshot frame
         self.screenshot_frame = tk.Frame(self)
                 
+        # Convert cv2 image to PIL Image
+        location_screen = Image.fromarray(cropped_screenshot_location)
         # Load the location image
-        location = ImageTk.PhotoImage(cropped_screenshot_location_pil)
+        location = ImageTk.PhotoImage(location_screen)
 
         # Display the screenshot in the screenshot frame
         screenshot_label = tk.Label(self.screenshot_frame, image=location)

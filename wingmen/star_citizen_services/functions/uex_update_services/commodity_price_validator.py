@@ -65,7 +65,11 @@ class CommodityPriceValidator:
 
     @staticmethod
     def _validate_price(validated_commodity, price_to_check, multiplier, operation):
+        if not price_to_check:
+            return 0, False
+        
         uex_price = validated_commodity[f"price_{operation}"]
+        
 
         # we check, if the raw price is within 20% of the current price
         difference = abs(uex_price - price_to_check)

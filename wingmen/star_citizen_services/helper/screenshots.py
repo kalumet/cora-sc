@@ -159,21 +159,41 @@ def __get_best_template_matching_coordinates(data_dir_path, screenshot, area, re
     return matching_coordinates
 
 
-def crop_screenshot(data_dir_path, screenshot_file, areas_and_corners_and_cropstrat):
+def crop_screenshot(data_dir_path, screenshot_file, areas_and_corners_and_cropstrat, select_sides=None):
     """
     Crops a screenshot based on template matching against specified areas of the screenshot. This method supports 
     flexible cropping strategies, allowing for area-based, vertical, or horizontal cropping.
 
     Args:
-    - data_dir_path (str): The directory path where template images are stored.
+    - data_dir_path (str): The directory path where template images are stored. Convention: root path that contains a "templates" folder.
+        This folder contains template images that could (and should) be found in the given screenshot file.
+        This method will iterate over every numbered template file according to it's demanded area. Filename must be in this format:
+        "template_{area-name}_{index}.png"
+        If "UPPER_LEFT" is demanded, the method will only select files of the pattern "template_upper_left_{index}.png". 
+        It will try to match this template in the screenshot, if matched fine, if not, it will try with the next availabl index.
+
     - screenshot_file (str): The file path of the screenshot image to be cropped.
+
     - areas_and_corners_and_cropstrat (list of tuples): A list where each tuple contains:
         - area (str): The area name that corresponds to a template image ("UPPER_LEFT" or "LOWER_RIGHT").
+
         - corner (str): The corner of interest from the template matching result. Valid values are "UPPER_LEFT",
                         "LOWER_LEFT", "UPPER_RIGHT", and "LOWER_RIGHT".
-        - crop_strategy (str): The cropping strategy to apply. Valid values are "AREA" for cropping based on the
-                               area between two corners, "VERTICAL" for cropping vertically based on x-coordinates, 
-                               and "HORIZONTAL" for cropping horizontally based on y-coordinates.
+                        This allows to control at what corner of the match the crop should be based on. 
+
+        - crop_strategy (str): The cropping strategy to apply. Valid values are "AREA", "VERTICAL" and "HORIZONTAL".
+                               - "AREA": for cropping based on the area between two corners: 
+                                  This requires 2 AREA templates, usually UPPER_LEFT and LOWER_RIGHT.
+                                  The exact crop than depends on the selected corner and will be the rectangle between the 2 template matches
+                               - "VERTICAL": for cropping vertically based on x-coordinates. The returned crop is then selected by 
+                                 the value of "selected_sides"
+                               - "HORIZONTAL" for cropping horizontally based on y-coordinates. The returned crop is then selected by 
+                                 the value of "selected_sides"
+        
+        - selected_sides [str] (optional): A list of strings that controls what portion of the screenshot is returned on "HORIZONTAL" or "VERTICAL" slices.
+                               - LEFT / RIGHT for VERTICAL slice: return left side or right side of the screenshot
+                               - TOP / BOTTOM for HORIZONTAL slice: return top or bottom side of the screenshot
+                               Beware on how you apply this when you have mixed cropping strategies (HORIZONTAL and VERTICAL, or 2 HORIZONTAL slides)
 
     Returns:
     - cropped_screenshot (ndarray or None): The cropped screenshot as a numpy ndarray. Returns None if the cropping 
@@ -191,15 +211,12 @@ def crop_screenshot(data_dir_path, screenshot_file, areas_and_corners_and_cropst
     """
     if not os.path.exists(screenshot_file):
         print_debug(f"File not existing '{screenshot_file}'")
-        return None  # Exit the loop if the template file does not exist
+        return None
 
     screenshot = cv2.imread(screenshot_file, cv2.IMREAD_COLOR)
-    
-    # Assume full image dimensions initially
     x_min, y_min = 0, 0
     x_max, y_max = screenshot.shape[1], screenshot.shape[0]
 
-    # Flags to check if any VERTICAL or HORIZONTAL strategy is applied
     vertical_applied = False
     horizontal_applied = False
 
@@ -209,7 +226,6 @@ def crop_screenshot(data_dir_path, screenshot_file, areas_and_corners_and_cropst
             x, y = matching_coordinates
 
             if crop_strategy == "AREA":
-                # Adjust based on the strategy
                 x_min = min(x_max, x)
                 x_max = max(x_min, x)
                 y_min = min(y_max, y)
@@ -239,35 +255,79 @@ def crop_screenshot(data_dir_path, screenshot_file, areas_and_corners_and_cropst
     if horizontal_applied:
         y_max = screenshot.shape[0] if y_max == 0 else y_max
 
-    # Perform the cropping
-    if x_max > x_min and y_max > y_min:
-        cropped_screenshot = screenshot[y_min:y_max, x_min:x_max]
-        return cropped_screenshot
-    else:
+    cropped_screenshot = apply_quadrant_selection(screenshot, x_min, x_max, y_min, y_max, vertical_applied, horizontal_applied, select_sides)
+    
+    if cropped_screenshot is not None and DEBUG:
+        filename = os.path.basename(screenshot_file)
+        directory_path = os.path.dirname(screenshot_file)
+        filename = f"cropped_{filename}"
+        full_path = os.path.normpath(os.path.join(directory_path, filename))
+        cv2.imwrite(full_path, cropped_screenshot)
+    
+    return cropped_screenshot
+
+def apply_quadrant_selection(screenshot, x_min, x_max, y_min, y_max, vertical_applied, horizontal_applied, select_sides):
+    if x_max <= x_min or y_max <= y_min:
         print_debug("Invalid crop dimensions.")
         return None
+
+    if select_sides:
+        if vertical_applied and "LEFT" in select_sides:
+            x_max = x_min
+            x_min = 0
+        # standard behaviour to select right side sizes
+        # elif vertical_applied and "RIGHT" in select_sides: 
+        #     x_max = screenshot.shape[1]
+
+        if horizontal_applied and "BOTTOM" in select_sides:
+            y_min = y_max
+            y_max = screenshot.shape[0]
+        # standard behaviour to select TOP side sizes
+        # elif horizontal_applied and "TOP" in select_sides:
+
+    return screenshot[y_min:y_max, x_min:x_max]
 
 
 # Example usage
 if __name__ == "__main__":
     data_dir_path_test = "star_citizen_data/mining-data/"
     screenshot_file_test = "star_citizen_data/mining-data/examples/ScreenShot-2024-04-02_09-36-15-B2C.jpg"
-    areas_and_corners = [("UPPER_LEFT", "LOWER_LEFT", "AREA"), ("LOWER_RIGHT", "LOWER_RIGHT", "AREA")]
-    cropped_image = crop_screenshot(data_dir_path_test, screenshot_file_test, areas_and_corners)
+    # areas_and_corners = [("UPPER_LEFT", "LOWER_LEFT", "AREA"), ("LOWER_RIGHT", "LOWER_RIGHT", "AREA")]
+    # cropped_image = crop_screenshot(data_dir_path_test, screenshot_file_test, areas_and_corners)
 
-    debug_show_screenshot(cropped_image, DEBUG)
+    # debug_show_screenshot(cropped_image, DEBUG)
 
-    areas_and_corners = [("UPPER_LEFT", "UPPER_LEFT", "VERTICAL"), ("LOWER_RIGHT", "LOWER_RIGHT", "VERTICAL")]
-    cropped_image = crop_screenshot(data_dir_path_test, screenshot_file_test, areas_and_corners)
+    # areas_and_corners = [("UPPER_LEFT", "UPPER_LEFT", "VERTICAL"), ("LOWER_RIGHT", "LOWER_RIGHT", "VERTICAL")]
+    # cropped_image = crop_screenshot(data_dir_path_test, screenshot_file_test, areas_and_corners)
 
-    debug_show_screenshot(cropped_image, DEBUG)
+    # debug_show_screenshot(cropped_image, DEBUG)
 
     areas_and_corners = [("UPPER_LEFT", "UPPER_LEFT", "VERTICAL"), ("LOWER_RIGHT", "LOWER_RIGHT", "HORIZONTAL")]
     cropped_image = crop_screenshot(data_dir_path_test, screenshot_file_test, areas_and_corners)
 
     debug_show_screenshot(cropped_image, DEBUG)
 
-    areas_and_corners = [("UPPER_LEFT", "UPPER_LEFT", "HORIZONTAL"), ("LOWER_RIGHT", "LOWER_RIGHT", "HORIZONTAL")]
-    cropped_image = crop_screenshot(data_dir_path_test, screenshot_file_test, areas_and_corners)
+    # areas_and_corners = [("UPPER_LEFT", "UPPER_LEFT", "HORIZONTAL"), ("LOWER_RIGHT", "LOWER_RIGHT", "HORIZONTAL")]
+    # cropped_image = crop_screenshot(data_dir_path_test, screenshot_file_test, areas_and_corners)
+
+    # debug_show_screenshot(cropped_image, DEBUG)
+
+    areas_and_corners = [("UPPER_LEFT", "UPPER_LEFT", "VERTICAL"), ("LOWER_RIGHT", "LOWER_RIGHT", "HORIZONTAL")]
+    cropped_image = crop_screenshot(data_dir_path_test, screenshot_file_test, areas_and_corners, ["TOP", "LEFT"])
+
+    debug_show_screenshot(cropped_image, DEBUG)
+
+    areas_and_corners = [("UPPER_LEFT", "UPPER_LEFT", "VERTICAL"), ("LOWER_RIGHT", "LOWER_RIGHT", "HORIZONTAL")]
+    cropped_image = crop_screenshot(data_dir_path_test, screenshot_file_test, areas_and_corners, ["BOTTOM", "LEFT"])
+
+    debug_show_screenshot(cropped_image, DEBUG)
+
+    areas_and_corners = [("UPPER_LEFT", "UPPER_LEFT", "VERTICAL"), ("LOWER_RIGHT", "LOWER_RIGHT", "HORIZONTAL")]
+    cropped_image = crop_screenshot(data_dir_path_test, screenshot_file_test, areas_and_corners, ["BOTTOM", "RIGHT"])
+
+    debug_show_screenshot(cropped_image, DEBUG)
+
+    areas_and_corners = [("UPPER_LEFT", "UPPER_LEFT", "VERTICAL"), ("LOWER_RIGHT", "LOWER_RIGHT", "HORIZONTAL")]
+    cropped_image = crop_screenshot(data_dir_path_test, screenshot_file_test, areas_and_corners, ["TOP", "RIGHT"])
 
     debug_show_screenshot(cropped_image, DEBUG)

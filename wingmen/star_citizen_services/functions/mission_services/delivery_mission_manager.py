@@ -1,16 +1,19 @@
 import json
 import os
 import traceback
-import time
 
 from services.printr import Printr
 
 from wingmen.star_citizen_services.model.delivery_mission import DeliveryMission, MissionPackage
-from wingmen.star_citizen_services.functions.mission_services.delivery_mission_services.screenshot_ocr import TransportMissionAnalyzer
-from wingmen.star_citizen_services.functions.mission_services.delivery_mission_services.delivery_manager import PackageDeliveryPlanner, DeliveryMissionAction, UEXApi
-from wingmen.star_citizen_services.overlay import StarCitizenOverlay
 from wingmen.star_citizen_services.function_manager import FunctionManager
+from wingmen.star_citizen_services.functions.mission_services.delivery_mission_services.delivery_manager import PackageDeliveryPlanner, DeliveryMissionAction, UEXApi
+from wingmen.star_citizen_services.functions.mission_services.delivery_mission_services import delivery_mission_builder
+from wingmen.star_citizen_services.overlay import StarCitizenOverlay
 from wingmen.star_citizen_services.ai_context_enum import AIContext
+from wingmen.star_citizen_services.location_name_matching import LocationNameMatching
+
+from wingmen.star_citizen_services.helper import screenshots
+from wingmen.star_citizen_services.helper.ocr import OCR
 
 
 DEBUG = False
@@ -43,16 +46,30 @@ class DeliveryMissionManager(FunctionManager):
         self.mission_screen_upper_left_template = f'{self.mission_data_path}/{self.config["box-mission-configs"]["upper-left-region-template"]}'
         self.mission_screen_lower_right_template = f'{self.mission_data_path}/{self.config["box-mission-configs"]["lower-right-region-template"]}'
 
+        self.openai_api_key = secret_keeper.retrieve(
+            requester="MissionService",
+            key="openai",
+            friendly_key_name="OpenAI API key",
+            prompt_if_missing=False
+        )
+
         self.overlay1 = StarCitizenOverlay()
         self.overlay2 = StarCitizenOverlay()
         self.delivery_manager = PackageDeliveryPlanner()
-        self.mission_recognition_service = TransportMissionAnalyzer(
-            upper_left_template=self.mission_screen_upper_left_template, 
-            lower_right_template=self.mission_screen_lower_right_template, 
-            data_dir_path=self.mission_data_path
-            )
         
-        # we always load from file, as we might restart wingmen.ai indipendently from star citizen
+        with open(f'{self.mission_data_path}/templates/response_structure_delivery_mission.json', 'r', encoding="UTF-8") as file:
+            file_content = file.read()
+
+        # JSON-String direkt verwenden
+        json_string = file_content   
+
+        self.ocr = OCR(
+            openai_api_key=self.openai_api_key, 
+            data_dir=self.mission_data_path,
+            extraction_instructions=f"Give me the text within this image. Give me the response in a plain json object structured as defined in this example: {json_string}. Provide the json within markdown ```json ... ```.If you are unable to process the image, just return 'error' as response.",
+            overlay=self.overlay1)
+        
+        # we always load from file, as we might restart wingmen.ai independently from star citizen
         # TODO need to check on start, if we want to discard this mission
         self.load_missions()
         self.load_delivery_route()
@@ -337,7 +354,23 @@ class DeliveryMissionManager(FunctionManager):
     
     def get_new_mission(self):
 
-        delivery_mission: DeliveryMission = self.mission_recognition_service.identify_mission()
+        image_path = screenshots.take_screenshot(self.mission_data_path, "delivery_missions")
+        if not image_path:
+            return {"success": False, "instructions": "Could not take screenshot. Explain the player, that you only take screenshots, if the active window is Star Citizen. "}
+        cropped_image = screenshots.crop_screenshot(self.mission_data_path, image_path, [("UPPER_LEFT", "LOWER_LEFT", "AREA"), ("LOWER_RIGHT", "LOWER_RIGHT", "AREA")])
+        retrieved_json, success = self.ocr.get_screenshot_texts(cropped_image, "delivery_missions")
+        if not success:
+            return {"success": False, "error": retrieved_json, "instructions": "Explain the player the reason for the delivery mission not beeing able to be extracted. "}
+
+        delivery_mission = delivery_mission_builder.build(retrieved_json)
+
+        if not delivery_mission or len(delivery_mission.packages) == 0:
+            return None
+
+        LocationNameMatching.validate_location_names(delivery_mission, self.mission_data_path)
+
+        print_debug(delivery_mission)
+
         self.overlay1.display_overlay_text(
             (
                 f"Identified mission with a payout of {delivery_mission.revenue} aUEC and {len(delivery_mission.packages)} packages to deliver."

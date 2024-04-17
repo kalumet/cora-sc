@@ -1,0 +1,16 @@
+{
+    "revenue": 3000,
+    "packages": [
+        {
+            "package_id": "723223",
+            "pickup": {
+                "facility": "Shubin Mining Facility SMO-18",
+                "location": "microTech"
+            },
+            "drop_off": {
+                "facility": "Shubin Mining Facility SMO-13",
+                "location": "microTech"
+            }
+        }
+    ]
+}

@@ -94,6 +94,9 @@ class LoreManager(FunctionManager):
         # print_debug(f"tools definition: {json.dumps(tools, indent=2)}")
         return tools
     
+    def cora_start_information(self):
+        return "What are the news of the day? "
+    
     def get_news_of_the_day(self, function_args):
         print_debug(f"{self.get_news_of_the_day.__name__} called.")
         printr.print_info(f"Executing function '{self.get_news_of_the_day.__name__}'.")
@@ -124,14 +127,14 @@ class LoreManager(FunctionManager):
                 raise ValueError("English translation not found in the API data.")
 
             print_debug(f"Response: {en_EN_translation}")
-            return {"success": True, "instructions": "Greet the player and based on the given lore_article, make a headline news summary with a funny twist.", "lore_article": en_EN_translation}
+            return {"success": True, "instructions": "Based on the given lore_article, make a headline news summary. When the player asks for more information about a topic, make a search query only with words within the lore_article.", "lore_article": en_EN_translation}
 
         except requests.exceptions.RequestException as e:
             print_debug(f"{self.get_news_of_the_day.__name__} Request Error: {str(e)}")
-            return {"success": True, "instructions": "Greet the player and make a headline news summary within the star citizen game world based on your knowledge with a funny twist."}
+            return {"success": False, "instructions": "You currently have no access to the intergalactic news network. Create a short information about a random topic within the star citizen universe lore from your knowledge that might be interesting for the player. "}
         except ValueError as e:
             print_debug(f"{self.get_news_of_the_day.__name__} Value Error: {str(e)}")
-            return {"success": True, "instructions": "Greet the player and make a headline news summary within the star citizen game world based on your knowledge with a funny twist."}
+            return {"success": False, "instructions": "You currently have no access to the intergalactic news network. Create a short information about a random topic within the star citizen universe lore from your knowledge that might be interesting for the player. "}
     
     def get_more_information_about_topic(self, function_args):
         search_term = function_args.get("search_term", "")

@@ -4,12 +4,14 @@ import random
 from services.printr import Printr
 
 from wingmen.star_citizen_services.overlay import StarCitizenOverlay
-from wingmen.star_citizen_services.uex_api import UEXApi
+from wingmen.star_citizen_services.functions.uex_v2.uex_api_module import UEXApi2
 from wingmen.star_citizen_services.function_manager import FunctionManager
 from wingmen.star_citizen_services.ai_context_enum import AIContext
 
+from wingmen.star_citizen_services.helper import transform_numbers_in_words
 
-DEBUG = False
+
+DEBUG = True
 # TEST = True
 
 printr = Printr()
@@ -25,7 +27,7 @@ class TddManager(FunctionManager):
     def __init__(self, config, secret_keeper):
         super().__init__(config, secret_keeper)
         self.config = config  # the wingmen config
-        self.uex_service: UEXApi = UEXApi()
+        self.uex_service: UEXApi2 = UEXApi2()
         self.overlay: StarCitizenOverlay = StarCitizenOverlay()
         self.tdd_voice = self.config["openai"]["contexts"]["tdd_voice"]
 
@@ -131,14 +133,17 @@ class TddManager(FunctionManager):
         request_type = function_args.get("request_type", "")
                 
         if request_type == "find_best_trade_route_starting_at_location":  
-               
+            
+            location_from = function_args.get("location_name_from", None)
+            if location_from is None:
+                return {"instructions": "Ask the player from what location he want's to start his trading route. "}
             function_response = self.uex_service.find_best_trade_from_location_code(location_name_from=function_args.get("location_name_from", None))
 
             success = function_response.get("success", False)
             if success:
                 trade_route = function_response["trade_routes"][0]
-                moon_or_planet_buy = trade_route["buy_satellite"] if trade_route["buy_satellite"] else trade_route["buy_planet"]
-                moon_or_planet_sell = trade_route["sell_satellite"] if trade_route["sell_satellite"] else trade_route["sell_planet"]
+                moon_or_planet_buy = trade_route["buy_moon"] if trade_route["buy_moon"] else trade_route["buy_orbit"]
+                moon_or_planet_sell = trade_route["sell_moon"] if trade_route["sell_moon"] else trade_route["sell_orbit"]
                 self.overlay.display_overlay_text(
                     f'Buy {trade_route["commodity"]} at {trade_route["buy_at_tradeport_name"]} ({moon_or_planet_buy}). '
                     f'Sell at {trade_route["sell_at_tradeport_name"]} ({moon_or_planet_sell}). Profit: {trade_route["profit"]} aUEC.'    
@@ -152,6 +157,7 @@ class TddManager(FunctionManager):
                     function_response["message"] 
                 )
             printr.print(f'-> Resultat: {json.dumps(function_response, indent=2)}', tags="info") 
+            transform_numbers_in_words.transform_numbers(function_response)
             return function_response
 
         if request_type == "find_best_trade_route_between":
@@ -176,6 +182,7 @@ class TddManager(FunctionManager):
             else:
                 print_debug(function_response["message"])
             printr.print(f'-> Resultat: {json.dumps(function_response, indent=2)}', tags="info")
+            transform_numbers_in_words.transform_numbers(function_response)
             return function_response
 
         if request_type == "find_tradeport_at_location_to_sell_commodity":
@@ -197,9 +204,10 @@ class TddManager(FunctionManager):
                      f'Sell {trade_route["commodity"]} at {trade_route["sell_at_tradeport_name"]} ({moon_or_planet_sell}) for {trade_route["sell_price"]} aUEC.'      
                 ))
             else:
-                print_debug(function_response["message"])
+                print_debug("No selling location found.")
             printr.print(f'-> Resultat: {json.dumps(function_response, indent=2)}', tags="info")
 
+            transform_numbers_in_words.transform_numbers(function_response)
             return function_response
 
         if request_type == "find_best_trade_route_for_commodity_between_locations":
@@ -222,6 +230,7 @@ class TddManager(FunctionManager):
             else:
                 print_debug(function_response["message"])
             printr.print(f'-> Resultat: {json.dumps(function_response, indent=2)}', tags="info")
+            transform_numbers_in_words.transform_numbers(function_response)
             return function_response
 
         if request_type == "find_locations_to_sell_commodity":
@@ -241,6 +250,7 @@ class TddManager(FunctionManager):
             else:
                 print_debug(function_response["message"])
             printr.print(f'-> Resultat: {json.dumps(function_response, indent=2)}', tags="info")
+            transform_numbers_in_words.transform_numbers(function_response)
             return function_response
         
         if request_type == "find_best_trade_routes_around_location":  
@@ -264,6 +274,7 @@ class TddManager(FunctionManager):
             else:
                 print_debug(function_response["message"])
             printr.print(f'-> Resultat: {json.dumps(function_response, indent=2)}', tags="info")
+            transform_numbers_in_words.transform_numbers(function_response)
             return function_response
 
     def switch_tdd_employee(self, function_args):

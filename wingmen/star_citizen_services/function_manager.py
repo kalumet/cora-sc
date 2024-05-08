@@ -97,11 +97,11 @@ class FunctionManager(ABC):
         """
         pass
 
-    def start_information(self):
+    def cora_start_information(self):
         """  
             This method can be implemented to retrieve information from the manager, that Cora should provide to the user on startup.
         """
-        pass
+        return ""
     
     @abstractmethod
     def register_functions(self, function_register):

@@ -13,7 +13,8 @@ from wingmen.open_ai_wingman import OpenAiWingman
 
 from wingmen.star_citizen_services.ai_context_enum import AIContext
 from wingmen.star_citizen_services.keybindings import SCKeybindings
-from wingmen.star_citizen_services.uex_api import UEXApi
+from wingmen.star_citizen_services.functions.uex_v2.uex_api_module import UEXApi2
+from wingmen.star_citizen_services.functions.uex_v2 import uex_api_module
 from wingmen.star_citizen_services.overlay import StarCitizenOverlay
 from wingmen.star_citizen_services.function_manager import StarCitizensAiFunctionsManager, FunctionManager
 
@@ -83,7 +84,7 @@ class StarCitizenWingman(OpenAiWingman):
         self.current_user_request: str = None  # saves the current user request
         self.switch_context_executed = False  # used to identify multiple switch executions that would be incorrect -> Error
         self.sc_keybinding_service: SCKeybindings = None  # initialised in validate
-        self.uex_service: UEXApi = None  # set in validate()
+        self.uex_service: UEXApi2 = None  # set in validate()
         self.messages_buffer = 10
         self.current_tools = None # init in validate
         tdd_voices = set(self.config["openai"]["contexts"]["tdd_voices"].split(","))
@@ -103,39 +104,15 @@ class StarCitizenWingman(OpenAiWingman):
 
     def validate(self):
         errors = super().validate()
-        
-        uex_api_key = self.secret_keeper.retrieve(
-            requester=self.name,
-            key="uex",
-            friendly_key_name="UEX API key",
-            prompt_if_missing=True,
-        )
-        if not uex_api_key:
-            errors.append(
-                "Missing 'uex' API key. Please provide a valid key in the settings."
-            )
-            return
-        
-        uex_access_code = self.secret_keeper.retrieve(
-            requester=self.name,
-            key="uex_access_code",
-            friendly_key_name="UEX Data Runner access code",
-            prompt_if_missing=True,
-        )
-        if not uex_access_code:
-            errors.append(
-                "Missing 'uex_access_code' Data Runner access code key. Please provide a valid access code in the settings."
-            )
-            return
-
+    
         try:
             # every conversation starts with the "context" that the user has configured
-            self.uex_service = UEXApi.init(uex_api_key, uex_access_code)
             self.sc_keybinding_service = SCKeybindings(self.config, self.secret_keeper)
             self.sc_keybinding_service.parse_and_create_files()
 
             self.ai_functions_manager = StarCitizensAiFunctionsManager(self.config, self.secret_keeper)
 
+            self.uex_service = UEXApi2()
             self.current_tools = self._get_context_tools(self.current_context)
             self.overlay = StarCitizenOverlay()
             self._set_current_context(AIContext.CORA, new=True)
@@ -164,17 +141,17 @@ class StarCitizenWingman(OpenAiWingman):
             self.current_context = new_context
             context_prompt = f'{self.config["openai"]["contexts"].get(f"context-{new_context.name}")}'
 
-            tradeport_names = self.uex_service.get_category_names("tradeports")
-            planet_names = self.uex_service.get_category_names("planets")
-            satellite_names = self.uex_service.get_category_names("satellites")
-            commodity_names = self.uex_service.get_category_names("commodities")
-            cities_names = self.uex_service.get_category_names("cities")
+            outpost_names = self.uex_service.get_category_names(uex_api_module.CATEGORY_OUTPOSTS)
+            planet_names = self.uex_service.get_category_names(uex_api_module.CATEGORY_ORBITS)
+            satellite_names = self.uex_service.get_category_names(uex_api_module.CATEGORY_MOONS)
+            commodity_names = self.uex_service.get_category_names(uex_api_module.CATEGORY_COMMODITIES)
+            cities_names = self.uex_service.get_category_names(uex_api_module.CATEGORY_CITIES)
 
             context_prompt += (
                 " Whenever you need to provide or reference the name of a location it must be one of the available tradeport-, planet-, satellite / moon or city names that matches best the player request. "
                 "The same applies to commodity names. Identify the correct names among the following values: "
-                f"Available tradeport names: {tradeport_names}. "
-                f"Available planet names: {planet_names}. "
+                f"Available outpost names: {outpost_names}. "
+                f"Available planet and orbit names: {planet_names}. "
                 f"Available satellite names: {satellite_names}. "
                 f"Available city names: {cities_names}. "
                 f"Available commodity names: {commodity_names}. "
@@ -204,13 +181,27 @@ class StarCitizenWingman(OpenAiWingman):
                 )
 
             # add all additional function prompts of implemented managers for the given context.
+            # initial user message to start-up the conversation.
+            # initial_user_message = ""
             for ai_function_manager in self.ai_functions_manager.get_managers(new_context):
                 ai_function_manager: FunctionManager
                 functions_prompt += ai_function_manager.get_function_prompt()
+                # initial_user_message += ai_function_manager.cora_start_information()
             
             context_prompt += functions_prompt
 
             self.messages = [{"role": "system", "content": f'{context_prompt}. On a request of the Player you will identify the context of his request. The current context is: {new_context.value}. Follow these rules to switch context: {context_switch_prompt}'}]
+
+            # if len(initial_user_message) > 0:
+            #     initial_user_message = "Hello, please get me information about the following questions. When you respond, greet me first and respond in my language: " + initial_user_message
+            #     process_result, instant_response = self._get_response_for_transcript(initial_user_message, locale=None)
+
+            #     actual_response = instant_response or process_result
+            #     printr.print(f"<< ({self.name}): {actual_response}", tags="green")
+
+            #     # the last step in the chain. You'll probably want to play the response to the user as audio using a TTS provider or mechanism of your choice.
+            #     if process_result:
+            #         self._play_to_user(str(process_result))
         else:
             # get the saved context history
             tmp_new_context_history = self.contexts_history[new_context]

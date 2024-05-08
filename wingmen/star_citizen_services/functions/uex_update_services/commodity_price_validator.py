@@ -43,7 +43,7 @@ class CommodityPriceValidator:
             price_raw = price_info_raw.get("price_per_unit")
             multiplier = price_info_raw.get("multiplier")
 
-            new_price, success = CommodityPriceValidator._validate_price(validated_commodity, price_raw, multiplier, operation)
+            new_price, success = CommodityPriceValidator.validate_price(validated_commodity, price_raw, multiplier, operation)
 
             # inject found information 
             price_info_raw["code"] = validated_commodity_key
@@ -64,7 +64,7 @@ class CommodityPriceValidator:
         return all_prices, validated_prices, invalid_prices, True
 
     @staticmethod
-    def _validate_price(validated_commodity, price_to_check, multiplier, operation):
+    def validate_price(validated_commodity, price_to_check, multiplier, operation):
         if not price_to_check:
             return 0, False
         

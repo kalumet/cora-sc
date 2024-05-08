@@ -2,7 +2,7 @@ import json
 import Levenshtein
 
 
-DEBUG = False
+DEBUG = True
 
 
 def print_debug(to_print):
@@ -11,6 +11,14 @@ def print_debug(to_print):
 
 
 def find_best_match(search_term: str, search_space, attribute=None, score_cutoff=80):
+    """
+    Finds the best match for the search term within the search space.
+    :param search_term: The term to search for.
+    :param search_space: The space to search in. Can be a dictionary or a list of dictionaries.
+    :param attribute: The attribute within the dictionary to search for the search term.
+    :param score_cutoff: The minimum score a match should have to be considered valid.
+    :return: A dictionary containing the best match or an error message.
+    """
     if search_term is None:
         return "No search term", False
 

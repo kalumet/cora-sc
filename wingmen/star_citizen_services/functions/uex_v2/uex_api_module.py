@@ -5,7 +5,8 @@ import requests
 import random
 import heapq
 
-from services.printr import Printr
+if __name__ != "__main__":
+    from wingmen.star_citizen_services.helper import find_best_match
 
 
 DEBUG = True
@@ -17,8 +18,11 @@ def print_debug(to_print):
     if DEBUG:
         print(to_print)
 
-        
-printr = Printr()
+
+if __name__ != "__main__":
+    from services.printr import Printr
+
+    printr = Printr()
 
 # basic field names among all endpoints:
 ID_FIELD_NAME = "id"
@@ -104,31 +108,6 @@ class UEXApi2():
 
             self.code_mapping = {}
             self.name_mapping = {}
-            self.uex1_tradeport_name_to_uex2_id_mapping = {  # TODO Temporary mapping until v2 live
-                "Area 18 - Trade & Development Division": 12,
-                "New Babbage - Trade & Development Division": 89,
-                "Orison - Trade & Development Division": 90,
-                "Central Business District": 18,
-                "L19 Residences Admin Office": 51,
-                "ARC-L1 Wide Forest Station": 1,
-                "ARC-L2 Liveley Pathway Station": 2,
-                "ARC-L3 Modern Express Station": 3,
-                "ARC-L4 Faint Glen Station": 4,
-                "ARC-L5 Yellow Core Station": 5,
-                "MIC-L1 Shallow Frontier Station": 54,
-                "MIC-L2 Long Forest Station": 55,
-                "MIC-L3 Endless Odyssey Station": 56,
-                "MIC-L4 Red Crossroads Station": 57,
-                "MIC-L5 Modern Icarus Station": 58,
-                "HUR-L1 Green Glade Station": 44,
-                "HUR-L2 Faithful Dream Station": 45,
-                "HUR-L3 Thundering Express Station": 46,
-                "HUR-L4 Melodic Fields Station": 47,
-                "HUR-L5 High Course Station": 48,
-                "CRU-L1 Ambitious Dream Station": 19,
-                "CRU-L4 Shallow Fields Station": 20,
-                "CRU-L5 Beautiful Glen Station": 22
-            }
             self.data = {}
 
             print_debug("Initializing UexApi2 instance")
@@ -200,7 +179,7 @@ class UEXApi2():
             return file_data, file_age
         else:
             # Make a map of the uexDB:
-            uex_location_code_map = {loc.get(ID_FIELD_NAME): loc for loc in data["data"]}
+            uex_location_code_map = {loc.get(ID_FIELD_NAME): loc for loc in data}
 
             # save the call to the file system
             with open(file_path, 'w', encoding='utf-8') as file:
@@ -219,7 +198,7 @@ class UEXApi2():
         :param additional_category_filters: only relevant, if the category is provided (usually a price category request that should be filtered to something)
         :return: Data either from the file or the API
         """
-        categories = [CATEGORY_CITIES, CATEGORY_COMMODITIES, CATEGORY_ITEMS, CATEGORY_MOONS, CATEGORY_ORBITS, CATEGORY_OUTPOSTS, CATEGORY_TERMINALS, CATEGORY_VEHICLES, CATEGORY_REFINERY_METHODS]
+        categories = [CATEGORY_CITIES, CATEGORY_COMMODITIES, CATEGORY_MOONS, CATEGORY_ORBITS, CATEGORY_OUTPOSTS, CATEGORY_TERMINALS, CATEGORY_VEHICLES, CATEGORY_REFINERY_METHODS]
         
         for check_category in categories:
             if self._needs_refresh(check_category):
@@ -284,12 +263,18 @@ class UEXApi2():
             json.dump(json_data, file, ensure_ascii=False, indent=4)
  
     def _fetch_data_api(self, endpoint, **additional_category_filters):
-        url = f"{self.base_url}/{endpoint}"
+        url = f"{self.base_url}{endpoint}"
         response = self.session.get(url, params=additional_category_filters, timeout=30)
+        actual_url = response.request.url
         if response.status_code == 200:
-            return response.json()
+            print_debug(f"Request: {actual_url}")
+            print_debug(f'result: {json.dumps(response.json(), indent=2)[0:100]}...')
+            return response.json()["data"]
         else:
-            print_debug(f"Fehler beim Abrufen von Daten von {url} mit params {json.dumps(additional_category_filters)}: {response.status_code}")
+            sent_headers = response.request.headers
+            print_debug(f"Error calling: {actual_url}")
+            print_debug(f"Sent headers: {json.dumps(dict(sent_headers), indent=2)}")
+            print_debug(f"Response Body: {json.dumps(response.json(), indent=2)}")
             return None
 
     def _filter_available_commodities(self, commodities_data, include_restricted_illegal, isOnlySellable=False):
@@ -306,12 +291,14 @@ class UEXApi2():
                 Otherwise, returns commodities that are both buyable and sellable, depending on the include_restricted_illegal flag.
         """
         if (include_restricted_illegal):
-            buyable = {commodity[ID_FIELD_NAME]: commodity for commodity in commodities_data.values() if commodity['is_buyable'] == "1"}
-            sellable = {commodity[ID_FIELD_NAME]: commodity for commodity in commodities_data.values() if commodity['is_sellable'] == "1"}
+            buyable = {commodity[ID_FIELD_NAME]: commodity for commodity in commodities_data.values() if commodity['is_buyable'] == 1 and commodity['price_buy'] > 0}
+            sellable = {commodity[ID_FIELD_NAME]: commodity for commodity in commodities_data.values() if commodity['is_sellable'] == 1 and commodity['price_sell'] > 0}
         else:
-            buyable = {commodity[ID_FIELD_NAME]: commodity for commodity in commodities_data.values() if commodity['is_buyable'] == "1" and commodity['is_illegal'] != "1"}
-            sellable = {commodity[ID_FIELD_NAME]: commodity for commodity in commodities_data.values() if commodity['is_sellable'] == "1" and commodity['is_illegal'] != "1"}
+            buyable = {commodity[ID_FIELD_NAME]: commodity for commodity in commodities_data.values() if commodity['is_buyable'] == 1 and commodity['price_buy'] > 0 and commodity['is_illegal'] != 1}
+            sellable = {commodity[ID_FIELD_NAME]: commodity for commodity in commodities_data.values() if commodity['is_sellable'] == 1 and commodity['price_sell'] > 0 and commodity['is_illegal'] != 1}
 
+        # print_debug(f"buyable:  {json.dumps(buyable, indent=2)[0:150]}")
+        # print_debug(f"sellable:  {json.dumps(sellable, indent=2)[0:150]}")
         if isOnlySellable:
             return sellable
 
@@ -330,21 +317,58 @@ class UEXApi2():
         :return: A dictionary of filtered prices of the category type.
         """
         if self._needs_refresh(price_category, **additional_category_filters):
-            data, age = self._fetch_from_file_or_api(price_category, self.max_ages[price_category], self.get_api_endpoints_per_category(self.system_code, price_category), **additional_category_filters)
+            data, age = self._fetch_from_file_or_api(
+                price_category, 
+                self.max_ages[price_category], 
+                self.get_api_endpoints_per_category(self.system_code, price_category), 
+                **additional_category_filters)
 
-        return data["data"] if data else None
+        # print_debug(f"price query result: {json.dumps(data, indent=2)[0:100]}...")
+        return data if data else None
           
-    def _find_best_trade_between_locations(self, location_id1, location_id2, include_restricted_illegal=False ):
+    def _find_best_trade_between_locations(self, location_id1, location_category1, location_id2, location_category2, include_restricted_illegal=False ):
         """
         Find the best trading option between two systems.
         """
         # Extracting trade data for the specified systems
-        terminal_data = self.data[CATEGORY_TERMINALS].get("data")
+        terminal_data = [trade for trade in self.data[CATEGORY_TERMINALS].get("data").values() if trade["type"] == "commodity"]
         commodities_data = self.data[CATEGORY_COMMODITIES].get("data")
-        trades_system1 = [trade for trade in terminal_data.values() if trade['id_star_system'] == location_id1 or trade['id_orbit'] == location_id1 or trade['id_moon'] == location_id1 or trade['id_city'] == location_id1 or trade[ID_FIELD_NAME] == location_id1]
-        trades_system2 = [trade for trade in terminal_data.values() if trade['id_star_system'] == location_id2 or trade['id_orbit'] == location_id2 or trade['id_moon'] == location_id2 or trade['id_city'] == location_id2 or trade[ID_FIELD_NAME] == location_id2]
+
+        # depending on the location type, we need to match the tradeports available at that location
+        id_field_name = ''
+        if location_category1 == CATEGORY_ORBITS:
+            id_field_name = 'id_orbit'
+        elif location_category1 == CATEGORY_MOONS:
+            id_field_name = 'id_moon'
+        elif location_category1 == CATEGORY_CITIES:
+            id_field_name = 'id_city'
+        elif location_category1 == CATEGORY_OUTPOSTS:
+            id_field_name = 'id_outpost'
+
+        terminals_start = [trade for trade in terminal_data if trade[id_field_name] == location_id1]
+
+        id_field_name = ''
+        if location_category2 == CATEGORY_ORBITS:
+            id_field_name = 'id_orbit'
+        elif location_category2 == CATEGORY_MOONS:
+            id_field_name = 'id_moon'
+        elif location_category2 == CATEGORY_CITIES:
+            id_field_name = 'id_city'
+        elif location_category2 == CATEGORY_OUTPOSTS:
+            id_field_name = 'id_outpost'
+
+        # terminals_end = [trade for trade in terminal_data if trade[id_field_name] == location_id2]
+        target_terminal_ids = {trade['id'] for trade in terminal_data if trade[id_field_name] == location_id2}
 
         allowedCommodities = self._filter_available_commodities(commodities_data, include_restricted_illegal)
+
+        commodity_prices = {}
+        for commodity_id in allowedCommodities.keys():
+            prices = self._get_prices_of(price_category=PRICES_COMMODITIES, id_commodity=commodity_id)
+            if prices is None:
+                print_debug(f"Skipping commodity with id {commodity_id} as no prices found. ")
+                continue
+            commodity_prices[commodity_id] = list(prices.values())
 
         # Using a heap to store the top 3 trades
         top_trades = []
@@ -352,50 +376,67 @@ class UEXApi2():
 
         commodities_in_top_trades = {}
         trade_id = 0
-        for trade1 in trades_system1:
-            for trade2 in trades_system2:
-                for commodity_id, commodity in self._get_prices_of(price_category=PRICES_COMMODITIES, id_terminal=trade1[ID_FIELD_NAME]).items():
-                    if commodity_id not in allowedCommodities:
-                        continue  # we are only looking for tradable commodities (that can be bought and sold)
+
+        # first, go through all possible terminals at the start location
+        # and get all possible commodities that can be bought
+        for buy_terminal in terminals_start:
+            buy_terminal_id = buy_terminal[ID_FIELD_NAME]
+
+            buyable_commodities = [
+                commodity_price for commodity_list in commodity_prices.values()
+                for commodity_price in commodity_list
+                if commodity_price["id_terminal"] == buy_terminal_id and commodity_price["price_buy"] > 0
+            ]
+
+            # next, for each of the buyable commodities, get available selling tradeports
+            for terminal_buyable_commodity in buyable_commodities:
+                commodity_id = terminal_buyable_commodity["id_commodity"]
+                print_debug(f"price_buy for {terminal_buyable_commodity['commodity_name']}: {terminal_buyable_commodity['price_buy']}")
                 
-                    commodity_prices = self._get_prices_of(price_category=PRICES_COMMODITIES, id_terminal=trade2[ID_FIELD_NAME], id_commodity=commodity_id)
-                    if commodity_prices:                                       
-                        commodity2 = commodity_prices[commodity_id]
+                buy_price = terminal_buyable_commodity["price_buy"]
 
-                        # Check if the commodity is buyable at trade1 and sellable at trade2
-                        if commodity['price_buy'] > 0 and commodity2['price_sell'] > 0:
-                            sell_price = commodity2['price_sell']
-                            buy_price = commodity['price_buy']
-                        
-                            profit = round(sell_price - buy_price, ndigits=2)
-                            if profit <= 0:
-                                continue
-                            commodity_in_heap = commodities_in_top_trades.get(commodity_id)
+                # among the target selling terminals, find those that sell the given commodity
+                sellable_terminal_prices = [
+                    commodity_price for commodity_list in commodity_prices.values()
+                    for commodity_price in commodity_list
+                    if commodity_price["id_commodity"] == commodity_id
+                    and commodity_price["price_sell"] > 0
+                    and commodity_price["id_terminal"] in target_terminal_ids
+                ]
 
-                            if commodity_in_heap:
-                                # Compare profit with existing entry in heap
-                                if profit > commodity_in_heap['profit']:
-                                    # Remove old trade and update the dictionary
-                                    top_trades.remove((commodity_in_heap['negative_profit'], commodity_in_heap['trade_id'], commodity_in_heap['trade_info']))
-                                    heapq.heapify(top_trades)  # Re-heapify after removing an item
-                                    # Add new trade
-                                    trade_info = self._create_trade_info(trade1, trade2, commodity_id, buy_price, sell_price, profit)
-                                    heapq.heappush(top_trades, (-profit, trade_id, trade_info))
-                                    # Update commodities_in_top_trades
-                                    commodities_in_top_trades[commodity_id] = {'profit': profit, 'negative_profit': -profit, 'trade_id': trade_id, 'trade_info': trade_info}
-                                    trade_id += 1
-                            else:
+                # finally, go through these locations, and find the best selling options for the given commodity
+                for terminal_selling_commodity in sellable_terminal_prices:
+                    sell_price = terminal_selling_commodity['price_sell']
+                
+                    profit = round(sell_price - buy_price, ndigits=2)
+                    if profit <= 0:
+                        continue
+                    commodity_in_heap = commodities_in_top_trades.get(commodity_id)
 
-                                # -profit as heapq sorts with lowest value first
-                                if len(top_trades) < 3 or -profit < top_trades[0][0]:
-                                    if len(top_trades) == 3:
-                                        removed_trade = heapq.heappop(top_trades)  # remove the trade route with the lowest profit
-                                        removed_commodity_code = self.name_mapping.get(CATEGORY_COMMODITIES, {}).get(removed_trade[2]['commodity'], '')  # and remove also the commodity from our commodity map
-                                        del commodities_in_top_trades[removed_commodity_code]
-                                    trade_info = self._create_trade_info(trade1, trade2, commodity_id, buy_price, sell_price, profit) 
-                                    heapq.heappush(top_trades, (-profit, trade_id, trade_info))  # Insert new trade with negative profit (heap smallest value first). Include trade_id for a fallback sorting option
-                                    commodities_in_top_trades[commodity_id] = {'profit': profit, 'negative_profit': -profit, 'trade_id': trade_id, 'trade_info': trade_info}
-                                    trade_id += 1
+                    if commodity_in_heap:
+                        # Compare profit with existing entry in heap
+                        if profit > commodity_in_heap['profit']:
+                            # Remove old trade and update the dictionary
+                            top_trades.remove((commodity_in_heap['negative_profit'], commodity_in_heap['trade_id'], commodity_in_heap['trade_info']))
+                            heapq.heapify(top_trades)  # Re-heapify after removing an item
+                            # Add new trade
+                            trade_info = self._create_trade_info(terminal_buyable_commodity, terminal_selling_commodity, commodity_id, buy_price, sell_price, profit)
+                            heapq.heappush(top_trades, (-profit, trade_id, trade_info))
+                            # Update commodities_in_top_trades
+                            commodities_in_top_trades[commodity_id] = {'profit': profit, 'negative_profit': -profit, 'trade_id': trade_id, 'trade_info': trade_info}
+                            trade_id += 1
+                    else:
+
+                        # -profit as heapq sorts with lowest value first
+                        if len(top_trades) < 3 or -profit < top_trades[0][0]:
+                            if len(top_trades) == 3:
+                                removed_trade = heapq.heappop(top_trades)  # remove the trade route with the lowest profit
+                                removed_commodity_code = self.name_mapping.get(CATEGORY_COMMODITIES, {}).get(removed_trade[2]['commodity'], '')  # and remove also the commodity from our commodity map
+                                del commodities_in_top_trades[removed_commodity_code]
+                            trade_info = self._create_trade_info(terminal_buyable_commodity, terminal_selling_commodity, commodity_id, buy_price, sell_price, profit) 
+                            heapq.heappush(top_trades, (-profit, trade_id, trade_info))  # Insert new trade with negative profit (heap smallest value first). Include trade_id for a fallback sorting option
+                            commodities_in_top_trades[commodity_id] = {'profit': profit, 'negative_profit': -profit, 'trade_id': trade_id, 'trade_info': trade_info}
+                            trade_id += 1
         
         print_debug(top_trades)
         # Convert heap to a sorted list
@@ -406,20 +447,20 @@ class UEXApi2():
         
         return {
             "success": True, 
-            "instructions": "Tell the user how many alternatives you have identified. Provide him the first trade route details. Write out all numbers, especially prices. Example: instead of 24 write 'twentyfour'! ", 
+            "additional_instructions": "Tell the user how many alternatives you have identified. Provide him the first trade route details. Write out all numbers, especially prices. Example: instead of 24 write 'twentyfour'! ", 
             "trade_routes": top_trades,
             "number_of_alternatives": len(top_trades)
         }
 
-    def _create_trade_info(self, buy_tradeport, sell_tradeport, commodity_code, buy_price, sell_price, profit):
+    def _create_trade_info(self, buy_terminal, sell_terminal, commodity_code, buy_price, sell_price, profit):
         return {
             "commodity": self.code_mapping.get(CATEGORY_COMMODITIES, {}).get(commodity_code, ''),
-            "buy_at_tradeport_name": buy_tradeport.get(NAME_FIELD_NAME, ''),
-            "buy_moon": self.code_mapping.get(CATEGORY_MOONS, {}).get(buy_tradeport.get("id_moon", ''), ''),
-            "buy_orbit": self.code_mapping.get(CATEGORY_ORBITS, {}).get(buy_tradeport.get("id_orbit", ''), ''),
-            "sell_at_tradeport_name": sell_tradeport.get(NAME_FIELD_NAME, ''),
-            "sell_moon": self.code_mapping.get(CATEGORY_MOONS, {}).get(sell_tradeport.get("id_moon", ''), ''),
-            "sell_orbit": self.code_mapping.get(CATEGORY_ORBITS, {}).get(sell_tradeport.get("id_orbit", ''), ''),
+            "buy_at_tradeport_name": buy_terminal["terminal_name"],
+            "buy_moon": self.code_mapping[CATEGORY_MOONS].get(buy_terminal["id_moon"], ''),
+            "buy_orbit": self.code_mapping[CATEGORY_ORBITS].get(buy_terminal["id_orbit"], ''),
+            "sell_at_tradeport_name": sell_terminal["terminal_name"],
+            "sell_moon": self.code_mapping[CATEGORY_MOONS].get(sell_terminal["id_moon"], ''),
+            "sell_orbit": self.code_mapping[CATEGORY_ORBITS].get(sell_terminal["id_orbit"], ''),
             "buy_price": buy_price,
             "sell_price": sell_price,
             "profit": profit
@@ -429,35 +470,42 @@ class UEXApi2():
         """
         Find the best trade route for a specific commodity.
         """
-        tradeports_data = self.data[CATEGORY_TERMINALS].get("data")
-        commodities_data = self.data[CATEGORY_COMMODITIES].get("data"), 
+        terminal_data = [trade for trade in self.data[CATEGORY_TERMINALS].get("data").values() if trade["type"] == "commodity"]
+        commodities_data = self.data[CATEGORY_COMMODITIES].get("data")
+
         no_route = {"success": False, "message": f"No trade route found for commodity {commodity_id}."}
 
         allowedCommodities = self._filter_available_commodities(commodities_data, include_restricted_illegal, isOnlySellable=True)
         if commodity_id not in allowedCommodities:
             return no_route
         
+        # get all prices for the commodity
+        prices = self._get_prices_of(price_category=PRICES_COMMODITIES, id_commodity=commodity_id)
+        if prices is None:
+            return no_route
+        
+        prices = {item['id_terminal']: item for item in prices.values()}
+
         top_trades = []
         trade_id = 0
 
-        for trade1 in tradeports_data.values():  # buy tradeport
-            commodity_prices = self._get_prices_of(price_category=PRICES_COMMODITIES, id_terminal=trade1[ID_FIELD_NAME], id_commodity=commodity_id)
-            if not commodity_prices:
+        for trade1 in terminal_data:  # buy tradeport
+ 
+            buy_terminal = prices.get(trade1['id'], None)
+            if buy_terminal is None:
                 continue
-            
-            details = commodity_prices[commodity_id]
-            buy_price = details["price_buy"]
+
+            buy_price = buy_terminal["price_buy"]
             if buy_price <= 0:
                 continue
 
-            for trade2 in tradeports_data.values():  # sell tradeport
+            for trade2 in terminal_data:  # sell tradeport
                 
-                commodity_prices = self._get_prices_of(price_category=PRICES_COMMODITIES, id_terminal=trade2[ID_FIELD_NAME], id_commodity=commodity_id)
-                if not commodity_prices:
+                sell_terminal = prices.get(trade2['id'], None)
+                if sell_terminal is None:
                     continue
-            
-                details = commodity_prices[commodity_id]
-                sell_price = details['price_sell']
+        
+                sell_price = sell_terminal['price_sell']
                 if sell_price <= 0:
                     continue
 
@@ -465,7 +513,7 @@ class UEXApi2():
                 if profit <= 0:
                     continue
 
-                trade_info = self._create_trade_info(trade1, trade2, commodity_id, buy_price, sell_price, round(profit, ndigits=2))
+                trade_info = self._create_trade_info(buy_terminal, sell_terminal, commodity_id, buy_price, sell_price, round(profit, ndigits=2))
                 heapq.heappush(top_trades, (-profit, trade_id, trade_info))
                 trade_id += 1
                 
@@ -479,7 +527,7 @@ class UEXApi2():
 
         return {
             "success": True,
-            "instructions": "Tell the user how many alternatives you have identified. Provide him the first trade route details. Write out all numbers, especially prices. Example: instead of 24 write 'twentyfour'! ", 
+            "additional_instructions": "Tell the user how many alternatives you have identified. Provide him the first trade route details. Write out all numbers, especially prices. Example: instead of 24 write 'twentyfour'! ", 
             "trade_routes": best_trade_routes,
             "number_of_alternatives": len(best_trade_routes)
         }
@@ -488,28 +536,28 @@ class UEXApi2():
         """
         Find the best selling option for a commodity.
         """
-        tradeports_data = self.data[CATEGORY_TERMINALS].get("data")
         commodities_data = self.data[CATEGORY_COMMODITIES].get("data")
 
         no_route = {"success": False, "message": f"No selling location found for commodity {commodity_id}."}
         max_sell_price = 0
 
         allowedCommodities = self._filter_available_commodities(commodities_data, include_restricted_illegal, isOnlySellable=True)
-        if commodity_id not in allowedCommodities:
+        if commodity_id not in allowedCommodities.keys():
             return no_route
 
+        # get all prices for the commodity
+        prices = self._get_prices_of(price_category=PRICES_COMMODITIES, id_commodity=commodity_id)
+        if prices is None:
+            return no_route
+        
         top_trades = []
         trade_id = 0
-
-        for trade in tradeports_data.values():
-            commodity_prices = self._get_prices_of(price_category=PRICES_COMMODITIES, id_terminal=trade[ID_FIELD_NAME], id_commodity=commodity_id)
-            if not commodity_prices:
-                continue
+  
+        for terminal_prices in prices.values():
+            sell_price = terminal_prices['price_sell']
             
-            details = commodity_prices[commodity_id]
-            sell_price = details['price_sell']
-            if sell_price > max_sell_price or len(top_trades) < 3:
-                trade_info = self._build_trade_selling_info(commodity_id, trade, round(sell_price, ndigits=2))
+            if sell_price > 0 and (sell_price > max_sell_price or len(top_trades) < 3):
+                trade_info = self._build_trade_selling_info(commodity_id, terminal_prices, round(sell_price, ndigits=2))
                 # - profit as lowest value is always at top_trades[0]
                 heapq.heappush(top_trades, (-sell_price, trade_id, trade_info))
                 trade_id += 1
@@ -525,39 +573,59 @@ class UEXApi2():
 
         return {
             "success": True,
-            "instructions": "Tell the user how many alternatives you have identified. Provide him the first trade route details. Write out all numbers, especially prices. Example: instead of 24 write 'twentyfour'!", 
+            "additional_instructions": "Tell the user how many alternatives you have identified. Provide him the first trade route details. Write out all numbers, especially prices. Example: instead of 24 write 'twentyfour'!", 
             "trade_routes": best_trade_routes,
             "number_of_alternatives": len(best_trade_routes)
         }
 
-    def _find_best_sell_price_at_location(self, commodity_id, location_id):
+    def _find_best_sell_price_at_location(self, commodity_id, location_id, location_category):
         """
         Find the best trade route for a specific commodity around a specific location.
         """
-        terminal_data = self.data[CATEGORY_TERMINALS].get("data")
-        commodities_data = self.data[CATEGORY_COMMODITIES].get("data"), 
-        tradeports = [trade for trade in terminal_data.values() if trade['id_star_system'] == location_id or trade['id_orbit'] == location_id or trade['id_moon'] == location_id or trade['id_city'] == location_id or trade[ID_FIELD_NAME] == location_id]
-    
+        terminal_data = [trade for trade in self.data[CATEGORY_TERMINALS].get("data").values() if trade["type"] == "commodity"]
+        commodities_data = self.data[CATEGORY_COMMODITIES].get("data")
+        
+        # depending on the location type, we need to match the tradeports available at that location
+        id_field_name = ''
+        if location_category == CATEGORY_ORBITS:
+            id_field_name = 'id_orbit'
+        elif location_category == CATEGORY_MOONS:
+            id_field_name = 'id_moon'
+        elif location_category == CATEGORY_CITIES:
+            id_field_name = 'id_city'
+        elif location_category == CATEGORY_OUTPOSTS:
+            id_field_name = 'id_outpost'
+
+        tradeports = [trade for trade in terminal_data if trade[id_field_name] == location_id]
+   
         no_route = {"success": False, "message": f"No available tradeport found for commodity {commodity_id} at location {location_id}."}
         max_sell_price = 0
 
         allowedCommodities = self._filter_available_commodities(commodities_data, include_restricted_illegal=True, isOnlySellable=True)
-        if commodity_id not in allowedCommodities:
+        
+        if commodity_id not in allowedCommodities.keys():
             return no_route
+
+        # get all prices for the commodity
+        prices = self._get_prices_of(price_category=PRICES_COMMODITIES, id_commodity=commodity_id)
+        if prices is None:
+            return no_route
+        
+        prices = {item['id_terminal']: item for item in prices.values()}
 
         top_trades = []
         trade_id = 0
 
         for trade in tradeports:
-            
-            commodity_prices = self._get_prices_of(price_category=PRICES_COMMODITIES, id_terminal=trade[ID_FIELD_NAME], id_commodity=commodity_id)
-            if not commodity_prices:
+                    
+            # at the tradeport, there can only be one sell price for the given commodity
+            tradeport_price = prices.get(trade['id'], None)
+            if tradeport_price is None:
                 continue
-        
-            details = commodity_prices[commodity_id]
-            sell_price = details['price_sell']
+
+            sell_price = tradeport_price['price_sell']
             if sell_price > max_sell_price or len(top_trades) < 3:
-                trade_info = self._build_trade_selling_info(commodity_id, trade, round(sell_price, ndigits=2))
+                trade_info = self._build_trade_selling_info(commodity_id, tradeport_price, round(sell_price, ndigits=2))
                 # - profit as lowest value is always at top_trades[0]
                 heapq.heappush(top_trades, (-sell_price, trade_id, trade_info))
                 trade_id += 1
@@ -573,7 +641,7 @@ class UEXApi2():
 
         return {
             "success": True,
-            "instructions": "Tell the user how many alternatives you have identified. Provide him the first trade route details. Write out all numbers, especially prices. Example: instead of 24 write 'twentyfour'! ", 
+            "additional_instructions": "Tell the user how many alternatives you have identified. Provide him the first trade route details. Write out all numbers, especially prices. Example: instead of 24 write 'twentyfour'! ", 
             "trade_routes": best_trade_routes,
             "number_of_alternatives": len(best_trade_routes)
         }
@@ -581,59 +649,133 @@ class UEXApi2():
     def _build_trade_selling_info(self, commodity_code, best_sell, max_sell_price):
         return {
                 "commodity": self.code_mapping.get(CATEGORY_COMMODITIES, {}).get(commodity_code, ''),
-                "sell_at_tradeport_name": best_sell.get(NAME_FIELD_NAME, ''),
+                "sell_at_tradeport_name": best_sell.get("terminal_name", ''),
                 "sell_moon": self.code_mapping.get(CATEGORY_MOONS, {}).get(best_sell.get("id_moon", ''), ''),
                 "sell_orbit": self.code_mapping.get(CATEGORY_ORBITS, {}).get(best_sell.get("id_orbit", ''), ''),
                 "sell_price": max_sell_price
             }
 
-    def _find_best_trade_from_location(self, location_id, include_restricted_illegal=False):
+    def _find_best_trade_from_location(self, location_id, location_category, include_restricted_illegal=False):
         """
         Find the best trading option starting from a given location.
+
+        location_id is the id of any location / or area the player wants to start a trade (specific outpost, or any outpost of a specific moon)
+
+        first identifies all possible terminals within the search area for the start.
+        next identifies all tradeble commodities (can be bought and sold)
+
+        reduce to buyable commodities, that are available at any of the potential starting locations.
+
+        for every starting location, find for any of the available buyable commodities at that location where
+        it could be sold. Save all possible trade routes in order of profit.
         """
         # Extracting trade data for the specified systems
-        terminal_data = self.data[CATEGORY_TERMINALS].get("data")
+        terminal_data = [trade for trade in self.data[CATEGORY_TERMINALS].get("data").values() if trade["type"] == "commodity"]
         commodities_data = self.data[CATEGORY_COMMODITIES].get("data")
-        # Extrahiere alle Handelsposten am Startort
-        start_location_trades = [trade for trade in terminal_data.values() if trade['id_star_system'] == location_id or trade['id_orbit'] == location_id or trade['id_moon'] == location_id or trade['id_city'] == location_id or trade[ID_FIELD_NAME] == location_id]
+        
+        # depending on the location type, we need to match the tradeports available at that location
+        id_field_name = ''
+        if location_category == CATEGORY_ORBITS:
+            id_field_name = 'id_orbit'
+        elif location_category == CATEGORY_MOONS:
+            id_field_name = 'id_moon'
+        elif location_category == CATEGORY_CITIES:
+            id_field_name = 'id_city'
+        elif location_category == CATEGORY_OUTPOSTS:
+            id_field_name = 'id_outpost'
+
+        start_location_terminals = [trade for trade in terminal_data if trade[id_field_name] == location_id]
         
         allowedCommodities = self._filter_available_commodities(commodities_data, include_restricted_illegal)
-            
+        
+        # first, get current prices of all available commodities for trade
+        commodity_prices = {}
+        buyable_commodity_prices = {}
+        sellable_commodity_prices = {}
+        for commodity_id in allowedCommodities.keys():
+            prices = self._get_prices_of(price_category=PRICES_COMMODITIES, id_commodity=commodity_id)
+            if prices is None:
+                print_debug(f"Skipping commodity with id {commodity_id} as no prices found. ")
+                continue
+            commodity_prices[commodity_id] = list(prices.values())
+        
+        # commodity prices:
+        # "1" {[
+        # {
+            #     "id": 4,
+            #     "id_commodity": 1,
+            #     "id_star_system": 68,
+            #     "id_planet": 4,
+            #     "id_orbit": 4,
+            #     "id_moon": 0,
+            #     "id_city": 1,
+            #     "id_outpost": 0,
+            #     "id_poi": 0,
+            #     "id_terminal": 12,
+            #     "price_buy": 0,
+            #     "price_sell": 2539,
+            #     "scu_sell_stock": 3,
+            #     "status_buy": 0,
+            #     "status_sell": 1,
+            #     "commodity_name": "Agricium",
+            #     "commodity_code": "AGRI",
+            #     "commodity_slug": "agricium",
+            #     "star_system_name": "Stanton",
+            #     "planet_name": "ArcCorp",
+            #     "orbit_name": "ArcCorp",
+            #     "moon_name": null,
+            #     "space_station_name": null,
+            #     "city_name": "Area 18",
+            #     "outpost_name": null,
+            #     "terminal_name": "TDD - Trade and Development Division - Area 18",
+            #     "terminal_slug": "tdd-trade-and-development-division-area-18",
+            #     "terminal_code": "TDD-A18"
+            # },
         max_profit = 0
 
         top_trades = []
         trade_id = 0
 
         # Durchlaufe alle Waren, die am Startort gekauft werden können
-        for buy_terminal in start_location_trades:
-            for commodity_id, commodity in self._get_prices_of(price_category=PRICES_COMMODITIES, id_terminal=buy_terminal[ID_FIELD_NAME]).items():
-                if commodity_id not in allowedCommodities:
-                    continue
+        for buy_terminal in start_location_terminals:
+            buy_terminal_id = buy_terminal[ID_FIELD_NAME]
+            buy_terminal_name = buy_terminal['name']
+
+            buyable_commodities = [
+                commodity_price for commodity_list in commodity_prices.values()
+                for commodity_price in commodity_list
+                if commodity_price["id_terminal"] == buy_terminal_id and commodity_price["price_buy"] > 0
+            ]
+
+            for terminal_buyable_commodity in buyable_commodities:
+                commodity_id = terminal_buyable_commodity["id_commodity"]
+                print_debug(f"price_buy for {terminal_buyable_commodity['commodity_name']}: {terminal_buyable_commodity['price_buy']}")
                 
-                if commodity["price_buy"] <= 0:
-                    continue  # commodity cannot be bought at this terminal
-                
-                buy_price = commodity["price_buy"]
+                buy_price = terminal_buyable_commodity["price_buy"]
 
                 # Finde den besten Verkaufspreis für die Ware an anderen Orten
                 best_sell_price = 0
-                best_sell_location = None
-                for sell_terminal in terminal_data.values():
-                    commodity_price = self._get_prices_of(price_category=PRICES_COMMODITIES, id_terminal=sell_terminal[ID_FIELD_NAME], id_commodity=commodity_id)
+                best_sell_location_name = None
+
+                sellable_terminal_prices = [
+                    commodity_price for commodity_list in commodity_prices.values()
+                    for commodity_price in commodity_list
+                    if commodity_price["id_commodity"] == commodity_id and commodity_price["price_sell"] > 0
+                ]
+
+                for sell_terminal in sellable_terminal_prices:
+                    sell_terminal_name = sell_terminal["terminal_name"]
                     
-                    if commodity_price:                                       
-                        commodity2 = commodity_price[commodity_id]
-                    
-                        sell_price = commodity2['price_sell']
-                        if sell_price > 0:
-                            if sell_price > best_sell_price:
-                                best_sell_price = sell_price
-                                best_sell_location = sell_terminal
+                    sell_price = sell_terminal['price_sell']
+                    #  print_debug(f"price_sell for {commodity_id}: {commodity2['price_sell']}")
+                    if sell_price > best_sell_price:
+                        best_sell_price = sell_price
+                        best_sell_terminal = sell_terminal
 
                 # Berechne den Profit und prüfe, ob es eine bessere Option ist
                 profit = best_sell_price - buy_price
                 if profit > 0 and profit > max_profit:
-                    trade_info = self._create_trade_info(buy_terminal, best_sell_location, commodity, buy_price, best_sell_price, round(profit, ndigits=2))
+                    trade_info = self._create_trade_info(terminal_buyable_commodity, best_sell_terminal, commodity_id, buy_price, best_sell_price, round(profit, ndigits=2))
                     # - profit as lowest value is always at top_trades[0]
                     heapq.heappush(top_trades, (-profit, trade_id, trade_info))
                     max_profit = profit
@@ -649,70 +791,75 @@ class UEXApi2():
 
         return {
             "success": True,
-            "instructions": "Tell the user how many alternatives you have identified. Provide him the first trade route details. Write out all numbers, especially prices. Example: instead of 24 write 'twentyfour'! ", 
+            "additional_instructions": "Tell the user how many alternatives you have identified. Provide him the first trade route details. Write out all numbers, especially prices. Example: instead of 24 write 'twentyfour'! ", 
             "trade_routes": best_trade_routes,
             "number_of_alternatives": len(best_trade_routes)
         }
 
     def find_best_trade_between_locations_code(self, location_name_from, location_name_to):
-        printr.print(text=f"Suche beste Handelsoption für die Reise {location_name_from} -> {location_name_to}", tags="info")
-        _, location_from = self.get_location(location_name_from)
-        _, location_to = self.get_location(location_name_to)
+        if __name__ != "__main__":
+            printr.print(text=f"Suche beste Handelsoption für die Reise {location_name_from} -> {location_name_to}", tags="info")
+        category_from, location_from = self.get_location(location_name_from)
+        category_to, location_to = self.get_location(location_name_to)
         
         if not location_from: 
             return {
                 "success": False, 
-                "instructions": f"Start location not recognised: {location_name_from}"
+                "message": f"Start location not recognised: {location_name_from}"
             }
         
         if not location_to:
             return {
                 "success": False, 
-                "instructions": f"Target location not recognised: {location_name_to}"
+                "message": f"Target location not recognised: {location_name_to}"
             }   
 
-        return self._find_best_trade_between_locations(location_from[ID_FIELD_NAME], location_to[ID_FIELD_NAME])
+        return self._find_best_trade_between_locations(location_from[ID_FIELD_NAME], category_from, location_to[ID_FIELD_NAME], category_to)
 
     def find_best_trade_from_location_code(self, location_name_from):
-        printr.print(text=f"Suche beste Handelsoption ab {location_name_from}", tags="info")
-        _, location_from = self.get_location(location_name_from)
+        if __name__ != "__main__":
+            printr.print(text=f"Search best trade option from {location_name_from}", tags="info")
+        category, location_from = self.get_location(location_name_from)
         
         if not location_from: 
             return {
                 "success": False, 
-                "instructions": f"Start location not recognised: {location_name_from}"
+                "message": f"Start location not recognised: {location_name_from}"
             }
         
-        return self._find_best_trade_from_location(location_from[ID_FIELD_NAME])
+        return self._find_best_trade_from_location(location_from[ID_FIELD_NAME], category)
 
     def find_best_trade_for_commodity_code(self, commodity_name):
-        printr.print(text=f"Suche beste Route für {commodity_name}", tags="info")
+        if __name__ != "__main__":
+            printr.print(text=f"Suche beste Route für {commodity_name}", tags="info")
         commodity = self.get_commodity(commodity_name)
             
         if not commodity:
             return {
                 "success": False, 
-                "instructions": "Ask the player for the commodity that he wants to trade."
+                "additional_instructions": "Ask the player for the commodity that he wants to trade."
             }
         
         return self._find_best_trade_for_commodity(commodity[ID_FIELD_NAME])
     
     def find_best_selling_location_for_commodity_code(self, commodity_name):
-        printr.print(text=f"Suche beste Verkaufsort für {commodity_name}", tags="info")
+        if __name__ != "__main__":
+            printr.print(text=f"Suche beste Verkaufsort für {commodity_name}", tags="info")
         commodity = self.get_commodity(commodity_name)
             
         if not commodity:
             return {
                 "success": False, 
-                "instructions": "Ask the player the commodity that he wants to sell."
+                "additional_instructions": "Ask the player the commodity that he wants to sell."
             }
     
         return self._find_best_selling_location_for_commodity(commodity[ID_FIELD_NAME])
     
     def find_best_sell_price_at_location_codes(self, commodity_name, location_name):
-        printr.print(text=f"Suche beste Verkaufsoption für {commodity_name} bei {location_name}", tags="info")
+        if __name__ != "__main__":
+            printr.print(text=f"Suche beste Verkaufsoption für {commodity_name} bei {location_name}", tags="info")
         
-        _, location_to = self.get_location(location_name)
+        category, location_to = self.get_location(location_name)
 
         commodity = self.get_commodity(commodity_name)
         
@@ -720,17 +867,17 @@ class UEXApi2():
             print(f"find_tradeport_at_location_to_sell_commodity - location {location_name} not found.")
             return {
                 "success": False, 
-                "instructions": f"The location {location_name} could not be found. User should try again speaking clearly. "
+                "additional_instructions": f"The location {location_name} could not be found. User should try again speaking clearly. "
             }
         
         if not commodity:
             print(f"find_tradeport_at_location_to_sell_commodity - commodity {commodity_name} not found.")
             return {
                 "success": False, 
-                "instructions": f"The commodity {commodity_name} could not be identified. Ask the user to repeat the name clearly. "
+                "additional_instructions": f"The commodity {commodity_name} could not be identified. Ask the user to repeat the name clearly. "
             }
     
-        return self._find_best_sell_price_at_location(commodity_id=commodity[ID_FIELD_NAME], location_id=location_to[ID_FIELD_NAME])
+        return self._find_best_sell_price_at_location(commodity_id=commodity[ID_FIELD_NAME], location_id=location_to[ID_FIELD_NAME], location_category=category)
       
     def get_commodity_name(self, commodity_id):
         self._refresh_data()
@@ -777,11 +924,15 @@ class UEXApi2():
         return self.data[category].get("data", [])
     
     def get_refineries(self):
+        self._refresh_data()
         category = CATEGORY_TERMINALS
         data, age = self._fetch_from_file_or_api(category, self.max_ages[category], self.get_api_endpoints_per_category(self.system_code, category), type="refinery")
         return data 
     
     def get_tradeport(self, tradeport_mapping_name):
+        self._refresh_data()
+
+        find_best_match.find_best_match(tradeport_mapping_name, self.name_mapping[CATEGORY_TERMINALS].keys())
         terminal_id = self.name_mapping[CATEGORY_TERMINALS].get(tradeport_mapping_name, None)
         if not terminal_id:
             return None
@@ -789,23 +940,33 @@ class UEXApi2():
         return self.data[CATEGORY_TERMINALS].get("data", []).get(terminal_id, None)
     
     def get_location(self, location_mapping_name):
-
-        location_categories = [CATEGORY_TERMINALS, CATEGORY_OUTPOSTS, CATEGORY_CITIES, CATEGORY_MOONS, CATEGORY_ORBITS]
+        self._refresh_data()
+        location_categories = [CATEGORY_ORBITS, CATEGORY_MOONS, CATEGORY_CITIES, CATEGORY_OUTPOSTS]
+        
         for category in location_categories:
-            location_id = self.name_mapping[category].get(location_mapping_name, None)
-            if location_id:
-                return category, self.data[category].get("data", []).get(location_id, None)
+            # print_debug(f"location names for {category}: {json.dumps(self.name_mapping[category], indent=2)[0:150]}")
+            location_mapping, success = find_best_match.find_best_match(location_mapping_name, self.data[category].get('data', {}), attribute="name")
+            if not success:
+                continue
+
+            location = location_mapping["root_object"]
+            print_debug(f"found location '{location_mapping_name}' in category '{category}':\n {json.dumps(location_mapping, indent=2)}")
+            return category, location
         
         return None, None
     
     def get_commodity(self, commodity_mapping_name):
-        commodity_id = self.name_mapping[CATEGORY_COMMODITIES].get(commodity_mapping_name, None)
-        if commodity_id:
-            return self.data[CATEGORY_COMMODITIES].get("data", []).get(commodity_id, None)
+        self._refresh_data()
+        commodity_mapping, success = find_best_match.find_best_match(commodity_mapping_name, self.data[CATEGORY_COMMODITIES].get('data', {}), attribute="name")
+        if not success:
+            return None
         
-        return None
-    
+        commodity = commodity_mapping["root_object"]
+        print_debug(f"found commodity '{commodity_mapping_name}':\n {json.dumps(commodity, indent=2)}")
+        return commodity
+
     def get_commodity_for_tradeport(self, commodity_mapping_name, tradeport):
+        self._refresh_data()
         commodity_id = self.name_mapping[CATEGORY_COMMODITIES].get(commodity_mapping_name, None)
         # print_debug(f'uex: {commodity_mapping_name}-> {code} @ {tradeport["name_short"]}')
         if not commodity_id:
@@ -819,10 +980,28 @@ class UEXApi2():
         self._refresh_data()
         return self.data[category].get("data", [])
         
-    def get_category_names(self, category: str) -> list[str]:
+    def get_category_names(self, category: str, filter: tuple[str, str] = None) -> list[str]:
+        """
+        Fetch names from a given category filtered by the provided attribute-value tuple.
+        
+        :param category: The category to fetch from, e.g., "terminals" or "planets".
+        :param filter: A tuple containing the filter attribute and filter value, e.g., ("is_available", "1").
+        :return: A list of names (or other properties) from the filtered items.
+        """
         self._refresh_data()
         
-        return list(self.name_mapping[category].keys())
+        if filter is None:
+            return list(self.name_mapping[category].keys())
+        
+        category_data = self.data[category].get("data")
+
+        filter_attribute, filter_value = filter
+        # Filter the data based on the provided attribute and value
+        filtered_data = [item for item in category_data.values() if str(item.get(filter_attribute, "")) == filter_value]
+
+        # Assuming 'name' is a key in the dictionary that holds the name of the entity
+        names = [item['name'] for item in filtered_data]
+        return names
         
     def update_tradeport_prices(self, tradeport, commodity_update_infos, operation):
         self._refresh_data()
@@ -831,16 +1010,7 @@ class UEXApi2():
         if not ("code" in tradeport):
             return "missing code, rejected", False
         
-        terminal_id = self.name_mapping[CATEGORY_TERMINALS][tradeport["name"]] if tradeport["name"] in self.name_mapping[CATEGORY_TERMINALS] else None
-        if not terminal_id:  # TODO temporary try to find best matching name for uex2 based on uex1
-            terminal_id = self.uex1_tradeport_name_to_uex2_id_mapping[tradeport["name"]] if tradeport["name"] in self.uex1_tradeport_name_to_uex2_id_mapping else None
-
-            if not terminal_id:
-                print_debug(f"Unknown uex2 terminal id for tradeport['name']={tradeport['name']}")
-                return "unknown terminal id", False
-            # example uex1: Area 18 - Trade & Development Division, Area 18 TDD, ARCTD
-            # uex2: TDD - Trade and Development Division - Area 18, TDD Area 18, TDD-A18
-        
+        terminal_id = self.name_mapping[CATEGORY_TERMINALS][tradeport["name"]] if tradeport["name"] in self.name_mapping[CATEGORY_TERMINALS] else None        
         prices = []
         for commodity_info in commodity_update_infos:
             # {
@@ -938,3 +1108,53 @@ class UEXApi2():
         
         print_debug(f"Error deleting job from {url}: with response: {json.dumps(response.json(), indent=2)}")
         return response.json(), False  # error reason
+    
+
+if __name__ == "__main__":
+    api = UEXApi2.init(uex_api_key="****", 
+                       user_secret_key="****")
+    
+    import sys
+    # Fügen Sie den absoluten Pfad zum Verzeichnis hinzu, in dem sich das Paket befindet
+    sys.path.append(os.path.abspath(r'D:\Dokumente\dev\python-projects\wigman-ai\wingman-ai'))
+    from wingmen.star_citizen_services.helper import find_best_match
+
+    # print("========= TEST start Hurston ========")
+    # result = api.find_best_trade_from_location_code(location_name_from="Hurston")
+    # print("RESULT:")
+    # print(json.dumps(result, indent=2))
+
+    # print("========= TEST start HDMS-Lathan ========")
+    # result = api.find_best_trade_from_location_code(location_name_from="HDMS-Lathan")
+    # print("RESULT:")
+    # print(json.dumps(result, indent=2))
+
+    # print("========= TEST start Arccorp ========")
+    # result = api.find_best_trade_from_location_code(location_name_from="ArcCorp")
+    # print("RESULT:")
+    # print(json.dumps(result, indent=2))
+
+    # print("========= TEST Arccorp -> Hurston ========")
+    # result = api.find_best_trade_between_locations_code(location_name_from="ArcCorp", location_name_to="Hurston")
+    # print("RESULT:")
+    # print(json.dumps(result, indent=2))
+
+    # print("========= TEST Hurston -> Arccorp ========")
+    # result = api.find_best_trade_between_locations_code(location_name_from="hurton", location_name_to="Arccorp")
+    # print("RESULT:")
+    # print(json.dumps(result, indent=2))
+
+    # print("========= TEST Medical Supplies -> Hurston ========")
+    # result = api.find_best_sell_price_at_location_codes(commodity_name="Medical Supplies", location_name="Hurston")
+    # print("RESULT:")
+    # print(json.dumps(result, indent=2))
+
+    # print("========= TEST where sell Laranite? ========")
+    # result = api.find_best_selling_location_for_commodity_code(commodity_name="Laranite")
+    # print("RESULT:")
+    # print(json.dumps(result, indent=2))
+
+    # print("========= TEST best trade for Medical Supplies? ========")
+    # result = api.find_best_trade_for_commodity_code(commodity_name="Medical Supplies")
+    # print("RESULT:")
+    # print(json.dumps(result, indent=2))

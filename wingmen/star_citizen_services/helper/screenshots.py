@@ -42,8 +42,12 @@ def take_screenshot(data_dir_path, *subdirectories, **image_name_placeholders):
     # Format the path for subdirectories correctly
     subdir_path = "/".join(subdirectories)
     path = data_dir_path
-    
-    if TEST:
+
+    is_test = TEST
+    if "test" in image_name_placeholders.keys() and is_test is False:
+        is_test = image_name_placeholders["test"]
+
+    if is_test:
         path = os.path.join(path, 'examples', subdir_path)
         return random_image_from_directory(path)
     
@@ -261,10 +265,11 @@ def crop_screenshot(data_dir_path, screenshot_file, areas_and_corners_and_cropst
         filename = os.path.basename(screenshot_file)
         directory_path = os.path.dirname(screenshot_file)
         filename = f"cropped_{filename}"
-        full_path = os.path.normpath(os.path.join(directory_path, filename))
+        full_path = os.path.normpath(os.path.join(directory_path, "debug", filename))
         cv2.imwrite(full_path, cropped_screenshot)
     
     return cropped_screenshot
+
 
 def apply_quadrant_selection(screenshot, x_min, x_max, y_min, y_max, vertical_applied, horizontal_applied, select_sides):
     if x_max <= x_min or y_max <= y_min:

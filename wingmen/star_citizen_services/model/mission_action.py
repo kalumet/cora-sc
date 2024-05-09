@@ -1,3 +1,4 @@
+from wingmen.star_citizen_services.functions.uex_v2.uex_api_module import UEXApi2
 class DeliveryMissionAction:
 
     def __init__(self, index=None, location_ref=None, package_id=None, mission_ref=None, 
@@ -96,8 +97,7 @@ class DeliveryMissionAction:
         return hash(hash_str)
     
     def to_GPT_json(self): 
-        from wingmen.star_citizen_services.uex_api import UEXApi
-        uex_api = UEXApi()
+        uex_api = UEXApi2()
 
         satellites = uex_api.get_data("satellites")
         planets = uex_api.get_data("planets")

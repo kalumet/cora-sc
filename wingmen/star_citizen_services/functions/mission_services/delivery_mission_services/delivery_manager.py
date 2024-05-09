@@ -2,7 +2,7 @@
 # import copy
 import heapq
 
-from wingmen.star_citizen_services.uex_api import UEXApi
+from wingmen.star_citizen_services.functions.uex_v2.uex_api_module import UEXApi2
 from wingmen.star_citizen_services.model.delivery_mission import DeliveryMission
 from wingmen.star_citizen_services.model.mission_action import DeliveryMissionAction
 from wingmen.star_citizen_services.model.mission_package import MissionPackage
@@ -22,7 +22,7 @@ class PackageDeliveryPlanner:
 
         self.debug = False
         self.mission_actions_list = []
-        self.uex_service: UEXApi = UEXApi()
+        self.uex_service: UEXApi2 = UEXApi2()
 
     def calculate_delivery_route(self, missions: [DeliveryMission]) -> [DeliveryMissionAction]:
         """

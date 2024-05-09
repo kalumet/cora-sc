@@ -9,7 +9,7 @@ if __name__ != "__main__":
     from wingmen.star_citizen_services.helper import find_best_match
 
 
-DEBUG = True
+DEBUG = False
 TEST = False
 CALL_UEX_SR_ENDPOINT = True
 
@@ -306,12 +306,14 @@ class UEXApi2():
         buyable_and_sellable = {code: buyable[code] for code in buyable if code in sellable}
         return buyable_and_sellable
     
-    def _get_prices_of(self, price_category=PRICES_COMMODITIES, **additional_category_filters):
+    def get_prices_of(self, price_category=PRICES_COMMODITIES, **additional_category_filters):
         """
         Get prices of something for given filters
 
         :param price_category PRICES_COMMODITIES, PRICES_ITEMS or PRICES_VEHICLES
-        :param additional_category_filters must contain at least one parameter, usually {id_terminal: id}
+        :param additional_category_filters must contain at least one parameter:
+            - the id of the terminal - id_terminal=id
+            - the id of the commodity - id_commodity=id
 
 
         :return: A dictionary of filtered prices of the category type.
@@ -364,7 +366,7 @@ class UEXApi2():
 
         commodity_prices = {}
         for commodity_id in allowedCommodities.keys():
-            prices = self._get_prices_of(price_category=PRICES_COMMODITIES, id_commodity=commodity_id)
+            prices = self.get_prices_of(price_category=PRICES_COMMODITIES, id_commodity=commodity_id)
             if prices is None:
                 print_debug(f"Skipping commodity with id {commodity_id} as no prices found. ")
                 continue
@@ -480,7 +482,7 @@ class UEXApi2():
             return no_route
         
         # get all prices for the commodity
-        prices = self._get_prices_of(price_category=PRICES_COMMODITIES, id_commodity=commodity_id)
+        prices = self.get_prices_of(price_category=PRICES_COMMODITIES, id_commodity=commodity_id)
         if prices is None:
             return no_route
         
@@ -546,7 +548,7 @@ class UEXApi2():
             return no_route
 
         # get all prices for the commodity
-        prices = self._get_prices_of(price_category=PRICES_COMMODITIES, id_commodity=commodity_id)
+        prices = self.get_prices_of(price_category=PRICES_COMMODITIES, id_commodity=commodity_id)
         if prices is None:
             return no_route
         
@@ -607,7 +609,7 @@ class UEXApi2():
             return no_route
 
         # get all prices for the commodity
-        prices = self._get_prices_of(price_category=PRICES_COMMODITIES, id_commodity=commodity_id)
+        prices = self.get_prices_of(price_category=PRICES_COMMODITIES, id_commodity=commodity_id)
         if prices is None:
             return no_route
         
@@ -693,7 +695,7 @@ class UEXApi2():
         buyable_commodity_prices = {}
         sellable_commodity_prices = {}
         for commodity_id in allowedCommodities.keys():
-            prices = self._get_prices_of(price_category=PRICES_COMMODITIES, id_commodity=commodity_id)
+            prices = self.get_prices_of(price_category=PRICES_COMMODITIES, id_commodity=commodity_id)
             if prices is None:
                 print_debug(f"Skipping commodity with id {commodity_id} as no prices found. ")
                 continue
@@ -929,15 +931,15 @@ class UEXApi2():
         data, age = self._fetch_from_file_or_api(category, self.max_ages[category], self.get_api_endpoints_per_category(self.system_code, category), type="refinery")
         return data 
     
-    def get_tradeport(self, tradeport_mapping_name):
+    def get_terminal(self, tradeport_mapping_name, type="commodity", search_fields=["name"], cutoff=80):
+        
         self._refresh_data()
-
-        find_best_match.find_best_match(tradeport_mapping_name, self.name_mapping[CATEGORY_TERMINALS].keys())
-        terminal_id = self.name_mapping[CATEGORY_TERMINALS].get(tradeport_mapping_name, None)
-        if not terminal_id:
+        filtered_data = [item for item in self.data[CATEGORY_TERMINALS].get('data', {}).values() if str(item.get("type", "")) == type]
+        terminal_mapping, success = find_best_match.find_best_match(tradeport_mapping_name, filtered_data, attributes=search_fields, score_cutoff=cutoff)
+        if not success:
             return None
         
-        return self.data[CATEGORY_TERMINALS].get("data", []).get(terminal_id, None)
+        return terminal_mapping["root_object"]
     
     def get_location(self, location_mapping_name):
         self._refresh_data()
@@ -945,7 +947,7 @@ class UEXApi2():
         
         for category in location_categories:
             # print_debug(f"location names for {category}: {json.dumps(self.name_mapping[category], indent=2)[0:150]}")
-            location_mapping, success = find_best_match.find_best_match(location_mapping_name, self.data[category].get('data', {}), attribute="name")
+            location_mapping, success = find_best_match.find_best_match(location_mapping_name, self.data[category].get('data', {}), attributes=["name"])
             if not success:
                 continue
 
@@ -957,7 +959,7 @@ class UEXApi2():
     
     def get_commodity(self, commodity_mapping_name):
         self._refresh_data()
-        commodity_mapping, success = find_best_match.find_best_match(commodity_mapping_name, self.data[CATEGORY_COMMODITIES].get('data', {}), attribute="name")
+        commodity_mapping, success = find_best_match.find_best_match(commodity_mapping_name, self.data[CATEGORY_COMMODITIES].get('data', {}), attributes=["name"])
         if not success:
             return None
         
@@ -972,7 +974,7 @@ class UEXApi2():
         if not commodity_id:
             return None
         
-        commodity_prices = self._get_prices_of(price_category=PRICES_COMMODITIES, id_commodity=commodity_id, id_tradeport=tradeport[ID_FIELD_NAME])
+        commodity_prices = self.get_prices_of(price_category=PRICES_COMMODITIES, id_commodity=commodity_id, id_tradeport=tradeport[ID_FIELD_NAME])
 
         return commodity_prices[commodity_id] if commodity_prices else None
         
@@ -980,11 +982,12 @@ class UEXApi2():
         self._refresh_data()
         return self.data[category].get("data", [])
         
-    def get_category_names(self, category: str, filter: tuple[str, str] = None) -> list[str]:
+    def get_category_names(self, category: str, field_name: str = "name", filter: tuple[str, str] = None) -> list[str]:
         """
         Fetch names from a given category filtered by the provided attribute-value tuple.
         
         :param category: The category to fetch from, e.g., "terminals" or "planets".
+        :param field_name: The field name to fetch, e.g., "name" or "nickname".
         :param filter: A tuple containing the filter attribute and filter value, e.g., ("is_available", "1").
         :return: A list of names (or other properties) from the filtered items.
         """
@@ -1000,7 +1003,7 @@ class UEXApi2():
         filtered_data = [item for item in category_data.values() if str(item.get(filter_attribute, "")) == filter_value]
 
         # Assuming 'name' is a key in the dictionary that holds the name of the entity
-        names = [item['name'] for item in filtered_data]
+        names = [item[field_name] for item in filtered_data]
         return names
         
     def update_tradeport_prices(self, tradeport, commodity_update_infos, operation):

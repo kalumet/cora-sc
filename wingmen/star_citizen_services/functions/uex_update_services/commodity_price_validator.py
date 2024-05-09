@@ -1,4 +1,4 @@
-import Levenshtein
+from wingmen.star_citizen_services.helper import find_best_match as search
 
 
 DEBUG = True
@@ -11,7 +11,7 @@ def print_debug(to_print):
 
 class CommodityPriceValidator:
     @staticmethod
-    def validate_price_information(commodities_price_info_raw, tradeport, operation):
+    def validate_price_information(commodities_price_info_raw, terminal_prices, operation):
         validated_prices = []
         invalid_prices = []
         all_prices = []
@@ -25,29 +25,29 @@ class CommodityPriceValidator:
                 print_debug("missing commodity attribute, skipping")
                 continue
 
-            commodity_raw = price_info_raw.get("commodity_name")
+            commodity_raw_name = price_info_raw.get("commodity_name")
 
-            validated_commodity_key, validated_commodity, success = CommodityPriceValidator.validate_commodity_name(commodity_raw, tradeport)
-
+            # we want to find the commodity in the terminal prices list
+            match_result, success = search.find_best_match(commodity_raw_name, terminal_prices, attributes=["commodity_name"])
+            
             if not success:
-                print_debug(f"{validated_commodity} ... skipping")
-                print_debug("...skipping")
+                print_debug(f"{commodity_raw_name} ... skipping")
                 price_info_raw["validation_result"] = "commodity not found"
                 price_info_raw["code"] = ""
                 invalid_prices.append(price_info_raw)
                 all_prices.append(price_info_raw)
                 continue
 
-            # next make plausability check of the provided price, as the recognition can create some inconstistent results
-
+            current_commodity_price_object = match_result["root_object"]
+           
             price_raw = price_info_raw.get("price_per_unit")
             multiplier = price_info_raw.get("multiplier")
 
-            new_price, success = CommodityPriceValidator.validate_price(validated_commodity, price_raw, multiplier, operation)
+            new_price, success = CommodityPriceValidator.validate_price(current_commodity_price_object, price_raw, multiplier, operation)
 
             # inject found information 
-            price_info_raw["code"] = validated_commodity_key
-            price_info_raw["commodity_name"] = validated_commodity["name"]
+            price_info_raw["code"] = current_commodity_price_object["id_commodity"]
+            price_info_raw["commodity_name"] = current_commodity_price_object["commodity_name"]
             
             if not success:
                 print_debug(f"{new_price} not plausible ... skipping")
@@ -64,13 +64,12 @@ class CommodityPriceValidator:
         return all_prices, validated_prices, invalid_prices, True
 
     @staticmethod
-    def validate_price(validated_commodity, price_to_check, multiplier, operation):
+    def validate_price(uex_current_price_object, price_to_check, multiplier, operation):
         if not price_to_check:
             return 0, False
         
-        uex_price = validated_commodity[f"price_{operation}"]
+        uex_price = uex_current_price_object[f"price_{operation}"]
         
-
         # we check, if the raw price is within 20% of the current price
         difference = abs(uex_price - price_to_check)
 
@@ -103,38 +102,3 @@ class CommodityPriceValidator:
             index += 1
 
         return sanitize_price, False
-    
-    @staticmethod
-    def validate_commodity_name(commodity_raw, tradeport):
-        MIN_SIMILARITY_THRESHOLD = 80
-        print_debug(f"checking for {commodity_raw} @ {tradeport['name']}")
-        prices = tradeport.get("prices", {})
-        matched_commodity = None
-        matched_commodity_key = None
-        max_commodity_similarity = 0
-        for key, commodity in prices.items():
-            validated_name = commodity["name"]
-
-            # Check for exact match
-            if validated_name == commodity_raw:
-                return key, commodity, True
-
-            similarity = _calculate_similarity(
-                commodity_raw.lower(),
-                validated_name.lower(),
-                MIN_SIMILARITY_THRESHOLD,
-            )
-            if similarity > max_commodity_similarity:
-                matched_commodity = commodity
-                matched_commodity_key = key
-                max_commodity_similarity = similarity
-
-        if matched_commodity:
-            return matched_commodity_key, matched_commodity, True
-        return None, f"could not identify commodity {commodity_raw}", False
-    
-    
-def _calculate_similarity(str1, str2, threshold):
-    distance = Levenshtein.distance(str1, str2)
-    similarity = 100 - (100 * distance / max(len(str1), len(str2)))
-    return similarity if similarity >= threshold else 0

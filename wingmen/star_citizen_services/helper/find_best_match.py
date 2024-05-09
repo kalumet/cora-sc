@@ -2,7 +2,7 @@ import json
 import Levenshtein
 
 
-DEBUG = True
+DEBUG = False
 
 
 def print_debug(to_print):
@@ -10,14 +10,19 @@ def print_debug(to_print):
         print(to_print)
 
 
-def find_best_match(search_term: str, search_space, attribute=None, score_cutoff=80):
+def find_best_match(search_term: str, search_space, attributes=None, score_cutoff=80):
     """
     Finds the best match for the search term within the search space.
     :param search_term: The term to search for.
     :param search_space: The space to search in. Can be a dictionary or a list of dictionaries.
-    :param attribute: The attribute within the dictionary to search for the search term.
+    :param attributes: The attribute names (list) within the dictionary to search for the search term.
     :param score_cutoff: The minimum score a match should have to be considered valid.
-    :return: A dictionary containing the best match or an error message.
+    :return: A dictionary containing the matching result, or an error message if no match was found: 
+        {"score": 100, 
+        "matching_path": "path.to.matched.attribute", 
+        "matched_value": "value", 
+        "key_or_index": "key/index", 
+        "root_object": "the object within the search space where the match was found"}
     """
     if search_term is None:
         return "No search term", False
@@ -28,16 +33,17 @@ def find_best_match(search_term: str, search_space, attribute=None, score_cutoff
     if DEBUG:
         serialized_object = json.dumps(search_space, indent=2)
         truncated_serialized_object = serialized_object[:150]
-        print(f'Searching "{search_term}" within attribute "{attribute}" of search space \n{truncated_serialized_object}...')
+        print(f'Searching "{search_term}" within attributes "{attributes}" of search space \n{truncated_serialized_object}...')
 
-    best = __find_best_match(search_term.lower(), search_space, attribute=attribute, score_cutoff=score_cutoff)
+    best = __find_best_match(search_term.lower(), search_space, attributes=attributes, score_cutoff=score_cutoff)
     if best["matched_value"] is None:
         return f"No match for {search_term} found", False
 
+    print_debug(f"Best match found: {json.dumps(best, indent=2)}")
     return best, True
 
 
-def __find_best_match(search_term, search_space, attribute=None, path=None, current_best=None, score_cutoff=80):
+def __find_best_match(search_term, search_space, attributes=None, path=None, current_best=None, score_cutoff=80):
     if current_best is None:
         current_best = {'score': 0, 'matching_path': '', 'matched_value': None, 'key_or_index': None, 'root_object': None}
     if path is None:
@@ -48,13 +54,23 @@ def __find_best_match(search_term, search_space, attribute=None, path=None, curr
             current_path = path + [str(key)]
 
             if isinstance(value, dict) or isinstance(value, list):
-                __find_best_match(search_term, value, attribute, current_path, current_best, score_cutoff)
+                __find_best_match(search_term, value, attributes, current_path, current_best, score_cutoff)
             else:
-                if attribute is None or key == attribute:
+                if attributes is None or key in attributes:
                     compare = str(value).lower()
                     lev_distance = Levenshtein.distance(search_term, compare)
                     score = __normalized_score(lev_distance, search_term, compare)
                     print_debug(f"comparing: {search_term} <-> {compare}, score: {score}")
+                    if score == 100:
+                        current_best.update({
+                            'score': score,
+                            'matching_path': '.'.join(current_path),
+                            'matched_value': value,
+                            'key_or_index': key,
+                            'root_object': search_space
+                        })
+                        return current_best
+                    
                     if score >= score_cutoff and score > current_best['score']:
                         current_best.update({
                             'score': score,
@@ -68,12 +84,23 @@ def __find_best_match(search_term, search_space, attribute=None, path=None, curr
         for index, item in enumerate(search_space):
             current_path = path + [str(index)]
             if isinstance(item, list) or isinstance(item, dict):
-                __find_best_match(search_term, item, attribute, current_path, current_best, score_cutoff)
+                __find_best_match(search_term, item, attributes, current_path, current_best, score_cutoff)
             elif isinstance(item, str):
                 compare = item.lower()
                 lev_distance = Levenshtein.distance(search_term, compare)
                 score = __normalized_score(lev_distance, search_term, compare)
                 print_debug(f"comparing: {search_term} <-> {compare}, score: {score}")
+
+                if score == 100:
+                    current_best.update({
+                        'score': score,
+                        'matching_path': str(index),
+                        'matched_value': item,
+                        'key_or_index': index,
+                        'root_object': search_space
+                    })
+                    return current_best
+                
                 if score >= score_cutoff and score > current_best['score']:
                     current_best.update({
                         'score': score,
@@ -173,7 +200,7 @@ if __name__ == "__main__":
     search_term = "MIC-L2 Long Forest Station"
 
     print(f"\n======Test 1========")
-    best_test, success = find_best_match(search_term, data, "space_station_name")
+    best_test, success = find_best_match(search_term, data, attributes=["space_station_name"])
     if success:
         print(f"Key/Index of the root object: {best_test['key_or_index']}")
         print(f"Root Object: {best_test['root_object']}")
@@ -259,7 +286,7 @@ if __name__ == "__main__":
         }
     ]
 
-    best_test, success = find_best_match(search_term, data, "space_station_name")
+    best_test, success = find_best_match(search_term, data, attributes=["space_station_name"])
     if success:
         print(f"Key/Index of the root object: {best_test['key_or_index']}")
         print(f"Root Object: {best_test['root_object']}")

@@ -6,7 +6,8 @@ from services.printr import Printr
 
 from wingmen.star_citizen_services.model.delivery_mission import DeliveryMission, MissionPackage
 from wingmen.star_citizen_services.function_manager import FunctionManager
-from wingmen.star_citizen_services.functions.mission_services.delivery_mission_services.delivery_manager import PackageDeliveryPlanner, DeliveryMissionAction, UEXApi
+from wingmen.star_citizen_services.functions.mission_services.delivery_mission_services.delivery_manager import PackageDeliveryPlanner, DeliveryMissionAction
+from wingmen.star_citizen_services.functions.uex_v2.uex_api_module import UEXApi2
 from wingmen.star_citizen_services.functions.mission_services.delivery_mission_services import delivery_mission_builder
 from wingmen.star_citizen_services.overlay import StarCitizenOverlay
 from wingmen.star_citizen_services.ai_context_enum import AIContext
@@ -52,6 +53,8 @@ class DeliveryMissionManager(FunctionManager):
             friendly_key_name="OpenAI API key",
             prompt_if_missing=False
         )
+
+        self.uex_service = UEXApi2()
 
         self.overlay1 = StarCitizenOverlay()
         self.overlay2 = StarCitizenOverlay()
@@ -290,8 +293,6 @@ class DeliveryMissionManager(FunctionManager):
 
     def get_first_or_next_location_on_delivery_route(self, function_args):
         
-        uexApi = UEXApi()
-
         success, message = self.update_last_location()
         
         if success is False:
@@ -309,9 +310,9 @@ class DeliveryMissionManager(FunctionManager):
         next_location = self.current_delivery_location
         moon_or_planet = ""
         if next_location.get("satellite"):
-            moon_or_planet = uexApi.get_satellite_name(next_location.get("satellite"))
+            moon_or_planet = self.uex_service.get_satellite_name(next_location.get("satellite"))
         else:
-            moon_or_planet = uexApi.get_planet_name(next_location.get("planet"))
+            moon_or_planet = self.uex_service.get_planet_name(next_location.get("planet"))
 
         index = self.current_delivery_action_index
         pickup_packages = []
@@ -418,7 +419,6 @@ class DeliveryMissionManager(FunctionManager):
        
     def discard_mission(self, mission_id):
         """Discard a specific mission by its ID."""
-        uexApi = UEXApi()
 
         try:
             mission_id = int(mission_id)

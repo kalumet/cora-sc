@@ -12,7 +12,7 @@ import requests
 from wingmen.star_citizen_services.overlay import StarCitizenOverlay
 
 
-DEBUG = True
+DEBUG = False
 TEST = False
 
 

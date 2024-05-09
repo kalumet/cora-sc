@@ -1,5 +1,6 @@
 from wingmen.star_citizen_services.model.mission_package import MissionPackage
 from wingmen.star_citizen_services.helper.json_serializable import JsonSerializable
+from wingmen.star_citizen_services.functions.uex_v2.uex_api_module import UEXApi2
 
 
 class DeliveryMission(JsonSerializable):
@@ -77,8 +78,7 @@ class DeliveryMission(JsonSerializable):
                 "package_count": len(self.packages),
             }
             
-        from wingmen.star_citizen_services.uex_api import UEXApi
-        uex_api = UEXApi()
+        uex_api = UEXApi2()
 
         satellites = uex_api.get_data("satellites")
         planets = uex_api.get_data("planets")

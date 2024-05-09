@@ -3,8 +3,6 @@ import json
 
 from openai import OpenAI
 
-
-# import wingmen.star_citizen_services.text_analyser as text_analyser
 from services.secret_keeper import SecretKeeper
 from services.printr import Printr
 from services.audio_player import AudioPlayer
@@ -22,7 +20,7 @@ from wingmen.star_citizen_services.functions.uex_update_services.commodity_price
 from wingmen.star_citizen_services.functions.uex_v2.uex_api_module import UEXApi2
 
 
-DEBUG = True
+DEBUG = False
 SHOW_SCREENSHOTS = False
 TEST = False
 
@@ -127,7 +125,7 @@ class UexDataRunnerManager(FunctionManager):
         """ 
         Provides the openai function definition for this manager. 
         """
-        tradeport_names = self.uex2_service.get_category_names(category="terminals", filter=("type", "commodity"))
+        tradeport_names = self.uex2_service.get_category_names(category="terminals", field_name="nickname", filter=("type", "commodity"))
         commodity_names = self.uex2_service.get_category_names("commodities")
 
         tools = [
@@ -224,7 +222,7 @@ class UexDataRunnerManager(FunctionManager):
             function_response = {"success": False, "instruction": f"User needs to validate the following data: {json.dumps(function_args)}"}
             return function_response, None
 
-        tradeport = self.uex2_service.get_tradeport(function_args.get("player_provided_tradeport_name", None))
+        tradeport = self.uex2_service.get_terminal(function_args.get("player_provided_tradeport_name", None))
         if not tradeport:
             function_response = {"success": False, "instruction": "You could not identify the tradeport. Ask the user to repeat clearly the name."}
             return function_response, None
@@ -284,7 +282,7 @@ class UexDataRunnerManager(FunctionManager):
             function_response = json.dumps({"success": False, "instruction": "Ask the player to provide the tradeport name for which he wants the prices to be transmitted"})
             return function_response, None
         
-        tradeport = self.uex2_service.get_tradeport(function_args["player_provided_tradeport_name"])
+        tradeport = self.uex2_service.get_terminal(function_args["player_provided_tradeport_name"], search_fields=["nickname", "name", "space_station_name", "outpost_name", "city_name"])
 
         if not tradeport:
             function_response = json.dumps({"success": False, "instruction": 'Could not identify the given tradeport name. Please repeat clearly the tradeport name.'})
@@ -334,7 +332,7 @@ class UexDataRunnerManager(FunctionManager):
                     "instructions": "You cannot validate the given tradeport against the location in the screenshot. The user must select the current location in 'Your Inventories' drop-down. Or, if he did, he might need to transmit prices as single spoken commands without screenshot analysis.", 
                     }, None
         
-        print_debug(f'validated location name: {validated_tradeport["name_short"]}')            
+        print_debug(f'validated location name: {validated_tradeport["nickname"]}')            
 
         buy_result = self._analyse_prices_at_tradeport(screenshot_path, location_name_crop, validated_tradeport, operation)
 
@@ -359,7 +357,8 @@ class UexDataRunnerManager(FunctionManager):
 
         print_debug(f"extracted {number_of_extracted_prices} price-informations from screenshot")
 
-        all_prices, validated_prices, invalid_prices, success = CommodityPriceValidator.validate_price_information(prices_raw, validated_tradeport, operation)
+        terminal_prices = self.uex2_service.get_prices_of(price_category="commodities_prices", id_terminal=validated_tradeport["id"])
+        screenshot_prices, validated_prices, invalid_prices, success = CommodityPriceValidator.validate_price_information(prices_raw, terminal_prices, operation)
 
         if not success:
             self.overlay.display_overlay_text("Error: could not identify commodities. Check logs.")
@@ -367,7 +366,7 @@ class UexDataRunnerManager(FunctionManager):
                     "instructions": "You couldn't identify the commodities and prices. Instruct the user to analyse the log files.", 
                     }
         
-        manually_confirmed_data = OverlayPopup.show_data_validation_popup(validated_tradeport, operation, all_prices, commodity_area_crop, cropped_screenshot_location)
+        manually_confirmed_data = OverlayPopup.show_data_validation_popup(terminal_prices, operation, screenshot_prices, commodity_area_crop, cropped_screenshot_location)
         
         if manually_confirmed_data == "aborted":
             return {

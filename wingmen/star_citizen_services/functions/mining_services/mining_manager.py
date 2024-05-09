@@ -215,16 +215,11 @@ class MiningManager(FunctionManager):
         self.regolith.initialize_all_names()
 
     # overwritten
-    def start_information(self):
+    def cora_start_information(self):
         """  
             This method can be implemented to retrieve information from the manager, that Cora should provide to the user on startup.
         """
-        # On startup, we want to tell the user, if he has any active work orders he should take care of.
-        orders = self.regolith.get_active_work_orders()
-        if orders["total_refined_orders"] > 0 or orders["total_refined_orders"] > 0:
-            return orders
-        
-        return None
+        return "What currently active work orders do I have? If I don't have any, just don't respond. "
 
     def mining_or_salvage_session_management(self, function_args):
         confirmed_deletion = function_args.get("confirm_deletion", None)
@@ -423,7 +418,7 @@ class MiningManager(FunctionManager):
     def add_work_order_uex(self, work_order):
         print_debug("\n ===== ADDING UEX WORK ORDER ======")
         station = work_order["work_order"]["station_name"]
-        refinery, success = find_best_match.find_best_match(station, self.refineries, attribute="space_station_name")
+        refinery, success = find_best_match.find_best_match(station, self.refineries, attributes=["space_station_name"])
         if not success:
             return f"Couldn't identify refinery from '{station}'."
         print_debug(f'matched refinery "{refinery["matched_value"]}" with confidence {refinery["score"]}')
@@ -432,7 +427,7 @@ class MiningManager(FunctionManager):
         refinery_method, success = find_best_match.find_best_match(
             method, 
             self.refinery_methods, 
-            attribute="name")
+            attributes=["name"])
         if not success:
             return f"Couldn't identify refinery method from '{method}'."
 
@@ -449,7 +444,7 @@ class MiningManager(FunctionManager):
             if material["yield"] <= 0:
                 continue  # material hasn't been selected to be refined
             ore_name = material["commodity_name"]
-            ore, success = find_best_match.find_best_match(ore_name, self.ores, attribute="name")
+            ore, success = find_best_match.find_best_match(ore_name, self.ores, attributes=["name"])
             if not success:
                 print_debug(f"couldn't identify ore '{ore_name}'")
                 continue

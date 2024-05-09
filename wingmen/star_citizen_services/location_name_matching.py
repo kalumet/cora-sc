@@ -5,7 +5,8 @@ import json
 import os
 
 from wingmen.star_citizen_services.model.delivery_mission import DeliveryMission
-from wingmen.star_citizen_services.uex_api import UEXApi
+from wingmen.star_citizen_services.functions.uex_v2.uex_api_module import UEXApi2
+from wingmen.star_citizen_services.helper import find_best_match
 
 
 DEBUG = False
@@ -23,8 +24,8 @@ class LocationNameMatching:
         MIN_SIMILARITY_THRESHOLD = 50
         MIN_SIMILARITY_SATELLITE_THRESHOLD = 50
 
-        uex_service = UEXApi()
-        tradeports = uex_service.get_data("tradeports")
+        uex_service = UEXApi2()
+        tradeports = uex_service.get_data("terminals")
         satellites = uex_service.get_data("satellites")
         planets = uex_service.get_data("planets")
         unknown_outposts = {}  # name -> code, satellite
@@ -148,104 +149,24 @@ class LocationNameMatching:
 
             with open(filename, 'w', encoding="UTF-8") as file:
                 json.dump(unknown_outposts, file, indent=3)
-
-    @staticmethod
-    def validate_tradeport_name(location_name):
-        MIN_SIMILARITY_THRESHOLD = 50
-
-        uex_service = UEXApi()
-        tradeports = uex_service.get_data("tradeports")
-        matched_tradeport = None
-        max_location_similarity = 0
-        for tradeport in tradeports.values():
-            validated_name = tradeport["name"]
-
-            # Check for exact match
-            if validated_name == location_name:
-                return validated_name, True
-
-            similarity = _calculate_similarity(
-                location_name.lower(),
-                validated_name.lower(),
-                MIN_SIMILARITY_THRESHOLD,
-            )
-            if similarity > max_location_similarity:
-                matched_tradeport = tradeport
-                max_location_similarity = similarity
-
-        if matched_tradeport:
-            return matched_tradeport, True
-        return f"could not identify tradeport {location_name}", False
     
     @staticmethod
-    def validate_associated_location_name(location_name, tradeport, min_similarity=50):
-        if not tradeport or not location_name:
-            print_debug(f"cannot validate kiosk location, as tradeport or location name not provided.")
+    def validate_associated_location_name(location_name, terminal, min_similarity=80):
+        if not terminal or not location_name:
+            print_debug(f"cannot validate kiosk location, as terminal or location name not provided.")
             return False
         
-        print_debug(f'checking {location_name} against given tradeport {tradeport["name"]} city={tradeport["city"]} sat={tradeport["satellite"]} planet={tradeport["planet"]}')
+        print_debug(f'checking {location_name} against given terminal {terminal["nickname"]}')
 
-        # first, check if you get the most likely tradeport name from the screenshort (location_name):
-        location_name_tradeport, success = LocationNameMatching.validate_tradeport_name(location_name)
-
-        if success is True:  # screenshot maps to a tradeport, but sal-5 and sal-2 could make a difference
-            if tradeport["name"].lower() == location_name_tradeport["name"].lower():
-                return True
-            #else
-                # actually we found a tradeport with what is written in the screenshot?
-                # cities "inventories" have usually a very different name than a tradeport within them (i.e. Io North Tower vs Area 18, Central Business District vs Lorville, ...)
-                # but stations have inventories and tradeports that are very close to each other ..
-
-            
-        # this case is, if the tradeport is at a station or a city. City is quite simple to validate, as we have knowledge about known city names
-        # we don't have knowledge about station names. They are part of the tradeport api somehow ... so bit tricky to find the correct one
-
-        uex_service = UEXApi()
+        # usually, the terminal name of commodity kiosk matches the location name, therefore, we expact a high similarity
+        matching_result, success = find_best_match.find_best_match(location_name, terminal, attributes=["nickname", "name", "space_station_name", "outpost_name", "city_name"], score_cutoff=min_similarity)
         
-        # next, we need to check if the tradeport matches the selected local inventory
-        # this can either be a city, or a station with multiple trade kiosk
-        # if there are multiple trade kiosk at one station, than the names are very similar
-        city_code = tradeport.get("city", None)
-
-        # easy, if it is a city tradeport
-        if city_code:
-            city = uex_service.get_data("cities")[city_code]
-            print_debug(f'found city {city}. location_name.lower="{location_name.lower()}", tradeport_name.lower="{city["name"].lower()}"')
-            # first check if the given name matches the tradeport name. Only a few characters could be different
-            similarity = _calculate_similarity(
-                    location_name.strip().lower(),
-                    city["name"].lower(),
-                    min_similarity,
-                )
-            print_debug(f"tradeport in city? similarity={similarity}")
-            if similarity > min_similarity:  # only 1 or 2 characters are allowed to be wrong
-                return True
         
-        if success is False:  # we have no tradeport found and no city matching ... no chance to validate
-            return False
-
-        satellite_code = location_name_tradeport.get("satellite", None)
-        
-        if satellite_code != tradeport["satellite"]:
+        if not success:
+            print_debug(f"Kiosk location name '{location_name}' doesn't match the terminal \n{json.dumps(terminal['nickname'], indent=2)}")
             return False
         
-        planet_code = location_name_tradeport.get("planet", None)
-
-        if planet_code != tradeport["planet"]:
-            return False
-        
-        if not planet_code and not location_name_tradeport["planet"]:
-            similarity = _calculate_similarity(
-                location_name_tradeport["name_short"].lower(),
-                tradeport["name_short"].lower(),
-                40,
-            )
-            if similarity > 40:
-                return True
-            else:
-                return False
-        
-        return True  # basically a guess that chances are high, that it's the same location inventory, but: if player makes error, ai makes error or ocr makes error or any combination thereof -> match of not same tradeports could happen
+        return True
 
 
 def _calculate_similarity(str1, str2, threshold):

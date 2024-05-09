@@ -1,27 +1,24 @@
 import copy
 import tkinter as tk
 from tkinter import ttk
-from tkinter.ttk import Style
 import json
 
-from threading import Thread
-from PIL import Image, ImageTk, ImageDraw, ImageFont, ImageColor
+from PIL import Image, ImageTk
 from screeninfo import get_monitors
 
-from gui.root import WingmanUI 
+from gui.root import WingmanUI
 
-from wingmen.star_citizen_services.functions.uex_update_services.commodity_price_validator import CommodityPriceValidator
-from wingmen.star_citizen_services.location_name_matching import LocationNameMatching
-
+from wingmen.star_citizen_services.functions.uex_v2.uex_api_module import UEXApi2
+from wingmen.star_citizen_services.helper import find_best_match as search
 
 
 class OverlayPopup(tk.Toplevel):
-    def __init__(self, master, validated_tradeport, operation, all_prices, cropped_screenshot_prices, cropped_screenshot_location):
+    def __init__(self, master, terminal_prices, operation, screenshot_prices, cropped_screenshot_prices, cropped_screenshot_location):
         super().__init__(master)
         
-        self.current_tradeport = validated_tradeport
-        self.updated_data = copy.deepcopy(all_prices)
-        self.user_updated_data = copy.deepcopy(all_prices)
+        self.terminal_prices = list(terminal_prices.values())
+        self.updated_data = copy.deepcopy(screenshot_prices)
+        self.user_updated_data = copy.deepcopy(screenshot_prices)
         self.operation = operation
 
         print(json.dumps(self.updated_data, indent=2))
@@ -95,7 +92,7 @@ class OverlayPopup(tk.Toplevel):
 
         # Textfeld für den Handelsportnamen
         self.tradeport_entry = tk.Entry(textfield_frame, font=("Helvetica", 14, "bold"))
-        self.tradeport_entry.insert(0, validated_tradeport['name'])
+        self.tradeport_entry.insert(0, self.terminal_prices[0]['terminal_name'])
         self.adjust_entry_width(self.tradeport_entry)
         self.tradeport_entry.pack(side=tk.LEFT, padx=10, pady=10)
 
@@ -175,9 +172,9 @@ class OverlayPopup(tk.Toplevel):
 
 
     @staticmethod
-    def show_data_validation_popup(validated_tradeport, operation, all_prices, cropped_screenshot, location_name_screen_crop):
+    def show_data_validation_popup(terminal_prices, operation, screenshot_prices, cropped_screenshot, location_name_screen_crop):
         root = WingmanUI.get_instance()
-        popup = OverlayPopup(root, validated_tradeport, operation, all_prices, cropped_screenshot, location_name_screen_crop)
+        popup = OverlayPopup(root, terminal_prices, operation, screenshot_prices, cropped_screenshot, location_name_screen_crop)
         popup.show_popup()
 
         # Wait for the popup to close
@@ -242,25 +239,30 @@ class OverlayPopup(tk.Toplevel):
                 self.toggle_inventory_state(row_id, column)
                 
     def tradeport_update(self, event=None):
+
         updated_tradeport_name = self.tradeport_entry.get()
         
         if len(updated_tradeport_name) == 0:
             # revert
             self.revert_tradeport(event)
 
-        if updated_tradeport_name == self.current_tradeport["name"]:
+        if updated_tradeport_name == self.terminal_prices[0]["terminal_name"]:
             return
         
-        matched_tradeport, success = LocationNameMatching.validate_tradeport_name(updated_tradeport_name)
-        
-        if success is False:
-            matched_tradeport = {"name": "unknown"}
+        uex = UEXApi2()
 
-        self.current_tradeport = matched_tradeport
+        uex_terminal = uex.get_terminal(updated_tradeport_name, search_fields=["nickname", "name", "space_station_name", "outpost_name", "city_name"], cutoff=50)
+        
+        if uex_terminal is None:
+            matched_tradeport = {"terminal_name": "unknown"}
+        else:
+            self.terminal_prices = list(uex.get_prices_of(id_terminal=uex_terminal["id"]).values())
+            matched_tradeport = self.terminal_prices[0]
+
         # Entfernen des aktuellen Inhalts im Entry-Widget
         self.tradeport_entry.delete(0, tk.END)
         # Einfügen des neuen Textes in das Entry-Widget
-        self.tradeport_entry.insert(0, matched_tradeport["name"])
+        self.tradeport_entry.insert(0, matched_tradeport["terminal_name"])
 
         self.adjust_entry_width(self.tradeport_entry)
         self.tradeport_entry.update()  # Update  
@@ -268,7 +270,7 @@ class OverlayPopup(tk.Toplevel):
     def revert_tradeport(self, event=None):
         self.tradeport_entry.delete(0, tk.END)
         # Einfügen des neuen Textes in das Entry-Widget
-        self.tradeport_entry.insert(0, self.current_tradeport["name"])
+        self.tradeport_entry.insert(0, self.terminal_prices[0]["terminal_name"])
         self.adjust_entry_width(self.tradeport_entry)
         self.tradeport_entry.update()  # Update  
 
@@ -416,16 +418,18 @@ class OverlayPopup(tk.Toplevel):
 
             if column_key == "commodity_name":
                 commodity_name = new_value
-                validated_commodity_key, validated_commodity, success = CommodityPriceValidator.validate_commodity_name(commodity_name, self.current_tradeport)
+                # we want to find the commodity in the terminal prices list
+                match_result, success = search.find_best_match(commodity_name, self.terminal_prices, attributes=["commodity_name"], score_cutoff=50)
                 if not success:
                     self.updated_data[row_index]["validation_result"] = "commodity not found"
                     table_values[6] = "commodity not found"
                     return
                 
-                self.updated_data[row_index]['commodity_name'] = validated_commodity["name"]
-                table_values[0] = validated_commodity["name"]
-                self.updated_data[row_index]['code'] = validated_commodity_key
-                table_values[1] = validated_commodity_key
+                uex_commodity_price_object = match_result["root_object"]
+                self.updated_data[row_index]['commodity_name'] = uex_commodity_price_object["commodity_name"]
+                table_values[1] = uex_commodity_price_object["commodity_name"]
+                self.updated_data[row_index]['code'] = uex_commodity_price_object["id_commodity"]
+                table_values[2] = uex_commodity_price_object["id_commodity"]
                 unit_price = self.updated_data[row_index]["price_per_unit"]
                 multiplier = self.updated_data[row_index]["multiplier"]
                 if multiplier and multiplier.lower()[0] == "m":

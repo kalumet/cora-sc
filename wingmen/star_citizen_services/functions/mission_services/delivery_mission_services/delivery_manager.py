@@ -8,7 +8,7 @@ from wingmen.star_citizen_services.model.mission_action import DeliveryMissionAc
 from wingmen.star_citizen_services.model.mission_package import MissionPackage
 
 
-DEBUG = False
+DEBUG = True
 
 
 def print_debug(to_print):

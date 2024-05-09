@@ -17,7 +17,7 @@ from wingmen.star_citizen_services.helper import screenshots
 from wingmen.star_citizen_services.helper.ocr import OCR
 
 
-DEBUG = False
+DEBUG = True
 TEST = False
 printr = Printr()
 
@@ -278,13 +278,17 @@ class DeliveryMissionManager(FunctionManager):
                 locations.add(location_info.pickup_location_ref.get("code"))
                 locations.add(location_info.drop_off_location_ref.get("code"))
                 
-                moon = location_info.pickup_location_ref.get("satellite")
-                planet = location_info.pickup_location_ref.get("planet")
+                moon_pickup = location_info.pickup_location_ref.get("satellite")
+                planet_pickup = location_info.pickup_location_ref.get("planet")
 
-                if moon:
-                    moons_and_planets.add(moon)
-                else:
-                    moons_and_planets.add(planet)
+                moon_planet_pickup = "" + moon_pickup + planet_pickup
+                moons_and_planets.add(moon_planet_pickup)
+
+                moon_dropoff = location_info.drop_off_location_ref.get("satellite")
+                planet_dropoff = location_info.drop_off_location_ref.get("planet")
+
+                moon_planet_dropoff = "" + moon_dropoff + planet_dropoff
+                moons_and_planets.add(moon_planet_dropoff)
 
         location_count = len(locations)
         planetary_system_changes = len(moons_and_planets)
@@ -336,30 +340,33 @@ class DeliveryMissionManager(FunctionManager):
             vertical_position_ratio=10
         )
         
-        return {
+        response = {
             "success": True, 
             "instructions": "Provide the user with all provided information based on your calculation of the best delivery route considering risk, and least possible location-switches. Do not provide any information, if there is no value or 0.",
             "next_location": next_location.get("name"),
-            "on_moon": uexApi.get_satellite_name(next_location.get("satellite")),
-            "on_planet": uexApi.get_planet_name(next_location.get("planet")),
-            "in_city": uexApi.get_city_name(next_location.get("city")),
+            "on_moon": self.uex_service.get_satellite_name(next_location.get("satellite")),
+            "on_planet": self.uex_service.get_planet_name(next_location.get("planet")),
+            "in_city": self.uex_service.get_city_name(next_location.get("city")),
             "possible_threads": next_action.danger,
             "number_of_packages_to_pickup": pickup_count,
             "number_of_packages_to_dropoff": dropoff_count,
-            "sell_commodity": uexApi.get_commodity_name(next_action.sell_commodity_code),
-            "buy_commodity": uexApi.get_commodity_name(next_action.buy_commodity_code)
+            "sell_commodity": self.uex_service.get_commodity_name(next_action.sell_commodity_code),
+            "buy_commodity": self.uex_service.get_commodity_name(next_action.buy_commodity_code)
         }
+        printr.print(f'-> Next location: {json.dumps(response, indent=2)}', tags="info")
+
+        return response
     
     def get_mission_ids(self):
         return [mission for mission in self.missions.keys()]
     
     def get_new_mission(self):
 
-        image_path = screenshots.take_screenshot(self.mission_data_path, "delivery_missions")
+        image_path = screenshots.take_screenshot(self.mission_data_path, "delivery_missions", test=TEST)
         if not image_path:
             return {"success": False, "instructions": "Could not take screenshot. Explain the player, that you only take screenshots, if the active window is Star Citizen. "}
         cropped_image = screenshots.crop_screenshot(self.mission_data_path, image_path, [("UPPER_LEFT", "LOWER_LEFT", "AREA"), ("LOWER_RIGHT", "LOWER_RIGHT", "AREA")])
-        retrieved_json, success = self.ocr.get_screenshot_texts(cropped_image, "delivery_missions")
+        retrieved_json, success = self.ocr.get_screenshot_texts(cropped_image, "delivery_missions", test=False)
         if not success:
             return {"success": False, "error": retrieved_json, "instructions": "Explain the player the reason for the delivery mission not beeing able to be extracted. "}
 

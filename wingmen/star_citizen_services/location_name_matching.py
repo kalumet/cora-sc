@@ -25,9 +25,9 @@ class LocationNameMatching:
         MIN_SIMILARITY_SATELLITE_THRESHOLD = 50
 
         uex_service = UEXApi2()
-        tradeports = uex_service.get_data("terminals")
-        satellites = uex_service.get_data("satellites")
-        planets = uex_service.get_data("planets")
+        outposts = uex_service.get_data("outposts")
+        moons = uex_service.get_data("moons")
+        orbits = uex_service.get_data("orbits")
         unknown_outposts = {}  # name -> code, satellite
 
         filename = f"{data_dir_path}/unknown_locations.json"
@@ -58,43 +58,43 @@ class LocationNameMatching:
             #     f'Checking dropoff location "{dropoff_location_name}" in trading database'
             # )
 
-            for tradeport in tradeports.values():
-                validated_name = tradeport["name"]
+            for outpost in outposts.values():
+                validated_name = outpost["name"]
 
                 # Check for exact match
                 if not found_pickup_location and validated_name == pickup_location_name:
                     found_pickup_location = True
-                    matched_pickup_location = tradeport
+                    matched_pickup_location = outpost
 
                 if (
                     not found_dropoff_location
                     and validated_name == dropoff_location_name
                 ):
                     found_dropoff_location = True
-                    matched_dropoff_location = tradeport
+                    matched_dropoff_location = outpost
 
                 # Check satellite name for pickup location
+                moon = moons.get(str(outpost["id_moon"]), {})
+                orbit = orbits.get(str(outpost["id_orbit"]), {})
                 if not found_pickup_location:
-                    satellite = satellites.get(tradeport["satellite"], {})
                     
                     similarity = _calculate_similarity(
                         pickup_location.get("satellite", "").lower(),
-                        satellite.get("name", "").lower(),
+                        moon.get("name", "").lower(),
                         MIN_SIMILARITY_SATELLITE_THRESHOLD,
                     )
                     if similarity > MIN_SIMILARITY_SATELLITE_THRESHOLD:
                         # we found a similar satellite so we'll use this
-                        pickup_location["satellite"] = satellite.get("code", "")
+                        pickup_location["satellite"] = moon.get("code", "")
                     else:
-                        planet = planets.get(tradeport["planet"], {})
                         similarity = _calculate_similarity(
                             pickup_location.get("satellite", "").lower(),
-                            planet.get("name", "").lower(),
+                            orbit.get("name", "").lower(),
                             MIN_SIMILARITY_SATELLITE_THRESHOLD,
                         )
                         if similarity > MIN_SIMILARITY_SATELLITE_THRESHOLD:
                             # we found a similar satellite so we'll use this
-                            pickup_location["planet"] = planet.get("code", "")
+                            pickup_location["planet"] = orbit.get("code", "")
                             pickup_location["satellite"] = ""
 
                     # Check location name similarity
@@ -104,30 +104,28 @@ class LocationNameMatching:
                         MIN_SIMILARITY_THRESHOLD,
                     )
                     if similarity > max_pickup_similarity:
-                        matched_pickup_location = tradeport
+                        matched_pickup_location = outpost
                         max_pickup_similarity = similarity
 
                 # Check satellite name for dropoff location
                 if not found_dropoff_location:
-                    satellite = satellites.get(tradeport["satellite"], {})
                     similarity = _calculate_similarity(
                         dropoff_location.get("satellite", "").lower(),
-                        satellite.get("name", "").lower(),
+                        moon.get("name", "").lower(),
                         MIN_SIMILARITY_SATELLITE_THRESHOLD,
                     )
                     if similarity > MIN_SIMILARITY_SATELLITE_THRESHOLD:
                         # we found a similar satellite so we'll use this
-                        dropoff_location["satellite"] = satellite.get("code", "")
+                        dropoff_location["satellite"] = moon.get("code", "")
                     else:
-                        planet = planets.get(tradeport["planet"], {})
                         similarity = _calculate_similarity(
                             dropoff_location.get("satellite", "").lower(),  # at this point, only satellite is filled
-                            planet.get("name", "").lower(),
+                            orbit.get("name", "").lower(),
                             MIN_SIMILARITY_SATELLITE_THRESHOLD,
                         )
                         if similarity > MIN_SIMILARITY_SATELLITE_THRESHOLD:
                             # we found a similar satellite so we'll use this
-                            dropoff_location["planet"] = planet.get("code", "")
+                            dropoff_location["planet"] = orbit.get("code", "")
                             dropoff_location["satellite"] = ""
 
                     # Check location name similarity
@@ -137,7 +135,7 @@ class LocationNameMatching:
                         MIN_SIMILARITY_THRESHOLD,
                     )
                     if similarity > max_dropoff_similarity:
-                        matched_dropoff_location = tradeport
+                        matched_dropoff_location = outpost
                         max_dropoff_similarity = similarity
 
             _process_matched_location(
@@ -180,9 +178,10 @@ def _calculate_similarity(str1, str2, threshold):
 
 def _process_matched_location(location, matched_location, unknown_outposts, location_type):
     if matched_location:
-        for key in location:  # copy from the matched location all relevant entries
-            if key in matched_location:
-                location[key] = matched_location[key]
+        location["name"] = matched_location["name"]
+        location["code"] = matched_location["id"]
+        location["satellite"] = matched_location["moon_name"]
+        location["planet"] = matched_location["orbit_name"]
         return
     
     # unknown location, check if we have a similar name on the same moon in the unknown_outposts. If yes, we assume the same location

@@ -1,4 +1,3 @@
-from wingmen.star_citizen_services.functions.uex_v2.uex_api_module import UEXApi2
 class DeliveryMissionAction:
 
     def __init__(self, index=None, location_ref=None, package_id=None, mission_ref=None, 
@@ -60,16 +59,16 @@ class DeliveryMissionAction:
             self.action_priority += 1
 
     def __repr__(self):
-        location_name = self.location_ref['satellite']
-        if not location_name:
-            location_name = self.location_ref['planet']
-        return (f"action({self.package_id}.{self.action}({self.action_priority})) -> {self.location_ref['code']} ({location_name})")
+        orbit = self.location_ref['satellite']
+        if not orbit:
+            orbit = self.location_ref['planet']
+        return (f"action({self.package_id}.{self.action}({self.action_priority})) -> {self.location_ref['name']} ({orbit})")
 
     def __str__(self):
-        location_name = self.location_ref['satellite']
-        if not location_name:
-            location_name = self.location_ref['planet']
-        return (f"action({self.package_id}.{self.action}({self.action_priority})) -> {self.location_ref['code']} ({location_name})")
+        orbit = self.location_ref['satellite']
+        if not orbit:
+            orbit = self.location_ref['planet']
+        return (f"action({self.package_id}.{self.action}({self.action_priority})) -> {self.location_ref['name']} ({orbit})")
     
     def __lt__(self, other):
         """
@@ -95,58 +94,6 @@ class DeliveryMissionAction:
     def __hash__(self):
         hash_str = "_".join([str(self.mission_ref.id), str(self.package_id), str(self.action)])
         return hash(hash_str)
-    
-    def to_GPT_json(self): 
-        uex_api = UEXApi2()
-
-        satellites = uex_api.get_data("satellites")
-        planets = uex_api.get_data("planets")
-        cities = uex_api.get_data("cities")
-        commodities = uex_api.get_data("commodities")
-        tradeports = uex_api.get_tradeports()
-
-        tradeport = self.location_ref["code"]
-        satellite = self.location_ref["satellite"]
-        planet = self.location_ref["planet"]
-        city = self.location_ref["city"]
-        
-        tradeport_json = f'"tradeport": {tradeports.get(tradeport,{}).get("name", tradeport)},'
-        
-        location_json = ""
-        if satellite:
-            location_json = f'"satellite": {satellites.get(satellite,{}).get("name", satellite)},'
-        elif city:
-            location_json = (
-                f'"planet": {planets.get(planet, {}).get("name", planet)},\n'
-                f'"city": {cities.get(city, {}).get("name", city)},'
-            )
-        else:
-            location_json = f'"planet": {planets.get(planet, {}).get("name", planet)},'
- 
-        buy_json = ""
-        buy_commodity = ""
-        if self.buy:
-            buy_json = f'"buy": {self.buy},'
-            buy_commodity = f'"buy_commodity": {commodities.get(self.buy_commodity_code, {}).get("name", self.buy_commodity_code)},'  # commodity information for this action
-
-        sell_json = ""
-        sell_commodity = ""
-        if self.sell:
-            sell_json = f'"buy": {self.sell},'
-            sell_commodity = f'"sell_commodity": {commodities.get(self.sell_commodity_code, {}).get("name", self.sell_commodity_code)},'  # commodity information for this action
-
-        return {
-            f'"mission_id" : {self.mission_ref.id}'
-            f"{tradeport_json}"  # we need the ref, because derelict outposts cannot be found in the uex_api
-            f"{location_json}"
-            "package_id": self.package_id,
-            "action": self.action,  # pickup | dropoff
-            f"{buy_json}"
-            f"{sell_json}"
-            f"{buy_commodity}"
-            f"{sell_commodity}"
-            "danger": self.danger,  # if outlaw and or armistice 
-        }
 
     def to_json(self):
         

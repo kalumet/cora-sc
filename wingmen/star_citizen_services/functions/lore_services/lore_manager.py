@@ -99,7 +99,7 @@ class LoreManager(FunctionManager):
     
     def get_news_of_the_day(self, function_args):
         print_debug(f"{self.get_news_of_the_day.__name__} called.")
-        printr.print_info(f"Executing function '{self.get_news_of_the_day.__name__}'.")
+        printr.print(f"Executing function '{self.get_news_of_the_day.__name__}'.", tags="info")
         try:
             response = requests.get(url=f"{self.wiki_base_url}?limit=1&page=1")
             response.raise_for_status()

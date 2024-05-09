@@ -18,7 +18,7 @@ from wingmen.star_citizen_services.functions.uex_v2 import uex_api_module
 
 
 DEBUG = True
-TEST = True
+TEST = False
 printr = Printr()
 
 
@@ -297,11 +297,11 @@ class MiningManager(FunctionManager):
     
     def manage_work_order(self, type="new", work_order_index=None, confirmed_deletion=None):
         if type == "add_work_order":
-            image_path = screenshots.take_screenshot(self.mining_data_path, refinery="{refinery}")
+            image_path = screenshots.take_screenshot(self.mining_data_path, refinery="{refinery}", test=TEST)
             if not image_path:
                 return {"success": False, "instructions": "Could not take screenshot. Explain the player, that you only take screenshots, if the active window is Star Citizen. "}
             cropped_image = screenshots.crop_screenshot(self.mining_data_path, image_path, [("UPPER_LEFT", "LOWER_LEFT", "AREA"), ("LOWER_RIGHT", "LOWER_RIGHT", "AREA")])
-            retrieved_json, success = self.ocr.get_screenshot_texts(cropped_image, "workorder", refinery="{refinery}")
+            retrieved_json, success = self.ocr.get_screenshot_texts(cropped_image, "workorder", refinery="{refinery}", test=TEST)
             if not success:
                 return {"success": False, "error": retrieved_json, "instructions": "Explain the player the reason for the work order not beeing able to be extracted. "}
 

@@ -38,9 +38,13 @@ class OCR:
         now = datetime.datetime.now()
         timestamp = now.strftime("%Y%m%d_%H%M%S_%f")  # Format: YearMonthDay_HourMinuteSecond_Milliseconds
 
+        is_test = TEST
+        if "test" in filename_placeholders.keys() and is_test is False:
+            is_test = filename_placeholders["test"]
+
         try:
 
-            if not TEST:
+            if not is_test:
 
                 pil_img = Image.fromarray(gray_screenshot)
 

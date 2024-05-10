@@ -322,9 +322,14 @@ class PackageDeliveryPlanner:
 
             location_has_only_pickup_set[location_code] = is_pickup and only_pickup_at_location
 
-            satellite_planet = "_".join(
-                [mission_action.location_ref["planet"], 
-                 mission_action.location_ref["satellite"]])
+            if mission_action.location_ref is not None:
+                satellite = mission_action.location_ref.get("satellite", "")
+                planet = mission_action.location_ref.get("planet", "")
+            else:
+                satellite = ""
+                planet = ""
+            
+            satellite_planet = satellite + planet
             
             count = count_satellite_planet.get(satellite_planet, 0) + 5
             count_satellite_planet[satellite_planet] = count

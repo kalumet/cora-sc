@@ -26,5 +26,12 @@
       "code": "CPES348",
       "planet": "MIC",
       "city": ""
+   },
+   "Security Compound at Greycat Stanton IV Production Complex-A": {
+      "name": "Security Compound at Greycat Stanton IV Production Complex-A",
+      "satellite": "",
+      "code": "SCAGSIPC395",
+      "planet": "MIC",
+      "city": null
    }
 }

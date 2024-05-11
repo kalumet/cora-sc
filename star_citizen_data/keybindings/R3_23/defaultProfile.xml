@@ -291,7 +291,6 @@
     <mod input="gp_shoulderl" />
     <mod input="kb_lalt" />
     <mod input="lshift" />
-    <mod input="kb_f" />
   </modifiers>
   <ActionCategories>
     <Category name="PlayerActions" action="pc_pit_player_actions" UILabel="@PIT_ACPlayerActions" UIIcon="">
@@ -319,11 +318,18 @@
     <action name="v_toggle_missile_mode" activationMode="press" keyboard=" " gamepad=" " joystick=" " UILabel="@ui_CIMissileMode" UIDescription="@ui_CIMissileModeDesc" Category="ShipSystems" />
     <action name="v_toggle_guns_mode" activationMode="press" keyboard=" " gamepad=" " joystick=" " UILabel="@ui_v_toggle_guns_mode" UIDescription="@ui_v_toggle_guns_mode_desc" Category="ShipSystems" />
     <action name="v_toggle_flight_mode" activationMode="press" keyboard=" " gamepad=" " joystick=" " UILabel="@ui_v_toggle_flight_mode" UIDescription="@ui_v_toggle_flight_mode_desc" Category="ShipSystems" />
+    <action name="v_set_mining_mode" activationMode="press" keyboard=" " gamepad=" " joystick=" " UILabel="@ui_v_set_mining_mode" UIDescription="@ui_v_set_mining_mode_desc" />
+    <action name="v_set_salvage_mode" activationMode="press" keyboard=" " gamepad=" " joystick=" " UILabel="@ui_v_set_salvage_mode" UIDescription="@ui_v_set_salvage_mode_desc" />
+    <action name="v_set_scan_mode" activationMode="press" keyboard=" " gamepad=" " joystick=" " UILabel="@ui_v_set_scan_mode" UIDescription="@ui_v_set_scan_mode_desc" />
+    <action name="v_set_quantum_mode" activationMode="press" keyboard=" " gamepad=" " joystick=" " UILabel="@ui_v_set_quantum_mode" UIDescription="@ui_v_set_quantum_mode_desc" />
+    <action name="v_set_missile_mode" activationMode="press" keyboard=" " gamepad=" " joystick=" " UILabel="@ui_v_set_missile_mode" UIDescription="@ui_v_set_missile_mode_desc" />
+    <action name="v_set_guns_mode" activationMode="press" keyboard=" " gamepad=" " joystick=" " UILabel="@ui_v_set_guns_mode" UIDescription="@ui_v_set_guns_mode_desc" />
+    <action name="v_set_flight_mode" activationMode="press" keyboard=" " gamepad=" " joystick=" " UILabel="@ui_v_set_flight_mode" UIDescription="@ui_v_set_flight_mode_desc" />
     <action name="v_operator_mode_cycle_forward" activationMode="tap" keyboard="mouse3" gamepad=" " joystick=" " UILabel="@ui_v_operator_mode_toggle_next" UIDescription="@ui_v_operator_mode_toggle_next_desc" Category="ShipSystems" />
     <action name="v_operator_mode_cycle_back" activationMode="tap" keyboard=" " gamepad=" " joystick=" " UILabel="@ui_v_operator_mode_toggle_prev" UIDescription="@ui_v_operator_mode_toggle_prev_desc" Category="ShipSystems" />
   </actionmap>
   <actionmap name="spaceship_general" version="2" UILabel="@ui_CGSpaceFlightCockpit" UICategory="@ui_CCSpaceFlight">
-    <action name="v_self_destruct" activationMode="press" keyboard="backspace" joystick=" " UILabel="@ui_CISelfDestruct" UIDescription="@ui_CISelfDestructDesc" Category="ShipSystems">
+    <action name="v_self_destruct" activationMode="delayed_press_medium" keyboard="backspace" joystick=" " UILabel="@ui_CISelfDestruct" UIDescription="@ui_CISelfDestructDesc" Category="ShipSystems">
       <gamepad activationMode="delayed_press_medium" input=" " />
     </action>
     <action name="v_cooler_throttle_up" onPress="1" onHold="1" keyboard=" " gamepad=" " joystick=" " UILabel="@ui_CICoolerThrottleUp" UIDescription="@ui_CICoolerThrottleUpDesc" />
@@ -442,7 +448,9 @@
     <action name="v_target_match_vel" activationMode="press" keyboard=" " gamepad=" " joystick=" " UILabel="@ui_CIMatchTargetSpeed" UIDescription="@ui_CIMatchTargetSpeedDesc" />
     <action name="v_space_brake" onPress="1" onRelease="1" always="1" keyboard="x" gamepad=" " joystick=" " optionGroup="flight_move_space_brake" UILabel="@ui_CIBrake" UIDescription="@ui_CIBrakeDesc" />
     <action name="v_lock_rotation" activationMode="smart_toggle" keyboard="rshift" gamepad=" " joystick=" " UILabel="@ui_CIToggleLockRotation" UIDescription="@ui_CIToggleLockRotationDesc" />
-    <action name="v_ifcs_toggle_gforce_safety" activationMode="smart_toggle" keyboard=" " gamepad=" " joystick=" " UILabel="@ui_CIToggleGSafe" UIDescription="@ui_CIToggleGSafeDesc" Category="FlightSystems">
+    <action name="v_ifcs_gsafe_on" activationMode="press" keyboard=" " gamepad=" " joystick=" " UILabel="@ui_v_ifcs_gsafe_on" UIDescription="@ui_v_ifcs_gsafe_on_desc" />
+    <action name="v_ifcs_gsafe_off" activationMode="press" keyboard=" " gamepad=" " joystick=" " UILabel="@ui_v_ifcs_gsafe_off" UIDescription="@ui_v_ifcs_gsafe_off_desc" />
+    <action name="v_ifcs_toggle_gforce_safety" activationMode="tap" keyboard=" " gamepad=" " joystick=" " UILabel="@ui_CIToggleGSafe" UIDescription="@ui_CIToggleGSafeDesc" Category="FlightSystems">
       <states>
         <state name="on" UILabel="@ui_CIToggleGSafe_Disable" />
         <state name="off" UILabel="@ui_CIToggleGSafe_Enable" />
@@ -486,6 +494,22 @@
     <action name="v_master_mode_cycle" activationMode="tap" keyboard=" " gamepad=" " joystick=" " UILabel="@ui_v_master_mode_cycle" UIDescription="@ui_v_master_mode_cycle_desc" />
     <action name="v_master_mode_cycle_long" activationMode="delayed_press" keyboard="b" gamepad=" " joystick=" " UILabel="@ui_v_master_mode_cycle_long" UIDescription="@ui_v_master_mode_cycle_long_desc" />
     <action name="v_toggle_jump_request" activationMode="tap" mouse="mouse1" gamepad=" " joystick=" " UILabel="@ui_CIJumpDriveJumpRequest" UIDescription="@ui_CIJumpDriveJumpRequestDesc" />
+    <action name="v_ifcs_toggle_gravity_compensation" activationMode="tap" keyboard=" " gamepad=" " joystick=" " UILabel="@ui_v_ifcs_toggle_gravity_compensation" UIDescription="@ui_v_ifcs_toggle_gravity_compensation_desc" UICategory="@ui_CCFlightModes" Category="FlightSystems">
+      <states>
+        <state name="on" UILabel="@ui_v_ifcs_gravity_compensation_off" />
+        <state name="off" UILabel="@ui_v_ifcs_gravity_compensation_on" />
+      </states>
+    </action>
+    <action name="v_ifcs_gravity_compensation_on" activationMode="press" keyboard=" " gamepad=" " joystick=" " UILabel="@ui_v_ifcs_gravity_compensation_on" UIDescription="@ui_v_ifcs_gravity_compensation_on_desc" />
+    <action name="v_ifcs_gravity_compensation_off" activationMode="press" keyboard=" " gamepad=" " joystick=" " UILabel="@ui_v_ifcs_gravity_compensation_off" UIDescription="@ui_v_ifcs_gravity_compensation_off_desc" />
+    <action name="v_auto_precision_mode_toggle" activationMode="tap" keyboard=" " gamepad=" " joystick=" " UILabel="@ui_v_auto_precision_mode_toggle" UIDescription="@ui_v_auto_precision_mode_toggle_desc" UICategory="@ui_CCFlightModes" Category="FlightSystems">
+      <states>
+        <state name="on" UILabel="@ui_v_auto_precision_mode_off" />
+        <state name="off" UILabel="@ui_v_auto_precision_mode_on" />
+      </states>
+    </action>
+    <action name="v_auto_precision_mode_on" activationMode="press" keyboard=" " gamepad=" " joystick=" " UILabel="@ui_v_auto_precision_mode_on" UIDescription="@ui_v_auto_precision_mode_on_desc" />
+    <action name="v_auto_precision_mode_off" activationMode="press" keyboard=" " gamepad=" " joystick=" " UILabel="@ui_v_auto_precision_mode_off" UIDescription="@ui_v_auto_precision_mode_off_desc" />
   </actionmap>
   <actionmap name="spaceship_quantum" version="1" UILabel="@ui_cg_quantum_travel" UICategory="@ui_CCSeatGeneral">
     <action name="v_toggle_qdrive_engagement" activationMode="delayed_press" keyboard="mouse1" gamepad="triggerr_btn" joystick="button1" UILabel="@ui_v_toggle_qdrive_engagement" UIDescription="@ui_v_toggle_qdrive_engagement_desc" Category="ShipSystems">
@@ -664,12 +688,12 @@
     </action>
     <action name="turret_esp_hold" activationMode="hold" keyboard=" " gamepad=" " joystick=" " UILabel="@ui_turret_esp_hold" UIDescription="@ui_turret_esp_hold_desc" />
     <action name="turret_recenter" activationMode="hold_no_retrigger" keyboard="c" gamepad=" " joystick=" " UILabel="@ui_CITurretRecenter" UIDescription="@ui_CITurretRecenterDesc" />
-    <action name="turret_limiter_toggle" activationMode="smart_toggle" keyboard="a" gamepad=" " joystick=" " UILabel="@ui_CITurretSpeedLimiterToggle" UIDescription="@ui_CITurretSpeedLimiterToggleDesc" />
+    <action name="turret_limiter_toggle" activationMode="smart_toggle" keyboard=" " gamepad=" " joystick=" " UILabel="@ui_CITurretSpeedLimiterToggle" UIDescription="@ui_CITurretSpeedLimiterToggleDesc" />
     <action name="turret_limiter_rel" always="1" mouse="maxis_z" gamepad=" " joystick=" " optionGroup="turret_limiter_relative" UILabel="@ui_CI_TurretLimiterRelative" UIDescription="@ui_ui_CI_TurretLimiterRelativeDesc" />
-    <action name="turret_limiter_rel_increase" activationMode="all" keyboard="d" gamepad=" " joystick=" " UILabel="@ui_CI_TurretLimiterRelativeIncrease" UIDescription="@ui_CI_TurretLimiterRelativeIncreaseDesc" />
-    <action name="turret_limiter_rel_decrease" activationMode="all" keyboard="a" gamepad=" " joystick=" " UILabel="@ui_CI_TurretLimiterRelativeDecrease" UIDescription="@ui_CI_TurretLimiterRelativeDecreaseDesc" />
+    <action name="turret_limiter_rel_increase" activationMode="all" keyboard=" " gamepad=" " joystick=" " UILabel="@ui_CI_TurretLimiterRelativeIncrease" UIDescription="@ui_CI_TurretLimiterRelativeIncreaseDesc" />
+    <action name="turret_limiter_rel_decrease" activationMode="all" keyboard=" " gamepad=" " joystick=" " UILabel="@ui_CI_TurretLimiterRelativeDecrease" UIDescription="@ui_CI_TurretLimiterRelativeDecreaseDesc" />
     <action name="turret_limiter_abs" always="1" gamepad=" " joystick=" " optionGroup="turret_limiter_absolute" UILabel="@ui_CI_TurretLimiterAbsolute" UIDescription="@ui_CI_TurretLimiterAbsoluteDesc" />
-    <action name="turret_change_firemode" onPress="1" keyboard="b" gamepad=" " joystick=" " UILabel="@ui_CI_TurretChangeWeaponFireMode" UIDescription="@ui_CI_TurretChangeWeaponFireModeDesc" />
+    <action name="turret_change_firemode" onPress="1" keyboard=" " gamepad=" " joystick=" " UILabel="@ui_CI_TurretChangeWeaponFireMode" UIDescription="@ui_CI_TurretChangeWeaponFireModeDesc" />
     <action name="turret_instant_zoom" activationMode="all" keyboard="lshift" gamepad=" " joystick=" " UILabel="@ui_CI_TurretInstantZoom" UIDescription="@ui_CI_TurretInstantZoomDesc" />
     <action name="turret_change_position" activationMode="press" keyboard="s" gamepad=" " joystick=" " UILabel="@ui_ci_turret_change_position" UIDescription="@ui_ci_turret_change_position_desc" />
   </actionmap>
@@ -915,11 +939,12 @@
     <action name="mapui_action_planroute" onPress="1" onRelease="1" keyboard="r" joystick=" " UILabel="" UIDescription="" />
     <action name="mapui_action_clearroute" onPress="1" onRelease="1" keyboard="c" joystick=" " UILabel="" UIDescription="" />
     <action name="mapui_action_togglepin" onPress="1" onRelease="1" keyboard="t" joystick=" " UILabel="" UIDescription="" />
-    <action name="mapui_action_mylocation" onPress="1" onRelease="1" keyboard="x" joystick=" " UILabel="" UIDescription="" />
+    <action name="mapui_action_mylocation" onPress="1" onRelease="1" keyboard="2" joystick=" " UILabel="" UIDescription="" />
     <action name="mapui_action_toggle_view_entire_zone" onPress="1" onRelease="1" keyboard="z" joystick=" " UILabel="" UIDescription="" />
     <action name="mapui_action_toggleQTActions" activationMode="hold" retriggerable="1" keyboard="lshift" joystick="" UILabel="" UIDescription="" />
-    <action name="mapui_action_goto_selection" onPress="1" onRelease="1" keyboard="e" joystick=" " UILabel="" UIDescription="" />
-    <action name="mapui_action_step_back" onPress="1" onRelease="1" keyboard="q" joystick=" " UILabel="" UIDescription="" />
+    <action name="mapui_action_goto_selection" onPress="1" onRelease="1" keyboard="3" joystick=" " UILabel="" UIDescription="" />
+    <action name="mapui_action_step_back" onPress="1" onRelease="1" keyboard="4" joystick=" " UILabel="" UIDescription="" />
+    <action name="mapui_action_transition" onPress="1" onRelease="1" keyboard="1" joystick=" " UILabel="" UIDescription="" />
   </actionmap>
   <actionmap name="hacking" version="1" UILable="" UICategory="">
     <action name="hacking_minigame_debug_toggle_command_input" activationMode="double_tap" mouse="" keyboard="rshift" />
@@ -1235,6 +1260,8 @@
         <inputdata input="thumbr_right" />
       </gamepad>
     </action>
+    <action name="notification_accept" activationMode="press" keyboard="lbracket" joystick=" " gamepad=" " UILabel="@ui_CIUINotificationAccept" UIDescription="@ui_CIUINotificationAccept" Category="Notifications" />
+    <action name="notification_decline" activationMode="press" keyboard="rbracket" joystick=" " gamepad=" " UILabel="@ui_CIUINotificationDecline" UIDescription="@ui_CIUINotificationDecline" Category="Notifications" />
     <action name="toggle_contact" activationMode="press" keyboard="f11" joystick=" " gamepad=" " UILabel="@ui_CIUIContactsToggle" UIDescription="@ui_CIUIContactsToggleDesc" Category="MobiGlasActions" />
     <action name="toggle_chat" activationMode="press" keyboard="f12" joystick=" " gamepad=" " UILabel="@ui_CIUIChatToggle" UIDescription="@ui_CIUIChatToggleDesc" Category="MobiGlasActions" />
     <action name="cycle_chat_lobby" activationMode="press" keyboard="tab" joystick=" " gamepad=" " UILabel="@ui_CIUIChatCycleLobby" UIDescription="@ui_CIUIChatCycleLobbyDesc" />

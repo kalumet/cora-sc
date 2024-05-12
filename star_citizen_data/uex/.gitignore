@@ -1,7 +1,10 @@
 *.json
 *.jpg
 *.png
+!tempates/*.json
 !template_*.png
 !response_structure_buy.json
 !response_structure_sell.json
+!response_structure_commodity_prices.json
+!response_structure_location_name.json
 !kiosk_analyzer/examples/*

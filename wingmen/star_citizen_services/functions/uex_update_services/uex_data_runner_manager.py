@@ -45,8 +45,7 @@ class UexDataRunnerManager(FunctionManager):
             friendly_key_name="OpenAI API key",
             prompt_if_missing=False
         )
-        self.client: OpenAI = OpenAI()
-        self.client.api_key = self.openai_api_key
+        self.client: OpenAI = OpenAI(api_key=self.openai_api_key)
 
         self.best_template_index = 1
         

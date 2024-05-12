@@ -60,7 +60,7 @@ class UEXApi2():
         if not hasattr(self, 'is_initialized'):
             self.root_data_path = "star_citizen_data/uex2"
             
-            self.base_url = "https://ptu.uexcorp.space/api/"
+            self.base_url = "https://uexcorp.space/api/2.0/"
             self.session = requests.Session()
             self.session.headers.update({"Authorization": f"Bearer {self.api_key}"})
             self.session.headers.update({"secret_key": f"{self.user_secret_key}"})
@@ -224,7 +224,7 @@ class UEXApi2():
         category_key = category
         for attribute, value in additional_category_filters:
             category_key += f"_{attribute}-{value}"
-        return self.data[category_key].get("age") > self.max_ages[category]
+        return self.data[category_key].get("age") is None or self.data[category_key].get("age") > self.max_ages[category]
 
     def _write_code_mapping_to_file(self, data, category, api_value_field, export_code_field_name, export_value_field_name):
         """

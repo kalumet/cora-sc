@@ -84,6 +84,8 @@ class StarCitizenWingman(OpenAiWingman):
         self.current_user_request: str = None  # saves the current user request
         self.switch_context_executed = False  # used to identify multiple switch executions that would be incorrect -> Error
         self.sc_keybinding_service: SCKeybindings = None  # initialised in validate
+        self.uex2_api_key = None  # set in validate()
+        self.uex2_secret_key = None # set in validate()
         self.uex_service: UEXApi2 = None  # set in validate()
         self.messages_buffer = 10
         self.current_tools = None # init in validate
@@ -110,9 +112,25 @@ class StarCitizenWingman(OpenAiWingman):
             self.sc_keybinding_service = SCKeybindings(self.config, self.secret_keeper)
             self.sc_keybinding_service.parse_and_create_files()
 
+            self.uex2_api_key = self.secret_keeper.retrieve(
+                requester="Cora SC",
+                key="uex2_api_key",
+                friendly_key_name="UEX2 API key",
+                prompt_if_missing=False
+            )
+            self.uex2_secret_key = self.secret_keeper.retrieve(
+                requester="Cora SC",
+                key="uex2_secret_key",
+                friendly_key_name="UEX2 secret user key",
+                prompt_if_missing=False
+            )
+            self.uex_service = UEXApi2.init(
+                uex_api_key=self.uex2_api_key,
+                user_secret_key=self.uex2_secret_key
+            )
+
             self.ai_functions_manager = StarCitizensAiFunctionsManager(self.config, self.secret_keeper)
 
-            self.uex_service = UEXApi2()
             self.current_tools = self._get_context_tools(self.current_context)
             self.overlay = StarCitizenOverlay()
             self._set_current_context(AIContext.CORA, new=True)

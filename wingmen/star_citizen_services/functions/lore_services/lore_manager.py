@@ -232,6 +232,7 @@ class LoreManager(FunctionManager):
                         "call_identifier": self.current_call_identifier
                     })
                 printr.print(f"Found a single article about the topic. {json.dumps(result, indent=2)}", tags="info")
+                return result
 
             articles = []
 
@@ -256,10 +257,21 @@ class LoreManager(FunctionManager):
             return result
             
         except requests.exceptions.RequestException as e:
-            print_debug(f"{self.search_information_in_galactapedia.__name__} exception: {str(e)}")
-            printr.print(f"Error during search of '{search_term}' in the galactapedia: {str(e)} ", tags="info")
-            return {"success": False, 
-                    "additional_instructions": "Galactapedia is currently unavailable. Please try again later. ", 
+            if isinstance(e, requests.exceptions.HTTPError) and e.response.status_code == 404:
+                printr.print("No entry found for the search term '{search_term}'. "
+                             "Please check the spelling or suggest a correction.", tags="info")
+                return {
+                    "success": False,
+                    "additional_instructions": f"No entry found for the search term '{search_term}'. "
+                                               "Tell the player, you couldn't find information about the topic. Make a suggestion to correct the search term or ask him, to rephrase his question.",
+                    "error": str(e)
+                }
+            else:
+                print_debug(f"{self.search_information_in_galactapedia.__name__} exception: {str(e)}")
+                printr.print(f"Error during search of '{search_term}' in the galactapedia: {str(e)} ", tags="info")
+                return {
+                    "success": False,
+                    "additional_instructions": "Galactapedia is currently unavailable. Please try again later.",
                     "error": str(e)
                 }
     

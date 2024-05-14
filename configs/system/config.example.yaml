@@ -102,7 +102,7 @@ edge_tts:
 # Also note: With elevenlabs you can't add audio effects right now. We are working on that.'
 elevenlabs:
   voice: # Adam # Simple voice names.
-    id: # set to id of elevenlabs
+    id: FoqeiiNJZVtTAWpdsUMI
   # If you have a custom voice, you can use the voice ID instead:
   # voice:
   #   id: xxx
@@ -226,14 +226,14 @@ wingmen:
       keybindings-directory: "keybindings/"
       sc_installation_dir: C:/Program Files/Roberts Space Industries/StarCitizen
       sc_active_channel: LIVE # LIVE or PTU or EPTU TECH-PREVIEW
-      sc_channel_version: R3_22 # R3_21 or R3_22
-      user_keybinding_file_name: layout_kalumet_{sc_channel_version}_exported.xml # change to whatever you have named your keybinding files
-      sc_unp4k_install_dir: D:\Dokumente\dev\unp4k-suite-v3.13.21 # not relevant
-      sc_unp4k_file_default_keybindings_filter: defaultProfile.xml # don't change
-      sc_unp4k_file_keybinding_localization_filter: keybinding_localization.xml # don't change
-      sc_unp4k_translations_filter: global.ini # copy en translation as global.ini to star-citizen-data/keybindings/{channel_version} directory. All translations you want to the same dir with name global_{de_DE}.ini
+      sc_channel_version: R3_23 # R3_23 or R3_22
+      user_keybinding_file_name: layout_kalumet_{sc_channel_version}_exported.xml
+      sc_unp4k_install_dir: D:\Dokumente\dev\unp4k-suite-v3.13.21 # is just dokumentation which tool i use to extract the keybinding files from star citizen
+      sc_unp4k_file_default_keybindings_filter: defaultProfile.xml # file to be extracted.
+      sc_unp4k_file_keybinding_localization_filter: keybinding_localization.xml # file to be extracted.
+      sc_unp4k_translations_filter: global.ini # file names to be extracted for each language you want. copy en translation as global.ini to star-citizen-data/keybindings/{channel_version} directory. All translations you want to the same dir with name global_{de_DE}.ini
       en_translation_file: global_en_GB.ini
-      player_language: de_DE
+      player_language: en_GB # de_DE, en_GB, ...
       # This specifies the mapping between specific keybind names in star citizen and the key identifiers used in wingman.ai
       # not complete
       key-mappings:
@@ -243,9 +243,9 @@ wingmen:
         lalt: altleft
         lshift: shiftleft
         lctrl: ctrlleft
-        mouse1: LEFT
-        mouse2: RIGHT
-        mouse3: MIDDLE
+        mouse1: mouse_left
+        mouse2: mouse_right
+        mouse3: mouse_middle
         equals: "="
         np_0: KEY_NUMPAD_0
         np_1: KEY_NUMPAD_1
@@ -270,7 +270,7 @@ wingmen:
         # how long should keys be pressed in ms. The automatic keybinding recognition will mostly not work if a modifier needs to be hold. For instance, if you want to modify freelock (holding down y in f4 mode and than recenter the camera). These kind of actions must be defined manually if you want to automate something like, recenter camera.
         null: unknown # has multiple meanings, usually press and hold the key until you are satisfied with the action. Some actions trigger something on tap, so we only support the "tap" mode. might also be a press with a modifyer hold simultaneously, difficult to automatically do the right thing here. Commands not working as expected should be defined manually in the command-section below
         tap: 1 # just press down
-        hold: notSupported # we don't support this (keep key pressed until released) -> requires manuel setup of commands. See below examples for "camera view commands"
+        hold: notSupported # we don't support this (keep key pressed until released)
         smart_toggle: 1 # activates the toggle -> activates the "feature". Pressing again, deactivates the toggle. Is just pressing the key
         press: 1 # press, short hold, release
         delayed_press_medium: 300 # short delayed press?
@@ -345,6 +345,7 @@ wingmen:
     # or you find them to dangerous to be executed by the ai
     ignored_actionnames: 
       - v_eject
+      - v_view_look_behind
       - v_toggle_missile_mode
       - v_operator_mode_cycle_forward
       - v_self_destruct
@@ -448,12 +449,12 @@ wingmen:
     # This section is to make complex command chains or if you want faster response times for important action 
     commands: 
       # ──────────────────────────────────────────────────────────────────────────
-      - name: ReadyForTakeOff
+      - name: ReadyForTakeOff # for individual commands, provide a good long name in camel case
         sc_commands:
           - sc_command: spaceship_movement_Request_Landing
-            wait: 0.5 # sekunden
+            wait: 0.2 # seconds
           - sc_command: spaceship_power_Toggle_Power_All
-            wait: 0.5
+            wait: 0.2
           - sc_command: spaceship_power_Toggle_Power_Thrusters 
         instant_activation:
           - Klarschiff
@@ -472,23 +473,6 @@ wingmen:
           - Cora, prepare for takeoff
         responses: False # If you don't want the ai to acknowledge an instant_activation you can set this to false
       # ──────────────────────────────────────────────────────────────────────────
-      - name: spaceship_movement_Request_Landing
-        sc_commands:
-          - sc_command: spaceship_movement_Request_Landing
-        instant_activation:
-          - Landeanfrage stellen
-          - Cora, Landeanfrage stellen
-          - Cora, Landeerlaubnis anfordern
-          - Landeerlaubnis
-          - Landeanfrage
-          - Starterlaubnis
-          - Starterlaubnis anfragen
-          - Cora, Starterlaubnis anfragen
-          - Request landing
-          - Landing request
-          - Cora, make a landing request
-        responses: False # If you don't want the ai to acknowledge an instant_activation you can set this to false
-      # ──────────────────────────────────────────────────────────────────────────
       - name: InitiatePanicDefence
         sc_commands:
           - sc_command: spaceship_defensive_Decoy_Increase_Burst_Size_tap
@@ -505,42 +489,15 @@ wingmen:
           - Panik
           - Panik abwehr
           - Not abwehr
-        responses:
-          - Panik-Gegenmaßnahmen eingesetzt
-          - Gegenmaßnahmen-Salbe ausgelöst
-          - Panik-Abwehr durchgeführt
+          - Panic defence
+          - Panic
+        responses: False 
       # ──────────────────────────────────────────────────────────────────────────
-      - name: spaceship_defensive_Decoy_Launch_Burst_tap_Set_and_Launch_Burst_hold
-        sc_commands:
-          - sc_command: spaceship_defensive_Decoy_Launch_Burst_tap_Set_and_Launch_Burst_hold
-        instant_activation: 
-          - Raketenabwehr
-          - Raketenabwehrmaßnahmen einleiten
-          - Raketenabwehr feuern
-        responses:
-          - Raketenabwehr ausgelöst
-      # ──────────────────────────────────────────────────────────────────────────
-      - name: spaceship_defensive_Noise_Deploy_Tap
-        sc_commands:
-          - sc_command: spaceship_defensive_Noise_Deploy_Tap
-        instant_activation: 
-          - Verschleierung aktivieren
-          - Störsignal aktivieren
-          - Störsignal
-          - Radarabwehr
-          - Täuschkörper auslösen
-          - Täuschkörper aktivieren
-        responses:
-          - Täuschkörper aktiviert
-          - Radarabwehr aktiviert
-          - Störsignal eingesetzt
-      # ──────────────────────────────────────────────────────────────────────────
-      - name: ShowQRCode
+      - name: ShowQRCode # command do not work anymore, as console commands have changed.
         keys: 
         - key: "`" # open the console
-        - key: r  
-        - key: tab
-        - key: tab
+        - key: r 
+        - key: '_'
         - key: tab
         - key: tab
         - key: "1"
@@ -555,9 +512,8 @@ wingmen:
       - name: HideQRCode
         keys: 
         - key: "`" # open the console
-        - key: r  
-        - key: tab
-        - key: tab
+        - key: r
+        - key: "_"  
         - key: tab
         - key: tab
         - key: "0"
@@ -572,9 +528,8 @@ wingmen:
       - name: ShowFPSStatistics2
         keys: 
         - key: "`" # open the console
-        - key: r  
-        - key: tab
-        - key: tab
+        - key: r
+        - key: "_"
         - key: tab
         - key: "2"
         - key: enter
@@ -588,9 +543,8 @@ wingmen:
       - name: ShowFPSStatistics3
         keys: 
         - key: "`" # open the console
-        - key: r  
-        - key: tab
-        - key: tab
+        - key: r 
+        - key: "_" 
         - key: tab
         - key: "3"
         - key: enter
@@ -604,9 +558,9 @@ wingmen:
       - name: HideFPSStatistics
         keys: 
         - key: "`" # open the console
-        - key: r  
-        - key: tab
-        - key: tab
+        - key: r 
+        - key: "-"
+          modifier: shift 
         - key: tab
         - key: "0"
         - key: enter
@@ -644,42 +598,13 @@ wingmen:
           - Ping
         responses: False # If you don't want the ai to acknowledge an instant_activation you can set this to false
       # ──────────────────────────────────────────────────────────────────────────
-      - name: spaceship_targeting_advanced_Cycle_Lock_Attackers_Reset_to_Closest
+      - name: load_missiles
         sc_commands:
-          - sc_command: spaceship_targeting_advanced_Cycle_Lock_Attackers_Reset_to_Closest
+          - sc_command: spaceship_missiles_Increase_Number_of_Armed_Missiles
+          - sc_command: spaceship_missiles_Increase_Number_of_Armed_Missiles
         instant_activation:
-          - Feind aufschalten
-          - Feind anvisieren
-          - Feind scannen
-          - Feind locken
-          - Feind markieren
-          - Lock enemy
-          - Lock enemy target
-        responses: False # If you don't want the ai to acknowledge an instant_activation you can set this to false
-      # ──────────────────────────────────────────────────────────────────────────
-      - name: spaceship_targeting_advanced_Cycle_Lock_Hostiles_Forward
-        sc_commands:
-          - sc_command: spaceship_targeting_advanced_Cycle_Lock_Hostiles_Forward
-        instant_activation:
-          - Nächster Feind aufschalten
-          - Nächster Feind anvisieren
-          - Nächster Feind markieren
-          - Nächster Feind
-          - Next enemy
-          - target next enemy
-        responses: False # If you don't want the ai to acknowledge an instant_activation you can set this to false
-      # ──────────────────────────────────────────────────────────────────────────
-      - name: spaceship_targeting_Unlock_Locked_Target
-        sc_commands:
-          - sc_command: spaceship_targeting_Unlock_Locked_Target
-        instant_activation:
-          - Ziele abschalten
-          - Zielmodus deaktivieren
-          - Ziel abschalten
-          - Markierung abschalten
-          - Markierung entfernen
-          - Remove target
-          - unlock target
+          - Load missiles
+          - Raketen laden
         responses: False # If you don't want the ai to acknowledge an instant_activation you can set this to false
       
       #####################  CAMERA CONTROLS #####################################
@@ -708,6 +633,8 @@ wingmen:
         instant_activation:
           - Zu Außenansicht wechseln
           - Außenansicht
+          - External view
+          - Internal view
         responses: False # If you don't want the ai to acknowledge an instant_activation you can set this to false
       # ──────────────────────────────────────────────────────────────────────────
       - name: StandardView
@@ -719,6 +646,8 @@ wingmen:
           - Landeansicht
           - Standardsicht
           - Rückansicht
+          - Rear view
+          - Standard view
         responses: False # If you don't want the ai to acknowledge an instant_activation you can set this to false
       # ──────────────────────────────────────────────────────────────────────────
       - name: SaveCameraViewFront
@@ -729,6 +658,7 @@ wingmen:
         instant_activation:
           - Kamera auf 8 speichern
           - Vorderansicht speichern
+          - Save front view
         responses: 
           - gespeichert
       # ──────────────────────────────────────────────────────────────────────────
@@ -739,6 +669,7 @@ wingmen:
             hold: 0.01
         instant_activation:
           - Vorderansicht
+          - Front view
         responses: False # If you don't want the ai to acknowledge an instant_activation you can set this to false
       # ──────────────────────────────────────────────────────────────────────────
       - name: SaveCameraViewUp
@@ -749,6 +680,7 @@ wingmen:
         instant_activation:
           - Kamera auf 5 speichern
           - Obensicht speichern
+          - Save Top view
         responses: 
           - gespeichert
       # ──────────────────────────────────────────────────────────────────────────
@@ -761,6 +693,7 @@ wingmen:
           - Kamera 5
           - Obensicht
           - Sicht von oben
+          - Top view
         responses: False
       # ──────────────────────────────────────────────────────────────────────────
       - name: SaveCameraViewLeft
@@ -772,6 +705,7 @@ wingmen:
           - Kamera auf 4 speichern
           - Backbord sicht speichern
           - Links sicht speichern
+          - Save left view
         responses: 
           - gespeichert
       # ──────────────────────────────────────────────────────────────────────────
@@ -784,6 +718,7 @@ wingmen:
           - Backbord sicht
           - Sicht von Links
           - Linkssicht
+          - left view
         responses: False # If you don't want the ai to acknowledge an instant_activation you can set this to false
       # ──────────────────────────────────────────────────────────────────────────
       - name: SaveCameraViewRight
@@ -795,6 +730,7 @@ wingmen:
           - Kamera auf 6 speichern
           - Steuerbord sicht speichern
           - Rechtssicht speichern
+          - Save right view
         responses: 
           - gespeichert
       # ──────────────────────────────────────────────────────────────────────────
@@ -807,6 +743,7 @@ wingmen:
           - Steuerbord sicht
           - Sicht von rechts
           - rechtssicht
+          - right view
         responses: False # If you don't want the ai to acknowledge an instant_activation you can set this to false
       # ──────────────────────────────────────────────────────────────────────────
       #####################  RADEON Commands #####################################
@@ -848,6 +785,8 @@ wingmen:
         instant_activation: 
           - Aufnahme starten
           - Aufnahme stoppen
+          - Aufzeichnung starten
+          - Aufzeichnung stoppen
           - Aufnehmen
         responses: False
       # ──────────────────────────────────────────────────────────────────────────
@@ -858,7 +797,22 @@ wingmen:
         instant_activation: 
           - Screenshot
           - Bildschirmfoto
-        responses: False   
+        responses: False
+      # ──────────────────────────────────────────────────────────────────────────
+      - name: Mute_Unmute_Radeon_Microphone
+        keys: # You can still specify own key strokes
+        - key: m
+          modifiers: alt,shift,ctrl
+        instant_activation: 
+          - Sprache aufzeichnen
+          - Sprache nicht aufzeichnen
+          - Sprache aufnehmen
+          - Sprache nicht aufnehmen
+          - Radeon Mikrofon stummschalten
+          - Radeon Mikrofon aktivieren
+          - Voice aufzeichnen
+          - Voice nicht aufzeichnen
+        responses: False        
       #####################  Discord Commands #####################################
       # ──────────────────────────────────────────────────────────────────────────
       - name: ToggleMuteMicrofoneDiscord

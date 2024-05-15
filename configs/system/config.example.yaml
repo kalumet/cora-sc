@@ -180,6 +180,7 @@ wingmen:
     record_key: x1  # mouse button
     uex-base-url: "https://uexcorp.space/api/data" # note how you can just add your own config options here!
     data-root-directory: "star_citizen_data/"
+    open-ai-vision-model: "gpt-4o"
     sound: # overrides the GLOBAL settings. Will be overwritten programmatically ...
       effects:
         - ROBOT
@@ -233,7 +234,7 @@ wingmen:
       sc_unp4k_file_keybinding_localization_filter: keybinding_localization.xml # file to be extracted.
       sc_unp4k_translations_filter: global.ini # file names to be extracted for each language you want. copy en translation as global.ini to star-citizen-data/keybindings/{channel_version} directory. All translations you want to the same dir with name global_{de_DE}.ini
       en_translation_file: global_en_GB.ini
-      player_language: en_GB # de_DE, en_GB, ...
+      player_language: de_DE # de_DE, en_GB, ...
       # This specifies the mapping between specific keybind names in star citizen and the key identifiers used in wingman.ai
       # not complete
       key-mappings:
@@ -496,11 +497,8 @@ wingmen:
       - name: ShowQRCode # command do not work anymore, as console commands have changed.
         keys: 
         - key: "`" # open the console
-        - key: r 
-        - key: '_'
-        - key: tab
-        - key: tab
-        - key: "1"
+        - key: 
+          typewrite: "r_displaySessionInfo 1"
         - key: enter
         - key: "`"
         instant_activation: 
@@ -512,11 +510,8 @@ wingmen:
       - name: HideQRCode
         keys: 
         - key: "`" # open the console
-        - key: r
-        - key: "_"  
-        - key: tab
-        - key: tab
-        - key: "0"
+        - key: 
+          typewrite: "r_displaySessionInfo 0"
         - key: enter
         - key: "`"
         instant_activation: 
@@ -525,56 +520,60 @@ wingmen:
           - Hide QR code
         responses: False
       # ──────────────────────────────────────────────────────────────────────────
-      - name: ShowFPSStatistics2
+      - name: ShowFPSStatistics1
         keys: 
         - key: "`" # open the console
-        - key: r
-        - key: "_"
-        - key: tab
-        - key: "2"
+        - key: 
+          typewrite: "r_displayInfo 1"
         - key: enter
         - key: "`"
         instant_activation: 
-          - Basis informationen einblenden
-          - Basis informationen anzeigen
-          - Show basic information
+          - FPS 1 anzeigen
+          - show FPS 1
+        responses: False
+      # ──────────────────────────────────────────────────────────────────────────
+      - name: ShowFPSStatistics2
+        keys: 
+        - key: "`" # open the console
+        - key: 
+          typewrite: "r_displayInfo 2"
+        - key: enter
+        - key: "`"
+        instant_activation: 
+          - FPS 2 anzeigen
+          - show FPS 2
         responses: False
       # ──────────────────────────────────────────────────────────────────────────
       - name: ShowFPSStatistics3
         keys: 
         - key: "`" # open the console
-        - key: r 
-        - key: "_" 
-        - key: tab
-        - key: "3"
+        - key: 
+          typewrite: "r_displayInfo 3"
         - key: enter
         - key: "`"
         instant_activation: 
-          - Server Statistiken anzeigen
-          - Server Informationen anzeigen
-          - show server information
+          - FPS 3 anzeigen
+          - show FPS 3
         responses: False
       # ──────────────────────────────────────────────────────────────────────────
       - name: HideFPSStatistics
         keys: 
         - key: "`" # open the console
-        - key: r 
-        - key: "-"
-          modifier: shift 
-        - key: tab
-        - key: "0"
+        - key: 
+          typewrite: "r_displayInfo 0"
         - key: enter
         - key: "`"
         instant_activation: 
           - Informationen ausblenden
           - hide information
+          - FPS 0
         responses: False
       # ──────────────────────────────────────────────────────────────────────────
       - name: HelloChatTest
         keys: 
         - key: "enter" # start a chat
         - key:
-          typewrite: "o7 citiyens" # not working as intendet as upper keys not working and keyboard layout problematic -> my keyboard DE -> y = z
+          typewrite: "o7 citizens" # not working as intendet as upper keys not working and keyboard layout problematic -> my keyboard DE -> y = z
         - key: "enter"  
         instant_activation:
           - Hallo zusammen

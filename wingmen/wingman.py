@@ -1,5 +1,6 @@
 import random
 import time
+import pyperclip
 from difflib import SequenceMatcher
 from importlib import import_module
 from typing import Any
@@ -404,7 +405,6 @@ class Wingman(FileCreator):
                     key_module.keyDown(modifier)
                     active_modifiers.insert(0, modifier)  # we build a reverse list, as we want to release in the opposite order
 
-                    
             if entry.get("hold"):
                 if self.debug or DEBUG:
                     printr.print(f"press and hold ({entry['hold']}s): {key}",console_only=True)
@@ -413,8 +413,14 @@ class Wingman(FileCreator):
                 key_module.keyUp(key)
             elif entry.get("typewrite"):  # added very buggy, as it is keyboard-layout sensitive :(
                 if self.debug or DEBUG:
-                    printr.print(f"typewrite: {entry.get('typewrite')}",console_only=True)
-                key_module.typewrite(entry["typewrite"], interval=0.005)
+                    printr.print(f"typewrite: {entry.get('typewrite')}", console_only=True)
+                pyperclip.copy(entry.get('typewrite'))
+                key_module.keyDown("ctrl")
+                key_module.keyDown("v")
+                key_module.keyUp("v")
+                key_module.keyUp("ctrl")
+                # pydirectinput.hotkey("ctrl", )
+                # key_module.typewrite(entry["typewrite"], interval=0.005)
             else:
                 if self.debug or DEBUG:
                     printr.print(f'press {key}',console_only=True)

@@ -70,6 +70,10 @@ class Wingman(FileCreator):
         self.app_root_dir = app_root_dir
         """The path to the root directory of the app. This is where the Wingman executable lives."""
 
+        self.max_command_length = 0
+
+        self.instant_activation_commands = []
+
     @staticmethod
     def create_dynamically(
         module_path: str,
@@ -138,7 +142,18 @@ class Wingman(FileCreator):
         It is run AFTER validate() so you can access validated params safely here.
 
         You can override it if you need to load async data from an API or file."""
-        pass
+        
+        self.instant_activation_commands = [
+            command
+            for command in self.config.get("commands", [])
+            if command.get("instant_activation")
+        ]
+
+        self.max_command_length = max(
+            len(phrase)
+            for command in self.instant_activation_commands
+            for phrase in command.get("instant_activation", [])
+        )
 
     def reset_conversation_history(self):
         """This function is called when the user triggers the ResetConversationHistory command.
@@ -288,23 +303,27 @@ class Wingman(FileCreator):
             {} | None: The executed instant_activation command.
         """
 
-        instant_activation_commands = [
-            command
-            for command in self.config.get("commands", [])
-            if command.get("instant_activation")
-        ]
-
+        if len(transcript) > (self.max_command_length * 1.2):
+            return None
+        
         best_command = None
         best_ratio = 0
         # check if transcript matches any instant activation command. Each command has a list of possible phrases
-        for command in instant_activation_commands:
+        for command in self.instant_activation_commands:
             for phrase in command.get("instant_activation"):
                 ratio = SequenceMatcher(
                     None,
                     transcript.lower(),
                     phrase.lower(),
                 ).ratio()
-                if ratio > 0.8:  # we only accept commands that have a high ration
+
+                if ratio == 1.0: # found a perfect match, we can execute it immediately
+                    print(f"instant activation found for {transcript}: {command['name']} with ratio {ratio}")
+                    printr.print(f"instant activation found for {transcript}: {command['name']} with ratio {ratio}", tags="info")
+                    self._execute_command(command)
+                    return command
+                
+                if ratio > 0.8:  # we only accept commands that have a high ratio
                     print(f"instant activation ratio for {phrase}: {ratio}")
                     if ratio > best_ratio: # some command activations might have quite similar values, therefore, we need to check if there are better commands!
                         best_command = command
@@ -312,6 +331,7 @@ class Wingman(FileCreator):
         
         if best_command:
             print(f"instant activation found for {transcript}: {best_command['name']} with ratio {best_ratio}")
+            printr.print(f"instant activation found for {transcript}: {best_command['name']} with ratio {best_ratio}")
             self._execute_command(best_command)
             return best_command
         return None

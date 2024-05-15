@@ -238,7 +238,11 @@ class SCKeybindings():
             
                 print_debug("got response")
                 response_json = response.json()
-                
+
+                if response_json.get("error", False):
+                    print(f'Error during request: {response_json["error"]["type"]} skipping. {response_json}')
+                    return # stop the program, as we can't continue without the response
+
                 path = f"{self.data_root_path}{self.sc_channel_version}/completion_message_command_phrases_{chunk}.json"
                 
                 updated_keybindings = response_json["choices"][0]["message"]["content"]
@@ -246,10 +250,6 @@ class SCKeybindings():
                 updated_keybindings = json.loads(updated_keybindings)
                 with open(path, mode="w", encoding="utf-8") as file:
                     json.dump(updated_keybindings, file, indent=4)
-                
-                if response_json.get("error", False):
-                    print(f'Error during request: {response_json["error"]["type"]} skipping')
-                    continue
                 
                 for key, value in updated_keybindings.items():
                     print_debug(f"updating {key}")

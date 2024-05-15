@@ -22,13 +22,18 @@ def print_debug(to_print):
 
 
 class OCR:
-    def __init__(self, data_dir, openai_api_key, extraction_instructions, overlay:StarCitizenOverlay):
+    def __init__(self, data_dir, open_ai_model, openai_api_key, extraction_instructions, overlay:StarCitizenOverlay):
         self.extraction_instructions = extraction_instructions
         self.data_dir = data_dir
         self.openai_api_key = openai_api_key
         self.overlay = overlay
+        self.openai_model = open_ai_model
   
     def get_screenshot_texts(self, image, *subdirectories, **filename_placeholders):
+        if image is None:
+            print("ERROR: No screenshot provided. ")
+            return "No screenshot provided. ", False
+        
         gray_screenshot = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
         subdir_path = "/".join(subdirectories)
@@ -63,7 +68,7 @@ class OCR:
                     "Authorization": f"Bearer {self.openai_api_key}",
                 }
                 payload = {
-                    "model": "gpt-4-turbo-2024-04-09",
+                    "model": self.openai_model,
                     #"response_format": { "type": "json_object" },  #  not supported on this model
                     "messages": [
                         {

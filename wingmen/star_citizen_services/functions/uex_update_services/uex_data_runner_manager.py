@@ -83,6 +83,7 @@ class UexDataRunnerManager(FunctionManager):
         json_string = file_content   
 
         self.commodity_prices_ocr = OCR(
+            open_ai_model=f'{self.config["open-ai-vision-model"]}',
             openai_api_key=self.openai_api_key, 
             data_dir=self.data_dir_path,
             extraction_instructions=f"Give me the commodity price information within this image. Give me the response in a plain json object structured as defined in this example: {json_string}. Provide the json within markdown ```json ... ```.If you are unable to process the image, just return 'error' as response.",
@@ -92,6 +93,7 @@ class UexDataRunnerManager(FunctionManager):
             location_name_structure = file.read()
         
         self.location_name_ocr = OCR(
+            open_ai_model=f'{self.config["open-ai-vision-model"]}',
             openai_api_key=self.openai_api_key, 
             data_dir=self.data_dir_path,
             extraction_instructions=f"Give me the location name in this image. Give me the response in a plain json object structured as defined in this example: {location_name_structure}. Provide the json within markdown ```json ... ```.If you are unable to process the image, just return 'error' as response.",
@@ -404,7 +406,7 @@ class UexDataRunnerManager(FunctionManager):
                         "message": {
                             "tradeport": validated_tradeport["name"],
                             f"{operation}able_commodities_info": {
-                                "result_information": response2["response"]
+                                "result_information": response2["status"]
                             }
                         }
                     }

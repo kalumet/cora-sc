@@ -67,6 +67,7 @@ class DeliveryMissionManager(FunctionManager):
         json_string = file_content   
 
         self.ocr = OCR(
+            open_ai_model=f'{self.config["open-ai-vision-model"]}',
             openai_api_key=self.openai_api_key, 
             data_dir=self.mission_data_path,
             extraction_instructions=f"Give me the text within this image. Give me the response in a plain json object structured as defined in this example: {json_string}. Provide the json within markdown ```json ... ```.If you are unable to process the image, just return 'error' as response.",

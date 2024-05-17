@@ -16,10 +16,7 @@ class CommodityPriceValidator:
         invalid_prices = []
         all_prices = []
 
-        if not commodities_price_info_raw.get("commodity_prices", False):
-            return "json structure not as expected", None, False
-
-        for price_info_raw in commodities_price_info_raw["commodity_prices"]:
+        for price_info_raw in commodities_price_info_raw:
             print_debug(f"checking {price_info_raw}")
             if not price_info_raw.get("commodity_name", False):
                 print_debug("missing commodity attribute, skipping")

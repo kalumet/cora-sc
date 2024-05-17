@@ -20,7 +20,7 @@ from wingmen.star_citizen_services.functions.uex_update_services.commodity_price
 from wingmen.star_citizen_services.functions.uex_v2.uex_api_module import UEXApi2
 
 
-DEBUG = False
+DEBUG = True
 SHOW_SCREENSHOTS = False
 TEST = False
 
@@ -309,32 +309,32 @@ class UexDataRunnerManager(FunctionManager):
         
         screenshot_path = screenshots.take_screenshot(self.data_dir_path, operation, test=TEST, operation=operation, tradeport=tradeport["code"])
         if screenshot_path is None:
-            self.overlay.display_overlay_text("Could not take screenshot. Or couldn't identify template index")
+            self.overlay.display_overlay_text("Could not take screenshot. ")
             return {"success": False, "instructions": "You where not able to analyse the data. You can provide error information, if he likes. ", 
                     "error": "Could not make screenshot. Maybe, during screenshot taking, the active window displayed was NOT Star Citizen. In that case, I don't make any screenshots! "
                     }, None
     
         location_name_crop = screenshots.crop_screenshot(f"{self.data_dir_path}/location_name_area", screenshot_path, [("UPPER_LEFT", "LOWER_LEFT", "AREA"), ("LOWER_RIGHT", "LOWER_LEFT", "AREA")])
-        retrieved_json, success = self.location_name_ocr.get_screenshot_texts(location_name_crop, "location_name_area")
+        # retrieved_json, success = self.location_name_ocr.get_screenshot_texts(location_name_crop, "location_name_area")
         
-        if not success:
-            self.overlay.display_overlay_text("Couldn't retrieve location name ...")
-            return {
-                    "success": False, "instructions": "Tell the user, that you are not able to validate the provided location name. Bright spots might make recognition inpossible.", 
-                    }, None
-        location_name = retrieved_json['location_name']
-        print_debug(f"got raw location name: {location_name}")
+        # if not success:
+        #     self.overlay.display_overlay_text("Couldn't retrieve location name ...")
+        #     return {
+        #             "success": False, "instructions": "Tell the user, that you are not able to validate the provided location name. Bright spots might make recognition inpossible.", 
+        #             }, None
+        # location_name = retrieved_json['location_name']
+        # print_debug(f"got raw location name: {location_name}")
 
-        success = LocationNameMatching.validate_associated_location_name(location_name, validated_tradeport, min_similarity=50)
+        # success = LocationNameMatching.validate_associated_location_name(location_name, validated_tradeport, min_similarity=50)
 
-        if not success:
-            self.overlay.display_overlay_text("Error: Cannot validate location name!")
-            return {"success": False, 
-                    "instructions": "You cannot validate the given tradeport against the location in the screenshot. The user must select the current location in 'Your Inventories' drop-down. Or, if he did, he might need to transmit prices as single spoken commands without screenshot analysis.", 
-                    }, None
+        # if not success:
+        #     self.overlay.display_overlay_text("Error: Cannot validate location name!")
+        #     return {"success": False, 
+        #             "instructions": "You cannot validate the given tradeport against the location in the screenshot. The user must select the current location in 'Your Inventories' drop-down. Or, if he did, he might need to transmit prices as single spoken commands without screenshot analysis.", 
+        #             }, None
         
-        print_debug(f'validated location name: {validated_tradeport["nickname"]}')            
-
+        print_debug(f'location name: {validated_tradeport["nickname"]}')            
+        self.overlay.display_overlay_text(f'Selected tradeport: {validated_tradeport["nickname"]}')
         buy_result = self._analyse_prices_at_tradeport(screenshot_path, location_name_crop, validated_tradeport, operation)
 
         print_debug(buy_result)
@@ -348,10 +348,11 @@ class UexDataRunnerManager(FunctionManager):
         commodity_area_crop = screenshots.crop_screenshot(f"{self.data_dir_path}/commodity_info_area", screenshot_path, [("UPPER_LEFT", "LOWER_LEFT", "HORIZONTAL"), ("UPPER_LEFT", "LOWER_LEFT", "VERTICAL")], ["BOTTOM", "RIGHT"])
         prices_raw, success = self.commodity_prices_ocr.get_screenshot_texts(commodity_area_crop, "commodity_info_area", operation, operation=operation, tradeport=validated_tradeport['code'])
         
-        if not success:
+        if not success or not prices_raw.get("commodity_prices", False):
             self.overlay.display_overlay_text("Error retrieving commodity prices in screenshot.")
             return {"success": False, 
-                    "instructions": "You cannot analyse the commodity data, as something is obstructing your view. The player should reposition himself to avoid bright spots on the terminal and stand in front of the terminal.", 
+                    "instructions": "There was an error in retrieving the commodity prices from the screenshot. Provide information about the error, if the user asks for it. ", 
+                    "message": prices_raw
                     }
         
         number_of_extracted_prices = len(prices_raw["commodity_prices"])
@@ -359,7 +360,7 @@ class UexDataRunnerManager(FunctionManager):
         print_debug(f"extracted {number_of_extracted_prices} price-informations from screenshot")
 
         terminal_prices = self.uex2_service.get_prices_of(price_category="commodities_prices", id_terminal=validated_tradeport["id"])
-        screenshot_prices, validated_prices, invalid_prices, success = CommodityPriceValidator.validate_price_information(prices_raw, terminal_prices, operation)
+        screenshot_prices, validated_prices, invalid_prices, success = CommodityPriceValidator.validate_price_information(prices_raw.get("commodity_prices", []), terminal_prices, operation)
 
         if not success:
             self.overlay.display_overlay_text("Error: could not identify commodities. Check logs.")

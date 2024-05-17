@@ -10,6 +10,15 @@ from gui.root import WingmanUI
 
 from wingmen.star_citizen_services.functions.uex_v2.uex_api_module import UEXApi2
 from wingmen.star_citizen_services.helper import find_best_match as search
+from wingmen.star_citizen_services.functions.uex_update_services.commodity_price_validator import CommodityPriceValidator
+
+
+DEBUG = True
+
+
+def print_debug(to_print):
+    if DEBUG:
+        print(to_print)
 
 
 class OverlayPopup(tk.Toplevel):
@@ -21,7 +30,7 @@ class OverlayPopup(tk.Toplevel):
         self.user_updated_data = copy.deepcopy(screenshot_prices)
         self.operation = operation
 
-        print(json.dumps(self.updated_data, indent=2))
+        print_debug(f"got data to validate: \n{json.dumps(self.updated_data, indent=2)}")
 
         # self.overrideredirect(True)
         self.overrideredirect(False)  # Verwenden Sie False, um die Standarddekoration zu aktivieren
@@ -240,6 +249,7 @@ class OverlayPopup(tk.Toplevel):
                 
     def tradeport_update(self, event=None):
 
+        print_debug("Tradeport update")
         updated_tradeport_name = self.tradeport_entry.get()
         
         if len(updated_tradeport_name) == 0:
@@ -256,8 +266,25 @@ class OverlayPopup(tk.Toplevel):
         if uex_terminal is None:
             matched_tradeport = {"terminal_name": "unknown"}
         else:
-            self.terminal_prices = list(uex.get_prices_of(id_terminal=uex_terminal["id"]).values())
+            print_debug(f"found terminal: {uex_terminal['name']}")
+            self.terminal_prices = list(uex.get_prices_of(price_category="commodities_prices", id_terminal=uex_terminal["id"]).values())
             matched_tradeport = self.terminal_prices[0]
+
+        screenshot_prices, validated_prices, invalid_prices, success = CommodityPriceValidator.validate_price_information(self.updated_data, self.terminal_prices, self.operation)
+       
+        self.updated_data = screenshot_prices
+
+        for index, item in enumerate(self.updated_data):
+            # price_with_currency = f"{item['price_per_unit']:.2f}"
+            table_item = self.data_table.item(index)
+            table_item['values'][1] = item['commodity_name']
+            table_item['values'][2] = item['code']
+            table_item['values'][3] = item['available_SCU_quantity']
+            table_item['values'][4] = item['inventory_state']
+            table_item['values'][5] = f"{item['price_per_unit']}"  # do not cut off, to be able to see the exact price
+            table_item['values'][6] = item.get('multiplier', '')
+            table_item['values'][7] = item.get('validation_result', '')
+            self.data_table.item(index, values=table_item['values'])
 
         # Entfernen des aktuellen Inhalts im Entry-Widget
         self.tradeport_entry.delete(0, tk.END)
@@ -265,7 +292,8 @@ class OverlayPopup(tk.Toplevel):
         self.tradeport_entry.insert(0, matched_tradeport["terminal_name"])
 
         self.adjust_entry_width(self.tradeport_entry)
-        self.tradeport_entry.update()  # Update  
+        self.tradeport_entry.update()  # Update 
+        self.update() 
 
     def revert_tradeport(self, event=None):
         self.tradeport_entry.delete(0, tk.END)
@@ -284,10 +312,10 @@ class OverlayPopup(tk.Toplevel):
         current_operation = self.operation_entry.get()
         if current_operation.lower() == "buy":
             self.operation_entry.delete(0, tk.END)
-            self.operation_entry.insert(0, "Sell")
+            self.operation_entry.insert(0, "sell")
         else:
             self.operation_entry.delete(0, tk.END)
-            self.operation_entry.insert(0, "Buy")
+            self.operation_entry.insert(0, "buy")
 
         self.operation_entry.configure(state='readonly')
 

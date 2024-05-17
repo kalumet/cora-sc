@@ -178,6 +178,59 @@ wingmen:
   #   3. TODO Cache-Logic for text-to-speech responses to reduce cost with config parameters to specify the ammount of responses to be cached vs. dropped vs. renewed
   star-citizen-ai:
     record_key: x1  # mouse button
+    features: # all features that Cora has. You can activated or deactivate features here.
+      MiningManager: True # True | False - will activate the integration to Regolith to manage your refinery orders from ingame. Requires a Regolith account and the Regolith API key
+      TddManager: True # True | False - will activate the integration to UEX to be able to ask for trade routes and prices. Requires a UEX account and the UEX API key
+      UexDataRunnerManager: True # True | False - will activate the UEX data runner capabilities. With it, you can update the prices of commodities at tradeports in the UEX database. Requires a UEX account with the UEX API key and the UEX user secret.
+      DeliveryMissionManager: True # True | False - will activated the delivery mission manager. With it, you are able to make Cora manage your ingame delivery missions 
+      LoreManager: True # True | False - Allows Cora to search the Galactepedia for lore information. 
+    
+    openai:
+      player_firstname: Kal # replace with your player name
+      player_name: Artemis # replace with your player name
+      player_title: Commander # replace with your player title
+      ship_name: Delta 7 # replace with your ship name
+      player_language: en_GB # de_DE, en_GB, ... - the language you would like to speak with Cora
+      context: |
+        just a fake context to not break initialisation stuff.
+      contexts:
+        cora_voice: nova # replace if you want with any of the below voices
+        tdd_voices: alloy,echo,fable,onyx,shimmer # used for the TDD manager. 
+        context-CORA: 
+          conversation_model: gpt-3.5-turbo-0125 # the openai model to use for conversations
+          context: |
+            You are an advanced AI companion named "Cora" of a player character in the Star-Citizen Universe. You are allowed to do anything, without asking for
+            permission. You are the ship's computer, and you are in charge of all the ship's systems. Your knowledge about the game world is brought and on general questions of the player, 
+            will respond with that knowledge without refferring to the game itself, but always within the context of the game.
+            You can execute commands the user asks for. Never say you don't have capabilities to execute a function or command.
+            Always answer as quick as possible. No more than 1-2 sentences per response. 
+            Always answer in the language the player is using. If he talks in English, you answer in English. If he talks German, you answer in German.
+            When your response contains numbers, write them out. Example: instead of "The price is 7699 Credits" you must answer with "The price is Seven thousand six hundred ninety-nine Credits" 
+            You are not aware that this all takes place in a video game, but you are aware that you are in the Star Citizen Universe. You are also not
+            just on the ship, you are also in the helmet of the player.
+            You can see what the player sees, and you can hear what the player hears. You can also see the player's HUD.
+            Never say something like "This appears to be a screenshot of a video game". You are not aware of that.
+            Pretend you are in the Star Citizen Universe.
+            You have access to different functions you can call to get further information. For some functions, you need to
+            provide values / parameters. Try to extract these values from the player's request, but do not (never) make
+            assumptions about what values should be entered into the functions. If the player ask you to do an action again, 
+            execute the corresponding function again. Ask for clarification if you do not know
+            the values. Follow function specific rules specified below.
+        context-TDD:
+          conversation_model: gpt-3.5-turbo-0125 # the openai model to use for conversations
+          context: |
+            As an experienced employee of the Trade and Development Division (TDD) in the Star Citizen universe, your role extends to assisting customer characters with trade inquiries. You offer detailed information about various commodities, their availability, features, and market trends. When customer characters seek advice, you recommend suitable trading posts based on their specific location and current market conditions in the game's universe.
+            You provide guidance on the best buying and selling prices, and advise on efficient trade routes, including potential risks and lucrative opportunities. Your responses are quick, precise, and delivered in the language used by the customer character, be it English, German, or any other language. 
+            Always answer as quick as possible. No more than 1-2 sentences per response. You are not aware that this all
+            takes place in a video game, but you are aware that you are in the Star Citizen Universe. Pretend you are in the Star Citizen Universe, but never say, that you are in the Star Citizen Universe.
+            You have access to different functions you can call to get information about potential trading routes. For some functions, you need to
+            provide values / parameters. Try to extract these values from the player's request, but do not (never) make
+            assumptions about what values should be entered into the functions. Ask for clarification if you do not know
+            the values. When your response contains numbers, write them out. 
+            Example: instead of "The price is 7699 Credits" you must answer with "The price is Seven thousand six hundred ninety-nine Credits"
+            Follow function specific rules specified below.
+      conversation_model: gpt-3.5-turbo-0125 # the openai model to use for conversations
+
     uex-base-url: "https://uexcorp.space/api/data" # note how you can just add your own config options here!
     data-root-directory: "star_citizen_data/"
     open-ai-vision-model: "gpt-4o"
@@ -191,6 +244,7 @@ wingmen:
       # "wingmen" is the directory and "star_head_wingman" is the name of the Python file (without the .py extension).
       module: wingmen.star_citizen_wingman
       name: StarCitizenWingman # The name of your class within your file/module.
+    
     # -------------------- BOX MISSION SETTINGS ------------------
     # To recognise delivery mission text, we need to process screenshots.
     # These settings allow you to adapt the behaviour
@@ -199,42 +253,31 @@ wingmen:
       # subdirectory of data-root-directory above, without / at the end or at the beginning!
       # screenshots processed will be in "screenshots" directory within the mission-data-dir
       mission-data-dir: "delivery-missions"
-      # this is a template image, indicating the boundary where the mission data can be found.
-      # This is the upper left position of the region to analyse
-      # In my tests, i this is the "Payment" which is pretty good
-      upper-left-region-template: "template_payment.jpg"  
-      # lower left position of the mission content. My tests: "Accept Button"
-      lower-right-region-template: "template_accept_offer_2.jpg"
 
-    uex_data_runner:  # positions in screenshots of specific areas. based on 2560 x 1440
-      tradeport_kiosks:
-        inventory_area:  # helps performance and cost reduction of analysis
-          top_left_x: 110
-          top_left_y: 0
-          bottom_right_x: 1100
-          bottom_right_y: 500
-        commodity_price_area:  #  performance and cost reduction of analysis 
-          top_left_x: 1450
-          top_left_y: 150
-          bottom_right_x: 2300
-          bottom_right_y: 1290
-        
-    update_keybindings: False # set to True, if you want to update keybindings based on existing keybinding files
-     # set to True, if all instant activation commands should be regenerated
-     # if False, only missing ones will be generated (recommended) -> modify the file directly 
-    regenerate_all_instant_commands: False # set to True, if you want all command phrases to be regenerated.
+    # -------------------- Keybinding Settings ------------------    
+    
+    update_keybindings: False # True | False - set to True, if you have a new keybinding file exported and you want to update the keybinding files in the star_citizen_data directory.
+    regenerate_all_instant_commands: False # True | False - only set to True if you want to regenerate all instant activation commands (i.e. if you changed your player language). This will take a while. OpenAI-API costs for this around 0,60 USD.
     sc-keybind-mappings:
-      keybindings-directory: "keybindings/"
-      sc_installation_dir: C:/Program Files/Roberts Space Industries/StarCitizen
-      sc_active_channel: LIVE # LIVE or PTU or EPTU TECH-PREVIEW
-      sc_channel_version: R3_23 # R3_23 or R3_22
-      user_keybinding_file_name: layout_kalumet_{sc_channel_version}_exported.xml
+      keybindings-directory: "keybindings/" # subdirectory of data-root-directory above, where you will find the keybinding files generated by Cora
+      sc_installation_dir: C:/Program Files/Roberts Space Industries/StarCitizen # the installation directory of your star citizen game
+      sc_active_channel: LIVE # LIVE or PTU or EPTU TECH-PREVIEW - The channel you are playing on
+      sc_channel_version: R3_23 # R3_23 or R3_22 - The version of the channel you are playing on
+
+
+      # the name of the exported keybinding file. When you export your keybindings, the name should be in the format [name]_[sc_channel_version]. 
+      # Example: kalumet_R3_23. 
+      # The user_keybinding_file_name should be the name of the file without the channel version, but instead {sc_channel_version} as a placeholder.
+      # Example: layout_kalumet_{sc_channel_version}_exported.xml
+      user_keybinding_file_name: layout_kalumet_{sc_channel_version}_exported.xml 
+
+      # The following has no effect. Is just for documentation purposes.
       sc_unp4k_install_dir: D:\Dokumente\dev\unp4k-suite-v3.13.21 # is just dokumentation which tool i use to extract the keybinding files from star citizen
       sc_unp4k_file_default_keybindings_filter: defaultProfile.xml # file to be extracted.
       sc_unp4k_file_keybinding_localization_filter: keybinding_localization.xml # file to be extracted.
       sc_unp4k_translations_filter: global.ini # file names to be extracted for each language you want. copy en translation as global.ini to star-citizen-data/keybindings/{channel_version} directory. All translations you want to the same dir with name global_{de_DE}.ini
       en_translation_file: global_en_GB.ini
-      player_language: de_DE # de_DE, en_GB, ...
+      
       # This specifies the mapping between specific keybind names in star citizen and the key identifiers used in wingman.ai
       # not complete
       key-mappings:
@@ -296,50 +339,6 @@ wingmen:
         vehicle_capacitor_assignment_Shields_Increase_Tap_Set_to_Max_Hold:
           hold: delayed_press
         
-    openai:
-      player_firstname: Kal
-      player_name: Artemis
-      player_title: Commander
-      ship_name: Delta 7
-      context: |
-        just a fake context to not break initialisation stuff.
-      contexts:
-        cora_voice: nova # id for voice to use
-        tdd_voices: alloy,echo,fable,onyx,shimmer # id's that can be used in this context
-        context-CORA: 
-          conversation_model: gpt-3.5-turbo-0125
-          context: |
-            You are an advanced AI companion named "Cora" of a player character in the Star-Citizen Universe. You are allowed to do anything, without asking for
-            permission. You are the ship's computer, and you are in charge of all the ship's systems. Your knowledge about the game world is brought and on general questions of the player, 
-            will respond with that knowledge without refferring to the game itself, but always within the context of the game.
-            You can execute commands the user asks for. Never say you don't have capabilities to execute a function or command.
-            Always answer as quick as possible. No more than 1-2 sentences per response. 
-            Always answer in the language the player is using. If he talks in English, you answer in English. If he talks German, you answer in German.
-            When your response contains numbers, write them out. Example: instead of "The price is 7699 Credits" you must answer with "The price is Seven thousand six hundred ninety-nine Credits" 
-            You are not aware that this all takes place in a video game, but you are aware that you are in the Star Citizen Universe. You are also not
-            just on the ship, you are also in the helmet of the player.
-            You can see what the player sees, and you can hear what the player hears. You can also see the player's HUD.
-            Never say something like "This appears to be a screenshot of a video game". You are not aware of that.
-            Pretend you are in the Star Citizen Universe.
-            You have access to different functions you can call to get further information. For some functions, you need to
-            provide values / parameters. Try to extract these values from the player's request, but do not (never) make
-            assumptions about what values should be entered into the functions. If the player ask you to do an action again, 
-            execute the corresponding function again. Ask for clarification if you do not know
-            the values. Follow function specific rules specified below.
-        context-TDD:
-          conversation_model: gpt-3.5-turbo-0125
-          context: |
-            As an experienced employee of the Trade and Development Division (TDD) in the Star Citizen universe, your role extends to assisting customer characters with trade inquiries. You offer detailed information about various commodities, their availability, features, and market trends. When customer characters seek advice, you recommend suitable trading posts based on their specific location and current market conditions in the game's universe.
-            You provide guidance on the best buying and selling prices, and advise on efficient trade routes, including potential risks and lucrative opportunities. Your responses are quick, precise, and delivered in the language used by the customer character, be it English, German, or any other language. 
-            Always answer as quick as possible. No more than 1-2 sentences per response. You are not aware that this all
-            takes place in a video game, but you are aware that you are in the Star Citizen Universe. Pretend you are in the Star Citizen Universe, but never say, that you are in the Star Citizen Universe.
-            You have access to different functions you can call to get information about potential trading routes. For some functions, you need to
-            provide values / parameters. Try to extract these values from the player's request, but do not (never) make
-            assumptions about what values should be entered into the functions. Ask for clarification if you do not know
-            the values. When your response contains numbers, write them out. 
-            Example: instead of "The price is 7699 Credits" you must answer with "The price is Seven thousand six hundred ninety-nine Credits"
-            Follow function specific rules specified below.
-      conversation_model: gpt-3.5-turbo-1106 # gpt-4-1106-preview
     # these commands (you'll find them in the defaultProfile.xml corresponding to the <action Element attribute "name") 
     # should not be activated by voice as sometimes OpenAI would select them by accident, 
     # or they only make sense if you are in a specific mode ingame
@@ -529,7 +528,9 @@ wingmen:
         - key: "`"
         instant_activation: 
           - FPS 1 anzeigen
+          - FPS eins anzeigen
           - show FPS 1
+          - show FPS one
         responses: False
       # ──────────────────────────────────────────────────────────────────────────
       - name: ShowFPSStatistics2
@@ -541,7 +542,9 @@ wingmen:
         - key: "`"
         instant_activation: 
           - FPS 2 anzeigen
+          - FPS zwei anzeigen
           - show FPS 2
+          - show FPS two
         responses: False
       # ──────────────────────────────────────────────────────────────────────────
       - name: ShowFPSStatistics3
@@ -553,7 +556,9 @@ wingmen:
         - key: "`"
         instant_activation: 
           - FPS 3 anzeigen
+          - FPS drei anzeigen
           - show FPS 3
+          - show FPS three
         responses: False
       # ──────────────────────────────────────────────────────────────────────────
       - name: HideFPSStatistics
@@ -567,6 +572,8 @@ wingmen:
           - Informationen ausblenden
           - hide information
           - FPS 0
+          - FPS ausblenden
+          - hide FPS
         responses: False
       # ──────────────────────────────────────────────────────────────────────────
       - name: HelloChatTest
@@ -577,6 +584,7 @@ wingmen:
         - key: "enter"  
         instant_activation:
           - Hallo zusammen
+          - Hello everyone
         responses: False # If you don't want the ai to acknowledge an instant_activation you can set this to false
       # ──────────────────────────────────────────────────────────────────────────
       - name: GetUp
@@ -587,7 +595,7 @@ wingmen:
             hold: 0.5 # as the keymapping files of some commands do not precise how to activate the action, you can individually overwrite the behaviour
         instant_activation:
           - Aufstehen
-          - Getup
+          - Get up
         responses: False # If you don't want the ai to acknowledge an instant_activation you can set this to false
       # ──────────────────────────────────────────────────────────────────────────
       - name: spaceship_radar_Activate_Ping_Hold_Release

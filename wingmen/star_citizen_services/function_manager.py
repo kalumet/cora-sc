@@ -64,11 +64,15 @@ class StarCitizensAiFunctionsManager:
                     if isinstance(attribute, type) and issubclass(attribute, FunctionManager) and attribute is not FunctionManager:
                         print_debug(f"     -> YES")
                         # This is a FunctionManager subclass, register it accordingly
-                        manager_instance = attribute(config, secret_keeper)
-                        manager_instance.register_functions(self.function_registry)
-                        print(f"{attribute.__name__} registered")
-                        self.register_manager(manager_instance.get_context_mapping(), manager_instance)
-                        manager_instance.after_init()
+                        activate_module = config["features"].get(attribute.__name__, False)
+                        if activate_module:
+                            manager_instance = attribute(config, secret_keeper)
+                            manager_instance.register_functions(self.function_registry)
+                            print(f"{attribute.__name__} registered")
+                            self.register_manager(manager_instance.get_context_mapping(), manager_instance)
+                            manager_instance.after_init()
+                        else: 
+                            print(f"Skipping {attribute.__name__} as it is not activated in the config.")
                     else:
                         print_debug(f"     -> NO")
                         

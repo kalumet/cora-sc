@@ -44,8 +44,6 @@ class DeliveryMissionManager(FunctionManager):
         self.mission_data_path = f'{self.config["data-root-directory"]}{self.config["box-mission-configs"]["mission-data-dir"]}'
         self.missions_file_path = f'{self.mission_data_path}/active-missions.json'
         self.delivery_route_file_path = f'{self.mission_data_path}/active-delivery-route.json'
-        self.mission_screen_upper_left_template = f'{self.mission_data_path}/{self.config["box-mission-configs"]["upper-left-region-template"]}'
-        self.mission_screen_lower_right_template = f'{self.mission_data_path}/{self.config["box-mission-configs"]["lower-right-region-template"]}'
 
         self.openai_api_key = secret_keeper.retrieve(
             requester="MissionService",

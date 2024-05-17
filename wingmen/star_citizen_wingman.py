@@ -182,7 +182,7 @@ class StarCitizenWingman(OpenAiWingman):
                 context_prompt += (
                     f' The character you are supporting is named "{self.config["openai"]["player_name"]}". '
                     f'His title is {self.config["openai"]["player_title"]}. His ship call id is {self.config["openai"]["ship_name"]}. '
-                    f'He wants you to respond in {self.config["sc-keybind-mappings"]["player_language"]}'
+                    f'He wants you to respond in {self.config["openai"]["player_language"]}'
                 )
                 
                 context_switch_prompt += f" Switch to context {AIContext.TDD}, if the player is calling a specific Trading Division, like 'Hurston Trading Division, this is Delta 7, Over'."
@@ -195,7 +195,7 @@ class StarCitizenWingman(OpenAiWingman):
                     f"by calling the switch_context function. Do switch to context {AIContext.CORA}, "
                     f"if the player adresses 'Cora' or using words like 'computer' or demanding a specific player or ship action or mission related actions. "
                     "Do switch as well, if the user is asking non trade related questions. "
-                    f'He wants you to respond in {self.config["sc-keybind-mappings"]["player_language"]}. '
+                    f'He wants you to respond in {self.config["openai"]["player_language"]}. '
                 )
 
             # add all additional function prompts of implemented managers for the given context.
@@ -478,9 +478,26 @@ class StarCitizenWingman(OpenAiWingman):
                 keys = sorted(keys, key=lambda x: order.index(x) if x in order else len(order))
             elif hold == "double_tap":  # double tab is only one key always
                 print_debug(f"double tab {keys[0]}")
-                key_module.press(keys[0])
+                
+                is_mouse = False
+                key = self.config["sc-keybind-mappings"]["key-mappings"].get(keys[0])  # not all star citizen key names are  equal to key_modul names, therefore we do a mapping
+                if not key:  # if there is no mapping, key names are identical
+                    key = keys[0]
+                elif "mouse" in key:
+                    is_mouse = True
+
+                if is_mouse:
+                    key_module.click(button=key.split("mouse_")[-1], duration=0.1)
+                else:
+                    key_module.press(keys[0])
+                
                 time.sleep(0.050)
-                key_module.press(keys[0])
+
+                if is_mouse:
+                    key_module.click(button=key.split("mouse_")[-1], duration=0.1)
+                else:
+                    key_module.press(keys[0])
+
                 return "Ok", "Ok"
         
             if hold == "notSupported":
@@ -489,9 +506,12 @@ class StarCitizenWingman(OpenAiWingman):
             active_modifiers = []
 
             for sc_key in keys:
+                is_mouse = False
                 key = self.config["sc-keybind-mappings"]["key-mappings"].get(sc_key)  # not all star citizen key names are  equal to key_modul names, therefore we do a mapping
                 if not key:  # if there is no mapping, key names are identical
                     key = sc_key
+                elif "mouse" in key:
+                    is_mouse = True
 
                 if key in modifiers:
                     key_module.keyDown(key)
@@ -501,17 +521,31 @@ class StarCitizenWingman(OpenAiWingman):
 
                 if hold == "unknown":
                     print_debug("unknown activationMode assuming press: " + key)
-                    key_module.press(key)
+                    if is_mouse:
+                        key_module.click(button=key.split("mouse_")[-1], duration=0.1)
+                    else: 
+                        key_module.press(key)
                     continue
 
                 if hold > 1:
                     print_debug("hold and release: " + key)
-                    key_module.keyDown(key)  # apart of modifiers, we assume, that there is always only one further key that can be pressed ....
+                    if is_mouse:
+                        key_module.mouseDown(button=key.split("mouse_")[-1])
+                    else: 
+                        key_module.keyDown(key)  # apart of modifiers, we assume, that there is always only one further key that can be pressed ....
+                    
                     time.sleep(hold / 1000)  # transform in seconds
-                    key_module.keyUp(key)
+                    
+                    if is_mouse:
+                        key_module.mouseUp(button=key.split("mouse_")[-1])
+                    else: 
+                        key_module.keyUp(key)
                 else:
                     print_debug("press: " + key)
-                    key_module.press(key)
+                    if is_mouse:
+                        key_module.click(button=key.split("mouse_")[-1], duration=0.1)
+                    else: 
+                        key_module.press(key)
             
             active_modifiers.reverse()  # Kehrt die Liste in-place um
 
@@ -599,7 +633,7 @@ class StarCitizenWingman(OpenAiWingman):
                 "type": "function",
                 "function": {
                     "name": "execute_command",
-                    "description": "Executes a player command. On successfull response, do follow the instructions in the response.",
+                    "description": "Executes a player command. Select among the list of available commands the one that best matches the player request. On response, follow the provided instructions. ",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -607,9 +641,13 @@ class StarCitizenWingman(OpenAiWingman):
                                 "type": "string",
                                 "description": "The command to execute",
                                 "enum": list(command_set)
+                            },
+                            "command_excerpt": {
+                                "type": "string",
+                                "description": "The main aspect of the command in the player request. From the sentence 'Please open the door' the command_excerpt would be 'open door'",
                             }
                         },
-                        "required": ["command_name"]
+                        "required": ["command_name", "command_excerpt"]
                     }
                 }
             }

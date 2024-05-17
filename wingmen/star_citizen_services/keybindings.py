@@ -39,7 +39,7 @@ class SCKeybindings():
         self.default_keybinds_file = f'{self.data_root_path}/{self.sc_channel_version}/{self.config["sc-keybind-mappings"]["sc_unp4k_file_default_keybindings_filter"]}'
         self.keybindings_localization_file = f'{self.data_root_path}/{self.sc_channel_version}/{self.config["sc-keybind-mappings"]["sc_unp4k_file_keybinding_localization_filter"]}'
         self.sc_translations_en = f"{self.data_root_path}/{self.sc_channel_version}/{self.en_translation_file}"
-        self.player_language = self.config["sc-keybind-mappings"]["player_language"]
+        self.player_language = self.config["openai"]["player_language"]
         self.sc_translations_player_language = f"{self.data_root_path}/{self.sc_channel_version}/global_{self.player_language}.ini"
         self.keybind_categories_to_ignore = set(self.config["keybind_categories_to_ignore"])
         self.keybind_actions_to_include_from_category = set(self.config["include_actions"]) 

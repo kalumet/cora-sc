@@ -44,6 +44,7 @@ class SCKeybindings():
         self.keybind_categories_to_ignore = set(self.config["keybind_categories_to_ignore"])
         self.keybind_actions_to_include_from_category = set(self.config["include_actions"]) 
         self.command_phrases_included = False # will be set to true on first update of instant activation commands
+        self.openai_keybinding_generation_model = self.config["keybinding_generation_model"]
         self.open_api_key = secret_keeper.retrieve(
             requester="openai",
             key="openai",
@@ -161,7 +162,7 @@ class SCKeybindings():
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.open_api_key}",
         }
-        model = "gpt-4-1106-preview"
+        model = self.openai_keybinding_generation_model
 
         attributes_to_remove = [
             "actionname",
@@ -212,7 +213,7 @@ class SCKeybindings():
                                         "Further, the sentences should be simple, but it must be unique among all actions in the json-file."
                                         "Provide - if possible and - a 1 word command phrase, 2 two word command phrases and 1 three word command phrase."
                                         "For each action, provide command phrases in the available languages of the action. "
-                                        "An example for the 'command-phrases' attribute is: 'instant-activation-sentences': {'en': ['Roll left', 'Left roll'], 'de_DE': ['Links rollen', 'Rolle links']}. "
+                                        "An example for the 'command-phrases' attribute is: 'command-phrases': {'en': ['Roll left', 'Left roll'], 'de_DE': ['Links rollen', 'Rolle links']}. "
                                         f"Apart of en, provide {self.player_language} commands as well. "
                                         "The commands should have as much context information as possible, be as precise as possible and as short as possible. Try to avoid combind words. Example 'Toggles the docking camera.' should not lead to a phrase 'Camera mode'. A good phrase would be 'Change docking view'"
                                         "The commands should not provide information on how to execute them. Example 'Engage Quantum Drive (Hold)' should not lead to a phrase 'Hold quantum' or 'Quantum standby'. A good phrase would be 'Engage Quantum Drive'. "

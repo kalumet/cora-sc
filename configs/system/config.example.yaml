@@ -197,7 +197,7 @@ wingmen:
         cora_voice: nova # replace if you want with any of the below voices
         tdd_voices: alloy,echo,fable,onyx,shimmer # used for the TDD manager. 
         context-CORA: 
-          conversation_model: gpt-3.5-turbo-0125 # the openai model to use for conversations
+          conversation_model: gpt-4o # gpt-4o | gpt-3.5-turbo-0125  the openai model to use for conversations
           context: |
             You are an advanced AI companion named "Cora" of a player character in the Star-Citizen Universe. You are allowed to do anything, without asking for
             permission. You are the ship's computer, and you are in charge of all the ship's systems. Your knowledge about the game world is brought and on general questions of the player, 
@@ -217,7 +217,7 @@ wingmen:
             execute the corresponding function again. Ask for clarification if you do not know
             the values. Follow function specific rules specified below.
         context-TDD:
-          conversation_model: gpt-3.5-turbo-0125 # the openai model to use for conversations
+          conversation_model: gpt-4o # gpt-4o | gpt-3.5-turbo-0125  the openai model to use for conversations
           context: |
             As an experienced employee of the Trade and Development Division (TDD) in the Star Citizen universe, your role extends to assisting customer characters with trade inquiries. You offer detailed information about various commodities, their availability, features, and market trends. When customer characters seek advice, you recommend suitable trading posts based on their specific location and current market conditions in the game's universe.
             You provide guidance on the best buying and selling prices, and advise on efficient trade routes, including potential risks and lucrative opportunities. Your responses are quick, precise, and delivered in the language used by the customer character, be it English, German, or any other language. 
@@ -229,11 +229,11 @@ wingmen:
             the values. When your response contains numbers, write them out. 
             Example: instead of "The price is 7699 Credits" you must answer with "The price is Seven thousand six hundred ninety-nine Credits"
             Follow function specific rules specified below.
-      conversation_model: gpt-3.5-turbo-0125 # the openai model to use for conversations
+      conversation_model: gpt-4o # gpt-4o | gpt-3.5-turbo-0125  the openai model to use for conversations
 
     uex-base-url: "https://uexcorp.space/api/data" # note how you can just add your own config options here!
     data-root-directory: "star_citizen_data/"
-    open-ai-vision-model: "gpt-4o"
+    open-ai-vision-model: gpt-4o # gpt-4o | gpt-4-turbo-2024-04-09  the openai model to use for vision tasks
     sound: # overrides the GLOBAL settings. Will be overwritten programmatically ...
       effects:
         - ROBOT
@@ -256,6 +256,7 @@ wingmen:
 
     # -------------------- Keybinding Settings ------------------    
     
+    keybinding_generation_model: gpt-4o # gpt-4o | gpt-3.5-turbo-0125 - the model to use for keybinding generation. The better the model, the higher the price
     update_keybindings: False # True | False - set to True, if you have a new keybinding file exported and you want to update the keybinding files in the star_citizen_data directory.
     regenerate_all_instant_commands: False # True | False - only set to True if you want to regenerate all instant activation commands (i.e. if you changed your player language). This will take a while. OpenAI-API costs for this around 0,60 USD.
     sc-keybind-mappings:

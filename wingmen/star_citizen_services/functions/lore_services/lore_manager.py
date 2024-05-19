@@ -144,7 +144,7 @@ class LoreManager(FunctionManager):
                 raise ValueError("Total pages not found in the response.")
 
             random_page = random.randint(1, total_pages)
-            random_page_response = requests.get(url=f"{self.wiki_base_url}?limit=1&page={random_page}", timeout=30)
+            random_page_response = requests.get(url=f"{self.wiki_base_url}?limit=1&page={random_page}", timeout=5)
             random_page_response.raise_for_status()
             random_page_data = random_page_response.json()
 
@@ -187,7 +187,7 @@ class LoreManager(FunctionManager):
 
         try:
             # Make a POST request to search for the term
-            search_response = requests.post(search_url, json=payload, headers=headers, timeout=30)
+            search_response = requests.post(search_url, json=payload, headers=headers, timeout=5)
             search_response.raise_for_status()
 
             search_data = search_response.json()
@@ -299,7 +299,7 @@ class LoreManager(FunctionManager):
         
         try:
             # Make a GET request to the API URL
-            api_response = requests.get(api_url, headers=headers, timeout=30)
+            api_response = requests.get(api_url, headers=headers, timeout=5)
             api_response.raise_for_status()
             
             api_data = api_response.json()

@@ -256,12 +256,13 @@ class OpenAiWingman(Wingman):
             A tuple of strings representing the response to a function call and an instant response.
         """
         self.last_transcript_locale = locale
-        self._add_user_message(transcript)
 
         instant_response = self._try_instant_activation(transcript)
         if instant_response:
             return instant_response, instant_response
-
+        
+        # only if it is not an instant command, we add the user message to the history
+        self._add_user_message(transcript)
         completion = self._gpt_call()
 
         if completion is None:

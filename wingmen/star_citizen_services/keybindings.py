@@ -40,7 +40,7 @@ class SCKeybindings():
         self.keybindings_localization_file = f'{self.data_root_path}/{self.sc_channel_version}/{self.config["sc-keybind-mappings"]["sc_unp4k_file_keybinding_localization_filter"]}'
         self.sc_translations_en = f"{self.data_root_path}/{self.sc_channel_version}/{self.en_translation_file}"
         self.player_language = self.config["openai"]["player_language"]
-        self.sc_translations_player_language = f"{self.data_root_path}/{self.sc_channel_version}/global_{self.player_language}.ini"
+        self.command_languages = self.config["command_languages"]
         self.keybind_categories_to_ignore = set(self.config["keybind_categories_to_ignore"])
         self.keybind_actions_to_include_from_category = set(self.config["include_actions"]) 
         self.command_phrases_included = False # will be set to true on first update of instant activation commands
@@ -56,23 +56,32 @@ class SCKeybindings():
         self.correct_keybinding_activations = False  # set to true, if ai response structure is slightly different and implement corrections method _correct_instant_activation_commands
 
     def _correct_instant_activation_commands(self):
+        """
+        Corrects the instant activation commands by updating the keybindings.
 
+        If `correct_keybinding_activations` is False, the method returns without making any changes.
+        Otherwise, it loads the keybindings and updates them based on the data from the completion message command phrases JSON file.
+        The updated keybindings are then saved back to the JSON file.
+
+        Returns:
+            None
+        """
         if not self.correct_keybinding_activations:
             return
-        
+
         print("correcting instant activations commands")
         chunk = 4
         path = f"{self.data_root_path}{self.sc_channel_version}/completion_message_command_phrases_{chunk}.json"
-        try: 
+        try:
             response = ""
             with open(path, "r", encoding="utf-8") as file:
                 response = json.load(file)
 
             keybindings = self._load_keybindings()
-            
+
             updated_keybindings = response["choices"][0]["message"]["content"]["command-phrases"]
 
-            # Da der "content" selbst ein JSON-String ist, müssen Sie diesen parsen
+            # Since the "content" itself is a JSON string, it needs to be parsed
             updated_keybindings = json.loads(updated_keybindings)
 
             for key, value in updated_keybindings.items():
@@ -158,6 +167,16 @@ class SCKeybindings():
         keybindings = self._load_keybindings()
         keybindings_reduce = copy.deepcopy(keybindings)
 
+        example_request_json = None
+        path = os.path.join(self.data_root_path, "example_keybinds_information.json")
+        with open(path, "r", encoding="utf-8") as file:
+                example_request_json = json.load(file)
+
+        example_response_json = None
+        path = os.path.join(self.data_root_path, "response_example.json")
+        with open(path, "r", encoding="utf-8") as file:
+                example_response_json = json.load(file)
+
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.open_api_key}",
@@ -169,8 +188,10 @@ class SCKeybindings():
             "activationMode",
             "keyboard-mapping",
             "keyboard-mapping-en",
-            f"keyboard-mapping-{self.player_language}",
         ]
+
+        for language in self.command_languages:
+            attributes_to_remove.append(f"keyboard-mapping-{language}")
 
         # Entfernen der spezifizierten Attribute aus jedem Eintrag in der JSON-Struktur
         keybindings_to_update = {}
@@ -185,11 +206,13 @@ class SCKeybindings():
                     if not item.get("command-phrases", None):
                         keybindings_to_update[action] = item
 
-        chunk_size = 40
+        chunk_size = 20
         chunk = 0
         totalItems = len(list(keybindings_to_update.keys()))
         items_list = list(keybindings_to_update)
         print_debug(f"retrieving command phrases for a total of {totalItems} actions")
+        totalChunks = (totalItems + chunk_size - 1) // chunk_size
+        print_debug(f"Splitting these actions in {totalChunks} chunks of {chunk_size} actions each. ")
         index = 0
 
         while index < totalItems:
@@ -204,24 +227,29 @@ class SCKeybindings():
                 index += 1
             
             messages = [
-                {"role": "system", "content": "You are expert in handling json files and translations."},
+                {"role": "system", "content": (
+                    "You are an expert in handling json files and translations. "
+                    "Your task is to provide good command phrases for star citizen ingame actions that the player executes with keybindings. "
+                    "You are provided with several json files that contain the description for available actions to be processed by you. "
+                    "The command phrases should be intuitive, and be in the style of a command a user would call out to somebody that must execute the action. "
+                    "Each command phrase must only contain the command, nothing else, therefore, it should not contain any abbreviations, punctuation marks or any other non alphanumerical characters. "
+                    "Further, the sentences should be simple, but they must be unique among all actions you have processed so far. "
+                    "Try to provide several variations of the command phrases around the main word(s). Try to identify different synonyms for the main word per action and provide variations for these main words as well. Example: 'Landing System' could be also 'Landing Gear' "
+                    "There should be not more than 2 main word variations and per main word, not more than 5 command phrase variations. The minimum being: 1 one word command phrase, 2 two word command phrases and 1 three word command phrase. "
+                    f"Apart of en, provide the command-phrases also in the following languages: {self.command_languages}. "
+                    "The commands should have as much context information as possible, be as precise as possible to match the context of the action within the star citizen context and as short as possible. Try to avoid combined words. "
+                    "The commands should not provide information on how to execute them. Example: If the description is 'Engage Quantum Drive (Hold)' a bad command phrase would be 'Hold quantum'. A good phrase would be 'Engage Quantum Drive' or 'Quantum Drive' or 'Engage Quantum' or 'Jump'. "
+                    "Whenever you process an action that is a toggle, extend the command phrases to include both opposite action commands. Example 'Open/Close Doors (Toggle) should lead to the following command phrases: 'Open doors', 'Close doors', 'Doors', 'Toggle doors'. "
+                    "If the action is a 'cycle', extend the command with command phrase for cycle states you know of. For instance: the action 'Cycle Master Mode' could have the following command-phrases 'Cycle Master Mode', 'Master Mode', 'Next Master Mode', 'Navigation Mode', 'Combat Mode'. "
+                    "The following jsons are example of the input you receive and corresponding good output:"
+                    f"Example: Getting the following json with action descriptions: {json.dumps(example_request_json)} "
+                    f"A good response would be: {json.dumps(example_response_json)} "
+                    )},
                 {"role": "user",    "content": (
-                                        "Analyse the following json an fill in for each action the attribute 'command-phrases' which should contain a list of sentences the user can call out as commands. "
-                                        "A command phrase should have at least 1 word and not more then 4. "
-                                        "The command phrases must be intuitive, and be in the style of a command a user would call out to somebody that must execute the action. "
-                                        "Each entry must only contain the command, nothing else, therefore, it should not contain any abbreviations, punctuation marks or any other non alphanumerical characters. "
-                                        "Further, the sentences should be simple, but it must be unique among all actions in the json-file."
-                                        "Provide - if possible and - a 1 word command phrase, 2 two word command phrases and 1 three word command phrase."
-                                        "For each action, provide command phrases in the available languages of the action. "
-                                        "An example for the 'command-phrases' attribute is: 'command-phrases': {'en': ['Roll left', 'Left roll'], 'de_DE': ['Links rollen', 'Rolle links']}. "
-                                        f"Apart of en, provide {self.player_language} commands as well. "
-                                        "The commands should have as much context information as possible, be as precise as possible and as short as possible. Try to avoid combind words. Example 'Toggles the docking camera.' should not lead to a phrase 'Camera mode'. A good phrase would be 'Change docking view'"
-                                        "The commands should not provide information on how to execute them. Example 'Engage Quantum Drive (Hold)' should not lead to a phrase 'Hold quantum' or 'Quantum standby'. A good phrase would be 'Engage Quantum Drive'. "
-                                        "Whenever you process a command that is a toggle, provide at least 2 additional opposite command phrases. Example 'Open/Close Doors (Toggle) should lead at least to the two following command phrases: 'Open doors', 'Close doors'. In such a case, provide also a single word phrase like 'doors'.  "
-                                        "Your response only contains the following json, nothing more, that you update with the provided command phrases for each entry. "
-                                        f"json file: {json.dumps(keybindings_message_chunk)}"
-                                    ) 
-                }
+                            "Provide good command phrase for the following actions. "
+                            f"json file: {json.dumps(keybindings_message_chunk)}"
+                        )
+                    }
             ]
             response = None
             try:
@@ -244,11 +272,16 @@ class SCKeybindings():
                     print(f'Error during request: {response_json["error"]["type"]} skipping. {response_json}')
                     return # stop the program, as we can't continue without the response
 
-                path = f"{self.data_root_path}{self.sc_channel_version}/completion_message_command_phrases_{chunk}.json"
+                path = f"{self.data_root_path}{self.sc_channel_version}/raw_response_{chunk}.json"
                 
+                with open(path, mode="w", encoding="utf-8") as file:
+                    json.dump(response_json, file, indent=2)
+                    
                 updated_keybindings = response_json["choices"][0]["message"]["content"]
                 # Da der "content" selbst ein JSON-String ist, müssen Sie diesen parsen
                 updated_keybindings = json.loads(updated_keybindings)
+                
+                path = f"{self.data_root_path}{self.sc_channel_version}/completion_message_command_phrases_{chunk}.json"
                 with open(path, mode="w", encoding="utf-8") as file:
                     json.dump(updated_keybindings, file, indent=4)
                 
@@ -414,15 +447,18 @@ class SCKeybindings():
             "activationMode",
             "keyboard-mapping",
             "action-label-en",
-            f"action-label-{self.player_language}",
             "action-description-en",
-            f"action-description-{self.player_language}",
             "keyboard-mapping-en",
-            f"keyboard-mapping-{self.player_language}",
             "keyboard-mapping-ui",
             "label-ui",
             "description-ui",
         ]
+
+        for language in self.command_languages:
+            content_keys.append(f"action-label-{language}")
+            content_keys.append(f"action-description-{language}")
+            content_keys.append(f"keyboard-mapping-{language}")
+
         json_data = self._create_json_data(actions, inclusion_mode, content_keys, "actionname")
 
         with open(path, mode="w", encoding="utf-8") as file:
@@ -437,13 +473,15 @@ class SCKeybindings():
             "activationMode",
             "keyboard-mapping",
             "action-label-en",
-            f"action-label-{self.player_language}",
             "action-description-en",
-            f"action-description-{self.player_language}",
             "keyboard-mapping-en",
-            f"keyboard-mapping-{self.player_language}",
             "command-phrases",
         ]
+        for language in self.command_languages:
+            content_keys.append(f"action-label-{language}")
+            content_keys.append(f"action-description-{language}")
+            content_keys.append(f"keyboard-mapping-{language}")
+
         json_data = self._create_json_data(actions, inclusion_mode, content_keys, "functionname")
 
         # Lade bestehende Daten, falls vorhanden
@@ -579,9 +617,11 @@ class SCKeybindings():
         translations_en = self._load_translations(self.sc_translations_en)
         self._update_actions_with_translations(actions, translations_en, "en")
 
-        # Load Player-Language translations and update actions
-        translations_de = self._load_translations(self.sc_translations_player_language)
-        self._update_actions_with_translations(actions, translations_de, self.player_language)
+        for language in self.command_languages:
+            # Load Player-Language translations and update actions
+            translation_file = f"{self.data_root_path}/{self.sc_channel_version}/global_{language}.ini"
+            translations = self._load_translations(translation_file)
+            self._update_actions_with_translations(actions, translations, language)
 
         return actions
 

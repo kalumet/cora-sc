@@ -1,3 +1,4 @@
 *.bak
 keybindings_*.json
 completion_*.json
+raw_response_*.json

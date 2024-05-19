@@ -1,0 +1,56 @@
+{
+    "spaceship_movement_Cycle_Master_Mode_Long_Press": {
+        "category": "spaceship_movement",
+        "action-label-en": "Cycle Master Mode (Long Press)",
+        "action-description-en": "",
+        "action-label-de_DE": "",
+        "action-description-de_DE": "",
+        "action-label-fr_FR": "",
+        "action-description-fr_FR": ""
+    },
+    "spaceship_missiles_Launch_Missiles_Tap": {
+        "category": "spaceship_missiles",
+        "action-label-en": "Launch Missiles (Tap)",
+        "action-description-en": "",
+        "action-label-de_DE": "Raketen abfeuern (tippen)",
+        "action-description-de_DE": "",
+        "action-label-fr_FR": "",
+        "action-description-fr_FR": ""
+    },
+    "spaceship_movement_Landing_System_Toggle": {
+        "category": "spaceship_movement",
+        "action-label-en": "Landing System (Toggle)",
+        "action-description-en": "",
+        "keyboard-mapping-en": "N",
+        "action-label-de_DE": "Fahrwerk (umschalten)",
+        "action-description-de_DE": "",
+        "action-label-fr_FR": "",
+        "action-description-fr_FR": ""
+    },
+    "spaceship_movement_Toggle_VTOL": {
+        "category": "spaceship_movement",
+        "action-label-en": "Toggle VTOL",
+        "action-description-en": "",
+        "action-label-de_DE": "VTOL umschalten",
+        "action-description-de_DE": "",
+        "action-label-fr_FR": "",
+        "action-description-fr_FR": ""
+    },
+    "spaceship_movement_Cycle_Configuration": {
+        "category": "spaceship_movement",
+        "action-label-en": "Cycle Configuration",
+        "action-description-en": "Cycle between the vehicle's expanded and retracted configurations.",
+        "action-description-de_DE": "Wechselt zwischen eingeklappter und ausgeklappter Konfiguration des Fahrzeugs.",
+        "action-label-fr_FR": "",
+        "action-description-fr_FR": ""
+    },
+    "spaceship_defensive_Decoy_Decrease_Burst_Size_tap": {
+        "category": "spaceship_defensive",
+        "action-label-en": "Decoy - Decrease Burst Size (tap)",
+        "action-description-en": "Decreases the burst size by one.",
+        "action-label-de_DE": "Köder – Salvenradius verringern (tippen)",
+        "action-description-de_DE": "Verringert den Salvenradius um 1.",
+        "action-label-fr_FR": "",
+        "action-description-fr_FR": ""
+    }
+}

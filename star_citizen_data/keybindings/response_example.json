@@ -1,0 +1,159 @@
+{
+    "spaceship_movement_Cycle_Master_Mode_Long_Press": {
+        "command-phrases": {
+            "en": [
+                "Cycle master mode",
+                "Next master mode",
+                "Master Mode",
+                "Change master mode",
+                "Navigation mode",
+                "Combat mode"
+            ],
+            "de_DE": [
+                "Master Modus",
+                "Master Modus ändern",
+                "nächster Master Modus",
+                "Navigationsmodus",
+                "Kampfmodus"
+            ],
+            "fr_FR": [
+                "Master Mode",
+                "Changer master mode",
+                "prochain master mode",
+                "Mode navigation",
+                "Mode combat"
+            ]
+        }
+    },
+    "spaceship_missiles_Launch_Missiles_Tap": {
+        "command-phrases": {
+            "en": [
+                "Missiles",
+                "Launch missiles",
+                "Fire missiles",
+                "Launch missiles now"
+            ],
+            "de_DE": [
+                "Raketen",
+                "Raketen abfeuern",
+                "Raketen starten",
+                "Raketen jetzt starten"
+            ],
+            "fr_FR": [
+                "Missiles",
+                "Lancer missiles",
+                "Tirer missiles",
+                "Lancer missiles maintenant"
+            ]
+        }
+    },
+    "spaceship_movement_Landing_System_Toggle": {
+        "command-phrases": {
+            "en": [
+                "Landing gear",
+                "Toggle landing gear",
+                "Landing gear up",
+                "Landing gear down",
+                "Landing system",
+                "Toggle landing system",
+                "Landing system up",
+                "Landing system down"
+            ],
+            "de_DE": [
+                "Landestützen",
+                "Landestützen umschalten",
+                "Landestützen rein",
+                "Landestützen raus",
+                "Fahrwerk rein",
+                "Fahrwerk raus",
+                "Fahrwerk"
+            ],
+            "fr_FR": [
+                "Supports d'atterrissage",
+                "Changer Supports d'atterrissage",
+                "Rentrer supports d'atterrissage",
+                "Sortir supports d'atterrissage",
+                "Rentrer train d'atterrissage",
+                "Sortir train d'atterrissage",
+                "Train d'atterrissage",
+                "Changer Train d'atterrissage"
+            ]
+        }
+    },
+    "spaceship_movement_Toggle_VTOL": {
+        "command-phrases": {
+            "en": [
+                "VTOL",
+                "Toggle VTOL",
+                "VTOL down",
+                "VTOL up",
+                "Swing thrusters",
+                "Swing thrusters down",
+                "Swing thruster up"
+            ],
+            "de_DE": [
+                "VTOL",
+                "VTOL umschalten",
+                "VTOL runter",
+                "VTOL hoch",
+                "Senkrechtstarter",
+                "Senkrechtstarter runter",
+                "Senkrechtstarter hoch"
+            ],
+            "fr_FR": [
+                "VTOL",
+                "Basculer VTOL",
+                "Descendre VTOL",
+                "Monter VTOL",
+                "Ailes pivotantes",
+                "Descendre ailes pivotantes",
+                "Monter ailes pivotantes"  
+            ]
+        }
+    },
+    "spaceship_movement_Cycle_Configuration": {
+        "command-phrases": {
+            "en": [
+                "Cycle ship configuration",
+                "Change ship configuration",
+                "Cycle configuration",
+                "Change configuration",
+                "Configuration"
+            ],
+            "de_DE": [
+                "Schiffskonfiguration",
+                "Schiffskonfiguration ändern",
+                "Schiffskonfiguration wechseln",
+                "Konfiguration",
+                "Konfiguration ändern",
+                "Konfiguration wechseln"
+            ],
+            "fr_FR": [
+                "Configuration du vaisseau",
+                "Changer configuration du vaisseau",
+                "Changer configuration",
+                "Changer configuration du vaisseau",
+                "Configuration"
+            ]
+        }
+    },
+    "spaceship_defensive_Decoy_Decrease_Burst_Size_tap": {
+        "command-phrases": {
+            "en": [
+                "Decrease decoy burst size",
+                "Decrease decoy",
+                "Less decoy"
+            ],
+            "de_DE": [
+                "Täuschkörper verringern",
+                "weniger Täuschkörper",
+                "Täuschkörper reduzieren"
+            ],
+            "fr_FR": [
+                "Réduire leurres",
+                "Moins de leurres",
+                "Diminuer leurres"
+            ]
+        }
+    }
+}

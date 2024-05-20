@@ -100,7 +100,8 @@ class DeliveryMissionManager(FunctionManager):
             Here you can provide instructions to open ai on how to use this function. 
         """
         return (
-            f"You are able to manage delivery missions the user has to fulfill. The following functions allow you to help the player in this task: "
+            f"You are able to manage delivery missions the user has to fulfill. "
+            "The following functions allow you to help the player in this task: "
             f"- {self.box_delivery_mission_management.__name__}: call it to add 1, remove 1 or delete all missions. "
             f"  This function will return all available and registered mission ids that you will need for further requests. "
             f"- {self.get_first_or_next_location_on_delivery_route.__name__}: get information about the next location the user should go. "
@@ -154,6 +155,30 @@ class DeliveryMissionManager(FunctionManager):
         ]
 
         return tools
+
+    def cora_start_information(self):
+        """  
+            This method is called, when the AI context is started. 
+            Here you can do further initialisation steps, if needed.
+        """
+        mission_count, package_count, revenue_sum, location_count, planetary_system_changes = self.get_missions_information()
+
+        # 3 return new mission and active missions + instructions for ai
+        if mission_count == 0:
+            return "" # nothing to tell the user about.
+        
+        return {
+            "delivery_mission_information_request" : {
+                "success": "True", 
+                "instructions": "Provide the user with all provided information based on your calculation of the best delivery route considering risk, and least possible location-switches. Do not provide any information, if there is no value or 0. Any numbers in your response must be written out. ",
+                "missions_count": mission_count,
+                "all_mission_ids": self.get_mission_ids(),
+                "total_revenue": revenue_sum,
+                "total_packages_to_deliver": package_count,
+                "number_of_locations_to_visit": location_count,
+                "number_of_moons_or_planets_to_visit": planetary_system_changes
+            }
+        }
 
     def box_delivery_mission_management(self, function_args):
         mission_id = function_args.get("mission_id", None)
@@ -277,16 +302,16 @@ class DeliveryMissionManager(FunctionManager):
                 locations.add(location_info.pickup_location_ref.get("code"))
                 locations.add(location_info.drop_off_location_ref.get("code"))
                 
-                moon_pickup = location_info.pickup_location_ref.get("satellite")
-                planet_pickup = location_info.pickup_location_ref.get("planet")
+                moon_pickup = str(location_info.pickup_location_ref.get("satellite"))
+                planet_pickup = str(location_info.pickup_location_ref.get("planet"))
 
-                moon_planet_pickup = "" + moon_pickup + planet_pickup
+                moon_planet_pickup = moon_pickup + planet_pickup
                 moons_and_planets.add(moon_planet_pickup)
 
-                moon_dropoff = location_info.drop_off_location_ref.get("satellite")
-                planet_dropoff = location_info.drop_off_location_ref.get("planet")
+                moon_dropoff = str(location_info.drop_off_location_ref.get("satellite"))
+                planet_dropoff = str(location_info.drop_off_location_ref.get("planet"))
 
-                moon_planet_dropoff = "" + moon_dropoff + planet_dropoff
+                moon_planet_dropoff = moon_dropoff + planet_dropoff
                 moons_and_planets.add(moon_planet_dropoff)
 
         location_count = len(locations)
@@ -365,7 +390,7 @@ class DeliveryMissionManager(FunctionManager):
         if not image_path:
             return {"success": False, "instructions": "Could not take screenshot. Explain the player, that you only take screenshots, if the active window is Star Citizen. "}
         cropped_image = screenshots.crop_screenshot(self.mission_data_path, image_path, [("UPPER_LEFT", "LOWER_LEFT", "AREA"), ("LOWER_RIGHT", "LOWER_RIGHT", "AREA")])
-        retrieved_json, success = self.ocr.get_screenshot_texts(cropped_image, "delivery_missions", test=False)
+        retrieved_json, success = self.ocr.get_screenshot_texts(cropped_image, "delivery_missions", test=TEST)
         if not success:
             return {"success": False, "error": retrieved_json, "instructions": "Explain the player the reason for the delivery mission not beeing able to be extracted. "}
 

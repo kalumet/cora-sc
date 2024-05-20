@@ -33,5 +33,19 @@
       "code": "SCAGSIPC395",
       "planet": "MIC",
       "city": null
+   },
+   "Shipping Area at Greycat Stanton IV Production Complex-A": {
+      "name": "Shipping Area at Greycat Stanton IV Production Complex-A",
+      "satellite": "",
+      "code": "SAAGSIPC364",
+      "planet": "MIC",
+      "city": null
+   },
+   "Shipping Area at Greycat": {
+      "name": "Shipping Area at Greycat",
+      "satellite": "Stanton IV Production Complex-A on microTech",
+      "code": "SAAG313",
+      "planet": null,
+      "city": null
    }
 }

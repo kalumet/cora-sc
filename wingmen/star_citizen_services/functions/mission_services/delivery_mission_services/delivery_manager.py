@@ -322,12 +322,11 @@ class PackageDeliveryPlanner:
 
             location_has_only_pickup_set[location_code] = is_pickup and only_pickup_at_location
 
+            satellite = ""
+            planet = ""
             if mission_action.location_ref is not None:
-                satellite = mission_action.location_ref.get("satellite", "")
-                planet = mission_action.location_ref.get("planet", "")
-            else:
-                satellite = ""
-                planet = ""
+                satellite = str(mission_action.location_ref.get("satellite", ""))
+                planet = str(mission_action.location_ref.get("planet", ""))          
             
             satellite_planet = satellite + planet
             
@@ -348,10 +347,7 @@ class PackageDeliveryPlanner:
 
             only_pickup_prio = 20 * location_count if location_has_only_pickup_set.get(location_code) is True else 0
             print_debug(f'   + {only_pickup_prio} for only pickups at location')
-
-            satellite_planet = "_".join(
-                [mission_action.location_ref["planet"], 
-                 mission_action.location_ref["satellite"]])
+        
             same_sapl_count = count_satellite_planet.get(satellite_planet, 0)
             print_debug(f'   + {same_sapl_count} for packages on the same moon or planet')
 
@@ -398,13 +394,9 @@ class PackageDeliveryPlanner:
         if not current_action or not last_action:
             return
         
-        current_location_sapl = "_".join(
-                [current_action.location_ref["planet"], 
-                 current_action.location_ref["satellite"]])
-        
-        last_action_sapl = "_".join(
-                [last_action.location_ref["planet"], 
-                 last_action.location_ref["satellite"]])
+        current_location_sapl = str(current_action.location_ref["planet"]) + str(current_action.location_ref["satellite"])
+                 
+        last_action_sapl = str(last_action.location_ref["planet"]) + str(last_action.location_ref["satellite"])
         
         if current_location_sapl == last_action_sapl:
             return  # we keep the original priority
@@ -429,9 +421,7 @@ class PackageDeliveryPlanner:
 
             location_has_only_pickup_set[location_code] = is_pickup and only_pickup_at_location
 
-            satellite_planet = "_".join(
-                [mission_action.location_ref["planet"], 
-                 mission_action.location_ref["satellite"]])
+            satellite_planet = str(mission_action.location_ref["planet"]) + str(mission_action.location_ref["satellite"])
             
             count = count_satellite_planet.get(satellite_planet, 0) + 1
             count_satellite_planet[satellite_planet] = count
@@ -451,9 +441,8 @@ class PackageDeliveryPlanner:
             only_pickup_prio = 20 * location_count if location_has_only_pickup_set.get(location_code) is True else 0
             print_debug(f'   + {only_pickup_prio} because this location has only pickups')
 
-            satellite_planet = "_".join(
-                [mission_action.location_ref["planet"], 
-                 mission_action.location_ref["satellite"]])
+            satellite_planet = str(mission_action.location_ref["planet"]) + str(mission_action.location_ref["satellite"])
+
             same_sapl_count = count_satellite_planet.get(satellite_planet, 0)
             print_debug(f'   + {same_sapl_count} for packages on the same moon or planet')
 

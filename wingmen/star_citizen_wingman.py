@@ -200,15 +200,38 @@ class StarCitizenWingman(OpenAiWingman):
 
             # add all additional function prompts of implemented managers for the given context.
             # initial user message to start-up the conversation.
-            # initial_user_message = ""
+            initial_user_message = ""
             for ai_function_manager in self.ai_functions_manager.get_managers(new_context):
                 ai_function_manager: FunctionManager
                 functions_prompt += ai_function_manager.get_function_prompt()
-                # initial_user_message += ai_function_manager.cora_start_information()
+                start_info = ai_function_manager.cora_start_information()
+                if len(start_info) > 0:
+                    initial_user_message += json.dumps(start_info)
             
             context_prompt += functions_prompt
 
             self.messages = [{"role": "system", "content": f'{context_prompt}. On a request of the Player you will identify the context of his request. The current context is: {new_context.value}. Follow these rules to switch context: {context_switch_prompt}'}]
+
+            if len(initial_user_message) > 0:
+                print(f"Initial user message: {initial_user_message}")
+                initial_user_message = "Hello Cora, this is my first request. Please summarize the following information. When you respond, greet me first and respond in my language: " + initial_user_message
+                self._add_user_message(initial_user_message)
+            
+                completion = self.openai.ask(
+                    messages=self.messages,
+                    model=self.config["openai"].get("conversation_model")
+                )
+
+                if completion is None:
+                    return None, None
+
+                response_message, tool_calls = self._process_completion(completion)
+
+                # do not tamper with this message as it will lead to 400 errors!
+                self.messages.append(response_message)
+
+                if response_message.content:
+                    asyncio.run(self._play_to_user(str(response_message.content)))
 
             # if len(initial_user_message) > 0:
             #     initial_user_message = "Hello, please get me information about the following questions. When you respond, greet me first and respond in my language: " + initial_user_message

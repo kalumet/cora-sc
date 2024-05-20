@@ -220,7 +220,16 @@ class MiningManager(FunctionManager):
         """  
             This method can be implemented to retrieve information from the manager, that Cora should provide to the user on startup.
         """
-        return "What currently active work orders do I have? If I don't have any, just don't respond. "
+        result = self.regolith.get_active_work_orders()
+        if result and not result["success"]:
+            return ""  # we don't tell the user that errors occured
+        
+        if result["data"]["total_finished_refinery_orders"] == 0 and result["data"]["total_refinery_orders_in_processing"] == 0:
+            return ""
+        
+        return {
+            "mining_session_work_order_request": result
+        }
 
     def mining_or_salvage_session_management(self, function_args):
         confirmed_deletion = function_args.get("confirm_deletion", None)

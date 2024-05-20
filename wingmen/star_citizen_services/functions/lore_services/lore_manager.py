@@ -129,153 +129,174 @@ class LoreManager(FunctionManager):
         return tools
     
     def cora_start_information(self):
-        return "What are the news of the day? "
+        result = self.get_news_of_the_day({})
+        if result.get("success", False) is False:
+            return ""
+        return {"news_of_the_day_request": result}
     
     def get_news_of_the_day(self, function_args):
         print_debug(f"{self.get_news_of_the_day.__name__} called.")
         printr.print(f"Executing function '{self.get_news_of_the_day.__name__}'.", tags="info")
-        try:
-            response = requests.get(url=f"{self.wiki_base_url}?limit=1&page=1")
-            response.raise_for_status()
-            data = response.json()
+        with requests.Session() as session:
+            session.headers.update({
+                'accept': 'application/json',
+                'Content-Type': 'application/json'
+            })
+            try:
+                response = session.get(url=f"{self.wiki_base_url}?limit=1&page=1", timeout=5)
+                response.raise_for_status()
+                data = response.json()
 
-            total_pages = data.get('meta', {}).get('last_page', 0)
-            if total_pages == 0:
-                raise ValueError("Total pages not found in the response.")
+                total_pages = data.get('meta', {}).get('last_page', 0)
+                if total_pages == 0:
+                    raise ValueError("Total pages not found in the response.")
 
-            random_page = random.randint(1, total_pages)
-            random_page_response = requests.get(url=f"{self.wiki_base_url}?limit=1&page={random_page}", timeout=5)
-            random_page_response.raise_for_status()
-            random_page_data = random_page_response.json()
+                random_page = random.randint(1, total_pages)
+                random_page_response = session.get(url=f"{self.wiki_base_url}?limit=1&page={random_page}", timeout=5)
+                random_page_response.raise_for_status()
+                random_page_data = random_page_response.json()
 
-            api_url = random_page_data.get('data', [{}])[0].get('api_url')
-            if not api_url:
-                raise ValueError("API URL not found in the random page data.")
+                api_url = random_page_data.get('data', [{}])[0].get('api_url')
+                if not api_url:
+                    raise ValueError("API URL not found in the random page data.")
 
-            result = self.request_information_from_galactapedia_entry_url(
-                    function_args={
-                        "galactapedia_entry_url": api_url, 
-                        "call_identifier": self.current_call_identifier
-                    })
-            
-            if result.get("success", False) is False:
+                result = self.request_information_from_galactapedia_entry_url(
+                        session=session,
+                        function_args={
+                            "galactapedia_entry_url": api_url, 
+                            "call_identifier": self.current_call_identifier
+                        })
+                
+                if result.get("success", False) is False:
+                    return result
+                
+                result["additional_instructions"] = "Based on the given article, make a headline news summary. " + result["additional_instructions"]
+                printr.print(f"News of the day: {json.dumps(result, indent=2)}", tags="info")
                 return result
-            
-            result["additional_instructions"] = "Based on the given article, make a headline news summary. " + result["additional_instructions"]
-            printr.print(f"News of the day: {json.dumps(result, indent=2)}", tags="info")
-            return result
 
-        except requests.exceptions.RequestException as e:
-            print_debug(f"{self.get_news_of_the_day.__name__} Request Error: {str(e)}")
-            printr.print(f"News of the day: Request Error: {str(e)}", tags="error")
-            return {"success": False, "additional_instructions": "You currently have no access to the intergalactic news network. Create a short information about a random topic within the star citizen universe lore from your knowledge that might be interesting for the player. "}
-        except ValueError as e:
-            print_debug(f"{self.get_news_of_the_day.__name__} Value Error: {str(e)}")
-            printr.print(f"News of the day: Request Error: {str(e)}", tags="error")
-            return {"success": False, "additional_instructions": "You currently have no access to the intergalactic news network. Create a short information about a random topic within the star citizen universe lore from your knowledge that might be interesting for the player. "}
+            except requests.exceptions.RequestException as e:
+                print_debug(f"{self.get_news_of_the_day.__name__} Request Error")
+                printr.print(f"News of the day: Request Error: {str(e)}", tags="error")
+                return {"success": False, "additional_instructions": "You currently have no access to the intergalactic news network. Create a short information about a random topic within the star citizen universe lore from your knowledge that might be interesting for the player. "}
+            except ValueError as e:
+                print_debug(f"{self.get_news_of_the_day.__name__} Value Error")
+                printr.print(f"News of the day: Value Error: {str(e)}", tags="error")
+                return {"success": False, "additional_instructions": "You currently have no access to the intergalactic news network. Create a short information about a random topic within the star citizen universe lore from your knowledge that might be interesting for the player. "}
     
     def search_information_in_galactapedia(self, function_args):
         search_url = f"{self.wiki_base_url}/search"
         search_term = function_args.get("search_term", "")
         print_debug(f"{self.search_information_in_galactapedia.__name__} called with '{search_term}'")
         printr.print(f"Executing function '{self.search_information_in_galactapedia.__name__}' with search term '{search_term}'.", tags="info")
-        headers = {
-            'accept': 'application/json',
-            'Content-Type': 'application/json'
-        }
         payload = {"query": search_term}
 
-        try:
-            # Make a POST request to search for the term
-            search_response = requests.post(search_url, json=payload, headers=headers, timeout=5)
-            search_response.raise_for_status()
+        with requests.Session() as session:
+            session.headers.update({
+                'accept': 'application/json',
+                'Content-Type': 'application/json',
+                'Accept-Encoding': 'gzip, deflate',
+                'Connection': 'keep-alive'
+            })
+            try:
+                # Make a POST request to search for the term
+                search_response = session.post(search_url, json=payload, timeout=5)
+                search_response.raise_for_status()
 
-            search_data = search_response.json()
+                search_data = search_response.json()
 
-            # Example response
-            #     "data": [
-            #         {
-            #         "id": "VY4Wnv7ZgW",
-            #         "title": "Banu-Human First Contact",
-            #         "slug": "banu-human-first-contact",
-            #         "thumbnail": "https://cig-galactapedia-prod.s3.amazonaws.com/upload/f20bf4e3-15a5-41b5-ada8-2115a4997bec",
-            #         "type": "Event",
-            #         "rsi_url": "https://robertsspaceindustries.com/galactapedia/article/VY4Wnv7ZgW-banu-human-first-contact",
-            #         "api_url": "https://api.star-citizen.wiki/api/v2/galactapedia/VY4Wnv7ZgW",
-            #         "created_at": "2021-02-08T00:47:01.000000Z"
-            #         },
-            #         {
-            #         "id": "RPPxJdLBJj",
-            #         "title": "Banu Language",
-            #         "slug": "banu-language",
-            #         "thumbnail": "https://cig-galactapedia-prod.s3.amazonaws.com/upload/3c107dd7-4385-4a72-bf31-6d8881a0e7e4",
-            #         "type": null,
-            #         "rsi_url": "https://robertsspaceindustries.com/galactapedia/article/RPPxJdLBJj-banu-language",
-            #         "api_url": "https://api.star-citizen.wiki/api/v2/galactapedia/RPPxJdLBJj",
-            #         "created_at": "2021-02-08T00:48:42.000000Z"
-            #         },
+                # Example response
+                #     "data": [
+                #         {
+                #         "id": "VY4Wnv7ZgW",
+                #         "title": "Banu-Human First Contact",
+                #         "slug": "banu-human-first-contact",
+                #         "thumbnail": "https://cig-galactapedia-prod.s3.amazonaws.com/upload/f20bf4e3-15a5-41b5-ada8-2115a4997bec",
+                #         "type": "Event",
+                #         "rsi_url": "https://robertsspaceindustries.com/galactapedia/article/VY4Wnv7ZgW-banu-human-first-contact",
+                #         "api_url": "https://api.star-citizen.wiki/api/v2/galactapedia/VY4Wnv7ZgW",
+                #         "created_at": "2021-02-08T00:47:01.000000Z"
+                #         },
+                #         {
+                #         "id": "RPPxJdLBJj",
+                #         "title": "Banu Language",
+                #         "slug": "banu-language",
+                #         "thumbnail": "https://cig-galactapedia-prod.s3.amazonaws.com/upload/3c107dd7-4385-4a72-bf31-6d8881a0e7e4",
+                #         "type": null,
+                #         "rsi_url": "https://robertsspaceindustries.com/galactapedia/article/RPPxJdLBJj-banu-language",
+                #         "api_url": "https://api.star-citizen.wiki/api/v2/galactapedia/RPPxJdLBJj",
+                #         "created_at": "2021-02-08T00:48:42.000000Z"
+                #         },
 
-            results = search_data.get('data', [])
-            if not results:
-                printr.print(f"Search term '{search_term}' not found in the galactapedia. ", tags="info")
-                return {"success": False, "additional_instructions": "You have not found information about the topic. Ask the user about a search term that is more specific. "}
-            
-            number_of_results = len(results)
-
-            self.current_call_identifier = random.randint(0, 1000000)
-            if number_of_results == 1:
-                api_url = results[0].get('api_url')
+                results = search_data.get('data', [])
+                if not results:
+                    printr.print(f"Search term '{search_term}' not found in the galactapedia. ", tags="info")
+                    return {"success": False, "additional_instructions": "You have not found information about the topic. Ask the user about a search term that is more specific. "}
                 
-                result = self.request_information_from_galactapedia_entry_url(
-                    function_args={
-                        "galactapedia_entry_url": api_url, 
-                        "call_identifier": self.current_call_identifier
-                    })
-                printr.print(f"Found a single article about the topic. {json.dumps(result, indent=2)}", tags="info")
+                number_of_results = len(results)
+
+                self.current_call_identifier = random.randint(0, 1000000)
+                if number_of_results == 1:
+                    api_url = results[0].get('api_url')
+                    
+                    result = self.request_information_from_galactapedia_entry_url(
+                        session=session, 
+                        function_args={
+                            "galactapedia_entry_url": api_url, 
+                            "call_identifier": self.current_call_identifier
+                        })
+                    printr.print(f"Found a single article about the topic. {json.dumps(result, indent=2)}", tags="info")
+                    return result
+
+                articles = []
+
+                for i in range(min(number_of_results, 10)):
+                    result = results[i]
+                    title = result.get('title')
+                    api_url = result.get('api_url')
+                    article_type = result.get('type')
+                    articles.append({"title": title, "type": article_type, "galactapedia_entry_url": api_url})
+
+                result = {"success": True, 
+                        "additional_instructions": (
+                            "You have found several articles about the topic. "
+                            "Provide the title of the articles to the user and ask him, "
+                            "if he wants to get more information about one or more of these. "
+                            "If he is interested in one of the articles, "
+                            "request more information with the provided galactapedia_entry_url. "
+                            "For subsequent requests, you have to provide the call_identifier. "), 
+                        "found_articles": articles, 
+                        "call_identifier": self.current_call_identifier}
+                printr.print(f"Found several articles about the topic. {json.dumps(result, indent=2)}", tags="info")
                 return result
-
-            articles = []
-
-            for i in range(min(number_of_results, 10)):
-                result = results[i]
-                title = result.get('title')
-                api_url = result.get('api_url')
-                article_type = result.get('type')
-                articles.append({"title": title, "type": article_type, "galactapedia_entry_url": api_url})
-
-            result = {"success": True, 
-                    "additional_instructions": (
-                        "You have found several articles about the topic. "
-                        "Provide the title of the articles to the user and ask him, "
-                        "if he wants to get more information about one or more of these. "
-                        "If he is interested in one of the articles, "
-                        "request more information with the provided galactapedia_entry_url. "
-                        "For subsequent requests, you have to provide the call_identifier. "), 
-                    "found_articles": articles, 
-                    "call_identifier": self.current_call_identifier}
-            printr.print(f"Found several articles about the topic. {json.dumps(result, indent=2)}", tags="info")
-            return result
-            
-        except requests.exceptions.RequestException as e:
-            if isinstance(e, requests.exceptions.HTTPError) and e.response.status_code == 404:
-                printr.print("No entry found for the search term '{search_term}'. "
-                             "Please check the spelling or suggest a correction.", tags="info")
-                return {
-                    "success": False,
-                    "additional_instructions": f"No entry found for the search term '{search_term}'. "
-                                               "Tell the player, you couldn't find information about the topic. Make a suggestion to correct the search term or ask him, to rephrase his question.",
-                    "error": str(e)
-                }
-            else:
-                print_debug(f"{self.search_information_in_galactapedia.__name__} exception: {str(e)}")
-                printr.print(f"Error during search of '{search_term}' in the galactapedia: {str(e)} ", tags="info")
-                return {
-                    "success": False,
-                    "additional_instructions": "Galactapedia is currently unavailable. Please try again later.",
-                    "error": str(e)
-                }
+                
+            except requests.exceptions.RequestException as e:
+                if isinstance(e, requests.exceptions.HTTPError) and e.response.status_code == 404:
+                    printr.print("No entry found for the search term '{search_term}'. "
+                                "Please check the spelling or suggest a correction.", tags="info")
+                    return {
+                        "success": False,
+                        "additional_instructions": f"No entry found for the search term '{search_term}'. "
+                                                "Tell the player, you couldn't find information about the topic. Make a suggestion to correct the search term or ask him, to rephrase his question.",
+                        "error": str(e)
+                    }
+                else:
+                    print_debug(f"{self.search_information_in_galactapedia.__name__} exception: {str(e)}")
+                    printr.print(f"Error during search of '{search_term}' in the galactapedia: {str(e)} ", tags="info")
+                    return {
+                        "success": False,
+                        "additional_instructions": "Galactapedia is currently unavailable. Please try again later.",
+                        "error": str(e)
+                    }
     
-    def request_information_from_galactapedia_entry_url(self, function_args):
+    def request_information_from_galactapedia_entry_url(self, function_args, session=None):
+        if session is None:
+            session = requests.Session()
+            session.headers.update({
+                'accept': 'application/json',
+                'Content-Type': 'application/json',
+                'Accept-Encoding': 'gzip, deflate',
+                'Connection': 'keep-alive'
+            })
         api_url = function_args.get("galactapedia_entry_url", "")
         call_identifier = function_args.get("call_identifier", None)
         printr.print(f"Executing function '{self.request_information_from_galactapedia_entry_url.__name__}'. URL: {api_url}. ", tags="info")
@@ -291,15 +312,10 @@ class LoreManager(FunctionManager):
             return {"success": False, "additional_instructions": "You are not allowed to request information from this URL. "}
         
         print_debug(f"{self.request_information_from_galactapedia_entry_url.__name__} called with API URL: {api_url}. ")
-        
-        headers = {
-            'accept': 'application/json',
-            'Content-Type': 'application/json'
-        }
-        
+              
         try:
             # Make a GET request to the API URL
-            api_response = requests.get(api_url, headers=headers, timeout=5)
+            api_response = session.get(api_url, timeout=5)
             api_response.raise_for_status()
             
             api_data = api_response.json()

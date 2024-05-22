@@ -61,9 +61,9 @@ class DeliveryMission(JsonSerializable):
         if self.packages:
             mission_info += "Packages:\n"
             for package in self.packages:
-                pickup = self.pickup_locations.get(package, ('Unknown', 'Unknown'))
+                pickup = self.pickup_locations.get(package, {'name': 'Unknown', 'satellite': 'Unknown', 'planet': 'Unknown'})
                 pickup_sat_or_plan = pickup["satellite"] if pickup["satellite"] else pickup["planet"]
-                drop_off = self.drop_off_locations.get(package, ('Unknown', 'Unknown'))
+                drop_off = self.drop_off_locations.get(package, {'name': 'Unknown', 'satellite': 'Unknown', 'planet': 'Unknown'})
                 dropoff_sat_or_plan = drop_off["satellite"] if drop_off["satellite"] else drop_off["planet"]
                 mission_info += f'  - Package #{package}:\n     Pickup at {pickup["name"]} on {pickup_sat_or_plan}\n     Drop-off at {drop_off["name"]} on {dropoff_sat_or_plan}\n'
 

@@ -198,6 +198,7 @@ class StarCitizenWingman(OpenAiWingman):
                     f'He wants you to respond in {self.config["openai"]["player_language"]}. '
                 )
 
+            # on startup of Cora, we want to retrieve information that are relevant to the player (like if he has active delivery missions or refinery jobs)
             # add all additional function prompts of implemented managers for the given context.
             # initial user message to start-up the conversation.
             initial_user_message = ""
@@ -214,7 +215,7 @@ class StarCitizenWingman(OpenAiWingman):
 
             if len(initial_user_message) > 0:
                 print(f"Initial user message: {initial_user_message}")
-                initial_user_message = "Hello Cora, this is my first request. Please summarize the following information. When you respond, greet me first and respond in my language: " + initial_user_message
+                initial_user_message = "Hello Cora, follow these instructions: 1. welcome me. 2. summarize in a natural conversational way the following information: " + initial_user_message
                 self._add_user_message(initial_user_message)
             
                 completion = self.openai.ask(

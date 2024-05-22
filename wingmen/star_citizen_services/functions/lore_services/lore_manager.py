@@ -49,11 +49,10 @@ class LoreManager(FunctionManager):
         return (
                 "When asked for star citizen game world lore information (Galactapedia) that are not related to trade related questions, you can call the following functions: "
                 f"- {self.get_news_of_the_day.__name__}: call this, if the player ask you to give him the latest news of the day. "
-                f"- {self.search_information_in_galactapedia.__name__}: call this, if the player wants to get information about a specific topic. "
+                f"- {self.search_information_in_galactapedia.__name__}: call this only, if the player ask questions to get information about a specific topic from you, like 'What is the Banu-Human First Contact?'. Always extract the best search term to call the function. Always try to match location or ship names to the provided list of names before executing this function. "
                 f"- {self.request_information_from_galactapedia_entry_url.__name__}: call this, if the user wants to get information about a related article. "
                 "In this case, you need to provide the call_identifier along with the galactapedia_entry_url. "
-                "Always try to match location or ship names to the provided list of names before executing this function. "
-                "If you don't have context information from previous searches, provide as search term a single word matching best the players question. When summarizing a topic, never refer URLs. "
+                "When summarizing a topic, never call out URLs or other technical information. "
                 "Write out any numbers in your response, especially dates. Example, instead of writing 'in the year 2439' you write 'in the year twothousendfourhundertandthirtynine'. "
         )
     
@@ -70,7 +69,7 @@ class LoreManager(FunctionManager):
                 {
                     "name": self.search_information_in_galactapedia.__name__,
                     "description": (
-                        "Gets star citizen game world lore information about a given topic / search term. "
+                        "Gets star citizen game world lore information about a given topic / search term within a question. "
                     ),
                     "parameters": {
                         "type": "object",
@@ -78,7 +77,7 @@ class LoreManager(FunctionManager):
                             "search_term": {
                                 "type": "string",
                                 "description": (
-                                    "The term that the player has asked information for. "
+                                    "The best matching term the user's question contains. "
                                 ),
                             },
                         },
@@ -132,7 +131,9 @@ class LoreManager(FunctionManager):
         result = self.get_news_of_the_day({})
         if result.get("success", False) is False:
             return ""
-        return {"news_of_the_day_request": result}
+        
+        result["additional_instructions"] = ("Give the user a summary of the description field only. Any other information is not relevant. Do not refer URLs or other technical information. ")
+        return {"news_of_the_day": result}
     
     def get_news_of_the_day(self, function_args):
         print_debug(f"{self.get_news_of_the_day.__name__} called.")

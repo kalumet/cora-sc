@@ -162,21 +162,37 @@ class DeliveryMissionManager(FunctionManager):
             Here you can do further initialisation steps, if needed.
         """
         mission_count, package_count, revenue_sum, location_count, planetary_system_changes = self.get_missions_information()
-
         # 3 return new mission and active missions + instructions for ai
         if mission_count == 0:
             return "" # nothing to tell the user about.
         
+        pick_up_count, dropoff_count = self.get_next_actions()
+
+        if pick_up_count is None and dropoff_count is None:
+            return {
+                "delivery_mission_information": { 
+                    "additional_instructions": "The user has completed all delivery missions. Remind him of his past achievement, reduced to the most important information. Any numbers in your response must be written out. Finally, ask him, if he would like to discard the information. ",
+                    "missions_count": mission_count,
+                    "all_mission_ids": self.get_mission_ids(),
+                    "total_revenue": revenue_sum,
+                    "total_packages_to_deliver": package_count,
+                    "number_of_locations_to_visit": location_count,
+                    "number_of_moons_or_planets_to_visit": planetary_system_changes
+                }
+            }
+
         return {
-            "delivery_mission_information_request" : {
-                "success": "True", 
-                "instructions": "Provide the user with all provided information based on your calculation of the best delivery route considering risk, and least possible location-switches. Do not provide any information, if there is no value or 0. Any numbers in your response must be written out. ",
+            "delivery_mission_information": {
+                "additional_instructions": "The user has active missions. Do not provide any information, if there is no value or 0. Any numbers in your response must be written out. Keep a conversational tone, and provide only the important information. ",
                 "missions_count": mission_count,
                 "all_mission_ids": self.get_mission_ids(),
                 "total_revenue": revenue_sum,
                 "total_packages_to_deliver": package_count,
-                "number_of_locations_to_visit": location_count,
-                "number_of_moons_or_planets_to_visit": planetary_system_changes
+                "total_number_of_locations_to_visit": location_count,
+                "total_number_of_moons_or_planets_to_visit": planetary_system_changes,
+                "packages_still_to_get": pick_up_count,
+                "packages_still_to_dropoff": dropoff_count,
+                "next_location_to_visit": self.current_delivery_location.get("name")
             }
         }
 
@@ -553,9 +569,9 @@ class DeliveryMissionManager(FunctionManager):
                         for package_id in mission.packages:
                             mission_package = MissionPackage()
                             mission_package.mission_id = mission.id
-                            mission_package.package_id = package_id
-                            mission_package.pickup_location_ref = mission.pickup_locations.get(package_id)
-                            mission_package.drop_off_location_ref = mission.drop_off_locations.get(package_id)
+                            mission_package.package_id = int(package_id)
+                            mission_package.pickup_location_ref = mission.pickup_locations.get(int(package_id))
+                            mission_package.drop_off_location_ref = mission.drop_off_locations.get(int(package_id))
                             mission.mission_packages.append(mission_package)
 
                         self.missions[mission.id] = mission  

@@ -17,42 +17,21 @@
       "name": "Point Wain Emergency Shelter",
       "satellite": "",
       "code": "PWES350",
-      "planet": "MIC",
+      "planet": "microTech",
       "city": ""
    },
    "Calhoun Pass Emergency Shelter": {
       "name": "Calhoun Pass Emergency Shelter",
       "satellite": "",
       "code": "CPES348",
-      "planet": "MIC",
+      "planet": "microTech",
       "city": ""
    },
-   "Security Compound at Greycat Stanton IV Production Complex-A": {
-      "name": "Security Compound at Greycat Stanton IV Production Complex-A",
-      "satellite": "",
-      "code": "SCAGSIPC395",
-      "planet": "MIC",
-      "city": null
-   },
-   "Shipping Area at Greycat Stanton IV Production Complex-A": {
+   "Greycat Stanton IV Production Complex-A": {
       "name": "Shipping Area at Greycat Stanton IV Production Complex-A",
       "satellite": "",
       "code": "SAAGSIPC364",
-      "planet": "MIC",
-      "city": null
-   },
-   "Shipping Area at Greycat": {
-      "name": "Shipping Area at Greycat",
-      "satellite": "Stanton IV Production Complex-A on microTech",
-      "code": "SAAG313",
-      "planet": null,
-      "city": null
-   },
-   "Greycat Stanton IV Production Complex-A": {
-      "name": "Greycat Stanton IV Production Complex-A",
-      "satellite": "",
-      "code": "GSIPC344",
-      "planet": "MIC",
+      "planet": "microTech",
       "city": null
    }
 }

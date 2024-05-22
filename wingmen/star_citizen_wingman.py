@@ -201,6 +201,8 @@ class StarCitizenWingman(OpenAiWingman):
             # on startup of Cora, we want to retrieve information that are relevant to the player (like if he has active delivery missions or refinery jobs)
             # add all additional function prompts of implemented managers for the given context.
             # initial user message to start-up the conversation.
+            asyncio.run(self._play_to_user("Initialising Cora. Please wait a moment."))
+            
             initial_user_message = ""
             for ai_function_manager in self.ai_functions_manager.get_managers(new_context):
                 ai_function_manager: FunctionManager
@@ -232,7 +234,10 @@ class StarCitizenWingman(OpenAiWingman):
                 self.messages.append(response_message)
 
                 if response_message.content:
+                    printr.print(f"Initialised Cora with: \n {json.dumps(initial_user_message, indent=2)} ", wait_for_gui=True, tags="info")
                     asyncio.run(self._play_to_user(str(response_message.content)))
+
+                printr.print(f"Cora is ready.", wait_for_gui=True, tags="info")
 
             # if len(initial_user_message) > 0:
             #     initial_user_message = "Hello, please get me information about the following questions. When you respond, greet me first and respond in my language: " + initial_user_message

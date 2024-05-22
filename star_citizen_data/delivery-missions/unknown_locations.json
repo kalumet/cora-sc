@@ -47,5 +47,12 @@
       "code": "SAAG313",
       "planet": null,
       "city": null
+   },
+   "Greycat Stanton IV Production Complex-A": {
+      "name": "Greycat Stanton IV Production Complex-A",
+      "satellite": "",
+      "code": "GSIPC344",
+      "planet": "MIC",
+      "city": null
    }
 }

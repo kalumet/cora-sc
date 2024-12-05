@@ -416,8 +416,8 @@ wingmen:
       - remote_switchTarget
       - spaceship_movement_Jump_Drive_Engage_Jump
       - spaceship_movement_Jump_Drive_Request_Jump
-      - spaceship_general_Flight_Systems_Ready # overwritten
     keybind_categories_to_ignore:
+      - spaceship_general
       - view_director_mode
       - spaceship_view
       - zero_gravity_traversal
@@ -441,6 +441,7 @@ wingmen:
       - toggle_contact
       - pl_exit
       - pc_pit_inventory
+      - v_toggle_all_doors
 
 
     

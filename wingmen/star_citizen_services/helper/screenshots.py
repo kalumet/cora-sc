@@ -6,7 +6,7 @@ import cv2
 import pygetwindow
 import pyautogui
 
-DEBUG = False
+DEBUG = True
 TEST = False
 
 

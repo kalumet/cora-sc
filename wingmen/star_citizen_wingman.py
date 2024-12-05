@@ -234,10 +234,10 @@ class StarCitizenWingman(OpenAiWingman):
                 self.messages.append(response_message)
 
                 if response_message.content:
-                    printr.print(f"Initialised Cora with: \n {json.dumps(initial_user_message, indent=2)} ", wait_for_gui=True, tags="info")
+                    printr.print(f"Initialised Cora with: \n {response_message.content} ", wait_for_gui=True, tags="info")
                     asyncio.run(self._play_to_user(str(response_message.content)))
 
-                printr.print(f"Cora is ready.", wait_for_gui=True, tags="info")
+                printr.print("Cora is ready.", wait_for_gui=True, tags="info")
 
             # if len(initial_user_message) > 0:
             #     initial_user_message = "Hello, please get me information about the following questions. When you respond, greet me first and respond in my language: " + initial_user_message

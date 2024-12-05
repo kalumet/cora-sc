@@ -481,7 +481,7 @@ class RegolithAPI():
             }
             }
             fragment UserProfileFragment on UserProfile {
-            workOrders(nextToken: $nextToken, filter: UNKNOWN) {
+            workOrders(nextToken: $nextToken) {
                 items {
                     ...WorkOrderFragment
                     __typename

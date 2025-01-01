@@ -53,7 +53,7 @@ class LoreManager(FunctionManager):
                 f"- {self.request_information_from_galactapedia_entry_url.__name__}: call this, if the user wants to get information about a related article. "
                 "In this case, you need to provide the call_identifier along with the galactapedia_entry_url. "
                 "When summarizing a topic, never call out URLs or other technical information. "
-                "Write out any numbers in your response, especially dates. Example, instead of writing 'in the year 2439' you write 'in the year twothousendfourhundertandthirtynine'. "
+                "Write out any numbers in your response as they would be read and spoken, especially dates. Example, instead of writing 'in the year 2439' you write 'in the year twothousend fourhundert and thirtynine'. This also applies to roman numbers. "
         )
     
     # @abstractmethod
@@ -277,7 +277,7 @@ class LoreManager(FunctionManager):
                     return {
                         "success": False,
                         "additional_instructions": f"No entry found for the search term '{search_term}'. "
-                                                "Tell the player, you couldn't find information about the topic. Make a suggestion to correct the search term or ask him, to rephrase his question.",
+                                                "Tell the player, you couldn't find information about the topic. Provide the user with a better, corrected search term and ask him if he wants to try again. Alternatively, ask him to rephrase his question.",
                         "error": str(e)
                     }
                 else:

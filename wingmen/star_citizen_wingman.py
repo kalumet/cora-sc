@@ -197,11 +197,6 @@ class StarCitizenWingman(OpenAiWingman):
                     "Do switch as well, if the user is asking non trade related questions. "
                     f'He wants you to respond in {self.config["openai"]["player_language"]}. '
                 )
-
-            # on startup of Cora, we want to retrieve information that are relevant to the player (like if he has active delivery missions or refinery jobs)
-            # add all additional function prompts of implemented managers for the given context.
-            # initial user message to start-up the conversation.
-            asyncio.run(self._play_to_user("Initialising Cora. Please wait a moment."))
             
             initial_user_message = ""
             for ai_function_manager in self.ai_functions_manager.get_managers(new_context):
@@ -216,6 +211,11 @@ class StarCitizenWingman(OpenAiWingman):
             self.messages = [{"role": "system", "content": f'{context_prompt}. On a request of the Player you will identify the context of his request. The current context is: {new_context.value}. Follow these rules to switch context: {context_switch_prompt}'}]
 
             if len(initial_user_message) > 0:
+                # on startup of Cora, we want to retrieve information that are relevant to the player (like if he has active delivery missions or refinery jobs)
+                # add all additional function prompts of implemented managers for the given context.
+                # initial user message to start-up the conversation.
+                asyncio.run(self._play_to_user("Initialising Cora. Please wait a moment."))
+
                 print(f"Initial user message: {initial_user_message}")
                 initial_user_message = "Hello Cora, follow these instructions: 1. welcome me. 2. summarize in a natural conversational way the following information: " + initial_user_message
                 self._add_user_message(initial_user_message)

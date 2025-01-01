@@ -1,5 +1,4 @@
 from services.printr import Printr
-from services.version_check import LOCAL_VERSION
 
 class Splashscreen:
     @staticmethod
@@ -8,28 +7,11 @@ class Splashscreen:
 
     @staticmethod
     def show(tower):
-        discord_link = Printr.clr('https://discord.gg/JSNbYbyH', Printr.CYAN)
-        github_link = Printr.clr('https://github.com/shipbit/wingman-ai', Printr.CYAN)
-        patreon_link = Printr.clr('https://www.patreon.com/ShipBit', Printr.CYAN)
-
-        version = LOCAL_VERSION
         wingmen = tower.get_wingmen()
         wingmen_count = len(wingmen)
         broken_wingmen = tower.get_broken_wingmen()
         broken_count = len(broken_wingmen)
 
-        print("")
-        print("{:^38} {:<80}".format(Printr.clr('', Printr.RED), Printr.clr('___       ______                                              _______________', Printr.BLUE)))
-        print("{:^38} {:<80}".format(Printr.clr('/ \\          / \\', Printr.RED), Printr.clr('__ |     / /__(_)_____________ _______ _________ _______      ___    |___  _/', Printr.BLUE)))
-        print("{:^38} {:<80}".format(Printr.clr('/   \\        /   \\', Printr.RED), Printr.clr('__ | /| / /__  /__  __ \\_  __ `/_  __ `__ \\  __ `/_  __ \\     __  /| |__  /', Printr.BLUE)))
-        print("{:^38} {:<80}".format(Printr.clr('/     \\\\‾‾‾‾//     \\', Printr.RED), Printr.clr('__ |/ |/ / _  / _  / / /  /_/ /_  / / / / / /_/ /_  / / /     _  ___ |_/ /', Printr.BLUE)))
-        print("{:^38} {:<80}".format(Printr.clr('/       \\\\  //       \\', Printr.RED), Printr.clr('____/|__/  /_/  /_/ /_/_\\__, / /_/ /_/ /_/\\__,_/ /_/ /_/      /_/  |_/___/', Printr.BLUE)))
-        print("{:^38} {:<80}".format(Printr.clr('/_________\\\\//_________\\', Printr.RED), Printr.clr('                       /____/', Printr.BLUE)))
-        print("{:^46} {:>82}".format(Printr.clr(f'\\{Printr.UNDERLINE}⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺{Printr.END_UNDERLINE}/', Printr.RED), f"Version: {Printr.clr(version, Printr.RED)}"))
-        print("{:^38} {:<10} {:<60}".format(Printr.clr('\\⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺/', Printr.RED), 'Discord:', discord_link))
-        print("{:^38} {:<10} {:<60}".format(Printr.clr('\\________/', Printr.RED), 'GitHub:', github_link))
-        print("{:^38} {:<10} {:<60}".format(Printr.clr('', Printr.RED), 'Patreon:', patreon_link))
-        print("")
         Printr.box_start()
         Printr.box_print(f"{Printr.BOLD}Welcome, Commander! {Printr.NORMAL_WEIGHT}{Printr.FAINT}o7{Printr.NORMAL_WEIGHT}")
         Printr.box_print("")

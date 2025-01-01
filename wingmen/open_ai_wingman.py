@@ -1,17 +1,8 @@
 import json
 from typing import Mapping
 import azure.cognitiveservices.speech as speechsdk
-from elevenlabslib import (
-    ElevenLabsUser,
-    GenerationOptions,
-    PlaybackOptions,
-    ElevenLabsVoice,
-    ElevenLabsDesignedVoice,
-    ElevenLabsClonedVoice,
-    ElevenLabsProfessionalVoice,
-)
+from openai import AzureOpenAI
 from services.open_ai import AzureConfig, OpenAi
-from services.edge import EdgeTTS
 from services.printr import Printr
 from services.secret_keeper import SecretKeeper
 from wingmen.wingman import Wingman
@@ -48,7 +39,6 @@ class OpenAiWingman(Wingman):
         ]
         """The conversation history that is used for the GPT calls"""
 
-        self.edge_tts = EdgeTTS(app_root_dir)
         self.last_transcript_locale = None
         self.elevenlabs_api_key = None
         self.azure_keys = {
@@ -196,13 +186,7 @@ class OpenAiWingman(Wingman):
         Returns:
             str | None: The transcript of the audio file or None if the transcription failed.
         """
-        detect_language = self.config["edge_tts"].get("detect_language")
-
-        response_format = (
-            "verbose_json"  # verbose_json will return the language detected in the transcript.
-            if self.tts_provider == "edge_tts" and detect_language
-            else "json"
-        )
+        response_format = "json"
 
         azure_config = None
         if self.stt_provider == "azure":
@@ -212,19 +196,7 @@ class OpenAiWingman(Wingman):
             audio_input_wav, response_format=response_format, azure_config=azure_config
         )
 
-        locale = None
-        # skip the GPT call if we didn't change the language
-        if (
-            response_format == "verbose_json"
-            and transcript
-            and transcript.language != self.last_transcript_locale  # type: ignore
-        ):
-            printr.print(
-                f"   EdgeTTS detected language '{transcript.language}'.", tags="info"  # type: ignore
-            )
-            locale = self.__ask_gpt_for_locale(transcript.language)  # type: ignore
-
-        return transcript.text if transcript else None, locale
+        return transcript.text if transcript else None, None
 
     def _get_azure_config(self, section: str):
         azure_api_key = self.azure_keys[section]
@@ -508,11 +480,7 @@ class OpenAiWingman(Wingman):
         if not text or text == "Ok":
             return
 
-        if self.tts_provider == "edge_tts":
-            await self._play_with_edge_tts(text)
-        elif self.tts_provider == "elevenlabs":
-            self._play_with_elevenlabs(text)
-        elif self.tts_provider == "azure":
+        if self.tts_provider == "azure":
             self._play_with_azure(text)
         else:
             self._play_with_openai(text)
@@ -523,108 +491,23 @@ class OpenAiWingman(Wingman):
             self.audio_player.stream_with_effects(response.content, self.config)
 
     def _play_with_azure(self, text):
-        azure_config = self.config["azure"].get("tts", None)
-
-        if azure_config is None:
-            return
-
-        speech_config = speechsdk.SpeechConfig(
-            subscription=self.azure_keys["tts"],
-            region=azure_config["region"],
-        )
-        speech_config.speech_synthesis_voice_name = azure_config["voice"]
-
-        if azure_config["detect_language"]:
-            auto_detect_source_language_config = (
-                speechsdk.AutoDetectSourceLanguageConfig()
+        azure_config = self._get_azure_config("tts")
+        voice = self.config["azure"].get("tts",{}).get("voice", "nova")
+        client = AzureOpenAI(
+                api_key=azure_config.api_key,
+                azure_endpoint=azure_config.api_base_url,
+                api_version=azure_config.api_version,
+                azure_deployment=azure_config.deployment_name,
             )
-
-        speech_synthesizer = speechsdk.SpeechSynthesizer(
-            speech_config=speech_config,
-            audio_config=None,
-            auto_detect_source_language_config=auto_detect_source_language_config
-            if azure_config["detect_language"]
-            else None,
+        
+        response = client.audio.speech.create(
+            model="tts-1",
+            voice=voice,
+            input=text
         )
 
-        result = speech_synthesizer.speak_text_async(text).get()
-        if result is not None:
-            self.audio_player.stream_with_effects(result.audio_data, self.config)
-
-    async def _play_with_edge_tts(self, text: str):
-        edge_config = self.config["edge_tts"]
-
-        tts_voice = edge_config.get("tts_voice")
-        detect_language = edge_config.get("detect_language")
-        if detect_language:
-            gender = edge_config.get("gender")
-            tts_voice = await self.edge_tts.get_same_random_voice_for_language(
-                gender, self.last_transcript_locale
-            )
-
-        communicate, output_file = await self.edge_tts.generate_speech(
-            text, voice=tts_voice
-        )
-        audio, sample_rate = self.audio_player.get_audio_from_file(output_file)
-
-        self.audio_player.stream_with_effects((audio, sample_rate), self.config)
-
-    def _play_with_elevenlabs(self, text: str):
-        # presence already validated in validate()
-        elevenlabs_config = self.config["elevenlabs"]
-        # validate() already checked that either id or name is set
-        voice_id = elevenlabs_config["voice"].get("id")
-        voice_name = elevenlabs_config["voice"].get("name")
-
-        voice_settings = elevenlabs_config.get("voice_settings", {})
-        user = ElevenLabsUser(self.elevenlabs_api_key)
-        model = elevenlabs_config.get("model", "eleven_multilingual_v2")
-
-        voice: (
-            ElevenLabsVoice
-            | ElevenLabsDesignedVoice
-            | ElevenLabsClonedVoice
-            | ElevenLabsProfessionalVoice
-        ) = None
-        if voice_id:
-            voice = user.get_voice_by_ID(voice_id)
-        else:
-            voice = user.get_voices_by_name(voice_name)[0]
-
-        # todo: add start/end callbacks to play Quindar beep even if use_sound_effects is disabled
-        playback_options = PlaybackOptions(runInBackground=True)
-        generation_options = GenerationOptions(
-            model=model,
-            latencyOptimizationLevel=elevenlabs_config.get("latency", 0),
-            style=voice_settings.get("style", 0),
-            use_speaker_boost=voice_settings.get("use_speaker_boost", True),
-        )
-        stability = voice_settings.get("stability")
-        if stability is not None:
-            generation_options.stability = stability
-
-        similarity_boost = voice_settings.get("similarity_boost")
-        if similarity_boost is not None:
-            generation_options.similarity_boost = similarity_boost
-
-        style = voice_settings.get("style")
-        if style is not None and model != "eleven_turbo_v2":
-            generation_options.style = style
-
-        use_sound_effects = elevenlabs_config.get("use_sound_effects", False)
-        if use_sound_effects:
-            audio_bytes, _history_id = voice.generate_audio_v2(
-                prompt=text,
-                generationOptions=generation_options,
-            )
-            if audio_bytes:
-                self.audio_player.stream_with_effects(audio_bytes, self.config)
-        else:
-            voice.generate_stream_audio_v2(
-                prompt=text,
-                playbackOptions=playback_options,
-                generationOptions=generation_options,
-            )
+        if response is not None:
+            self.audio_player.stream_with_effects(response.content, self.config)
 
     def _execute_command(self, command: dict) -> str:
         """Does what Wingman base does, but always returns "Ok" instead of a command response.
@@ -667,43 +550,6 @@ class OpenAiWingman(Wingman):
         ]
         return tools
 
-    def __ask_gpt_for_locale(self, language: str) -> str:
-        """OpenAI TTS returns a natural language name for the language of the transcript, e.g. "german" or "english".
-        This method uses ChatGPT to find the corresponding locale, e.g. "de-DE" or "en-EN".
-
-        Args:
-            language (str): The natural, lowercase language name returned by OpenAI TTS. Thank you for that btw.. WTF OpenAI?
-        """
-
-        response = self.openai.ask(
-            messages=[
-                {
-                    "content": """
-                        I'll say a natural language name in lowercase and you'll just return the IETF country code / locale for this language.
-                        Your answer always has exactly 2 lowercase letters, a dash, then two more letters in uppercase.
-                        If I say "german", you answer with "de-DE". If I say "russian", you answer with "ru-RU".
-                        If it's ambiguous and you don't know which locale to pick ("en-GB" vs "en-US"), you pick the most commonly used one.
-                        You only answer with valid country codes according to most common standards.
-                        If you can't, you respond with "None".
-                    """,
-                    "role": "system",
-                },
-                {
-                    "content": language,
-                    "role": "user",
-                },
-            ],
-            model="gpt-3.5-turbo-1106",
-        )
-        answer = response.choices[0].message.content
-
-        if answer == "None":
-            return None
-
-        printr.print(
-            f"   ChatGPT says this language maps to locale '{answer}'.", tags="info"
-        )
-        return answer
 
     def _get_message_role(self, message):
         """Helper method to get the role of the message regardless of its type."""

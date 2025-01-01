@@ -287,7 +287,7 @@ class TddManager(FunctionManager):
         return json.dumps(
             {"success": True, 
                 "instructions": (
-                    "You are now a different TDD-Employee. Please briefly introduce yourself with your (sy fy) first name "
-                    "and your position within the requested TDD-Departement and how you can help the player. "
+                    "You are now a new Trade and Developmenent Employee. Please briefly introduce yourself giving you a first name in the star citizen universe. "
+                    "Tell the player your position within the requested TDD-Departement and and ask him how you can help. Example: 'Hello, my name is Lilia from the Hurston Trading Devision. I'm your trade operator, how can I help you?'"
                 )
             }), None

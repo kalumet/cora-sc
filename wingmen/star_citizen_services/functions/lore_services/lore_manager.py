@@ -231,7 +231,7 @@ class LoreManager(FunctionManager):
                 results = search_data.get('data', [])
                 if not results:
                     printr.print(f"Search term '{search_term}' not found in the galactapedia. ", tags="info")
-                    return {"success": False, "additional_instructions": "You have not found information about the topic. Ask the user about a search term that is more specific. "}
+                    return {"success": False, "additional_instructions": "Answer the question of the user with your general knowledge about the topic. Tell the player, that you cannot cite galactapedia. "}
                 
                 number_of_results = len(results)
 
@@ -259,11 +259,12 @@ class LoreManager(FunctionManager):
 
                 result = {"success": True, 
                         "additional_instructions": (
-                            "You have found several articles about the topic. "
-                            "Provide the title of the articles to the user and ask him, "
-                            "if he wants to get more information about one or more of these. "
+                            "You have found several articles about the topic. Ask the player, in what article he is interessted. "
+                            "Provide the titles of the articles as descriptive text. Do not include formatting informations or new lines. "and
+                            "Just list the titles in one sentence each as in this example: "
+                            "<example>Worüber möchtest Du mehr informationen: ArcCorp die Firma oder ArcCorp den Planeten?</example>"
                             "If he is interested in one of the articles, "
-                            "request more information with the provided galactapedia_entry_url. "
+                            "execute the corresponding function with the provided galactapedia_entry_url. "
                             "For subsequent requests, you have to provide the call_identifier. "), 
                         "found_articles": articles, 
                         "call_identifier": self.current_call_identifier}
@@ -276,8 +277,10 @@ class LoreManager(FunctionManager):
                                 "Please check the spelling or suggest a correction.", tags="info")
                     return {
                         "success": False,
-                        "additional_instructions": f"No entry found for the search term '{search_term}'. "
-                                                "Tell the player, you couldn't find information about the topic. Provide the user with a better, corrected search term and ask him if he wants to try again. Alternatively, ask him to rephrase his question.",
+                        "additional_instructions": (
+                                f"No entry found for the search term '{search_term}'. "
+                                "Answer the question of the user with your general knowledge about the topic. Tell the user, that you couln't find further information on the galactapedia. If you have no knoweldge about the topic, suggest to the player different better and corrected search terms or ask him to rephrase his question. "
+                            ),
                         "error": str(e)
                     }
                 else:

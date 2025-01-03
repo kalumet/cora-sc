@@ -22,6 +22,11 @@ class AudioPlayer:
         audio, sample_rate = self._get_audio_from_stream(stream)
         sd.play(audio, sample_rate)
         sd.wait()
+    
+    def prepend_silence(self, audio, sample_rate, ms=50):
+        num_silence_samples = int(sample_rate * (ms / 1000.0))
+        silence = np.zeros(num_silence_samples, dtype=audio.dtype)
+        return np.concatenate([silence, audio])
 
     def stream_with_effects(
         self, input_data: bytes | tuple, config: dict, wait: bool = False
@@ -41,6 +46,8 @@ class AudioPlayer:
 
         if add_beep:
             audio = self._add_beep_effect(audio, sample_rate)
+
+        audio = self.prepend_silence(audio, sample_rate, ms=150)
 
         sd.play(audio, sample_rate)
 

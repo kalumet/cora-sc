@@ -1,17 +1,13 @@
 import random
 import requests
 import json
-
-from services.printr import Printr
-
-from wingmen.star_citizen_services.function_manager import FunctionManager
-from wingmen.star_citizen_services.ai_context_enum import AIContext
 import re
 
+from services.printr import Printr
+from wingmen.star_citizen_services.function_manager import FunctionManager
+from wingmen.star_citizen_services.ai_context_enum import AIContext
 
 DEBUG = True
-# TEST = True
-
 printr = Printr()
 
 
@@ -21,422 +17,292 @@ def print_debug(to_print):
 
 
 class LoreManager(FunctionManager):
-
     def __init__(self, config, secret_keeper):
         super().__init__(config, secret_keeper)
-        #self.config = config  # the wingmen config
-        #elf.overlay: StarCitizenOverlay = StarCitizenOverlay()
-
         self.wiki_base_url = "https://api.star-citizen.wiki/api/v2/galactapedia"
-
         self.current_call_identifier = None
 
-    # @abstractmethod
     def get_context_mapping(self) -> AIContext:
-        """  
-            This method returns the context this manager is associated to
-        """
+        # Returns the context this manager is associated to. TTS-freundlicher kurzer Prompt.
         return AIContext.CORA
-    
-    # @abstractmethod
+
     def register_functions(self, function_register):
+        # TTS-freundliche Beschreibungen
         function_register[self.search_information_in_galactapedia.__name__] = self.search_information_in_galactapedia
         function_register[self.get_news_of_the_day.__name__] = self.get_news_of_the_day
         function_register[self.request_information_from_galactapedia_entry_url.__name__] = self.request_information_from_galactapedia_entry_url
 
-    # @abstractmethod
     def get_function_prompt(self):
+        # Aus einem mehrzeiligen Prompt wurde ein einzeiliger TTS-freundlicher Text ohne Formatierungen
         return (
-                "When asked for star citizen game world lore information (Galactapedia) that are not related to trade related questions, you can call the following functions: "
-                f"- {self.get_news_of_the_day.__name__}: call this, if the player ask you to give him the latest news of the day. "
-                f"- {self.search_information_in_galactapedia.__name__}: call this only, if the player ask questions to get information about a specific topic from you, like 'What is the Banu-Human First Contact?'. Always extract the best search term to call the function. Always try to match location or ship names to the provided list of names before executing this function. "
-                f"- {self.request_information_from_galactapedia_entry_url.__name__}: call this, if the user wants to get information about a related article. "
-                "In this case, you need to provide the call_identifier along with the galactapedia_entry_url. "
-                "When summarizing a topic, never call out URLs or other technical information. "
-                "Write out any numbers in your response as they would be read and spoken, especially dates. Example, instead of writing 'in the year 2439' you write 'in the year twothousend fourhundert and thirtynine'. This also applies to roman numbers. "
+            "When asked for Star Citizen game world lore not related to trade, you can call: "
+            + self.get_news_of_the_day.__name__
+            + " if the user wants the latest news, "
+            + self.search_information_in_galactapedia.__name__
+            + " if the user asks about specific lore topics, and "
+            + self.request_information_from_galactapedia_entry_url.__name__
+            + " if the user wants information from a related article. Never reveal technical details in your summary. "
+            + "Write out numbers fully in text. For example, instead of 2438, say in the year twothousand fourhundred and thirtyeight."
         )
-    
-    # @abstractmethod
+
     def get_function_tools(self):
-        """ 
-        Provides the openai function definition for this manager. 
-        """
-        # commands = all defined keybinding label names
-        tools = [
+        # Auf kompakte, TTS-freundliche Beschreibungen gekürzt
+        return [
             {
                 "type": "function",
-                "function": 
-                {
+                "function": {
                     "name": self.search_information_in_galactapedia.__name__,
-                    "description": (
-                        "Gets star citizen game world lore information about a given topic / search term within a question. "
-                    ),
+                    "description": "Searches for lore in the galactapedia by a given topic or term.",
                     "parameters": {
                         "type": "object",
                         "properties": {
                             "search_term": {
                                 "type": "string",
-                                "description": (
-                                    "The best matching term the user's question contains. "
-                                ),
-                            },
+                                "description": "Best matching term in the user's question.",
+                            }
                         },
-                        "required": ["search_term"]
-                    }
-                }
+                        "required": ["search_term"],
+                    },
+                },
             },
             {
                 "type": "function",
-                "function": 
-                {
+                "function": {
                     "name": self.get_news_of_the_day.__name__,
-                    "description": "Get the latest news of the day. ",
-                }
+                    "description": "Retrieves the latest galactapedia entry as a news item.",
+                },
             },
             {
                 "type": "function",
-                "function": 
-                {
+                "function": {
                     "name": self.request_information_from_galactapedia_entry_url.__name__,
-                    "description": (
-                        "Makes a request to a given galactapedia entry url to get information about that topic. "
-                    ),
+                    "description": "Requests detailed information from a galactapedia entry URL.",
                     "parameters": {
                         "type": "object",
                         "properties": {
                             "galactapedia_entry_url": {
                                 "type": "string",
-                                "description": (
-                                    "The URL of the galactapedia entry to get information from. "
-                                )
+                                "description": "URL of the galactapedia entry to get information from.",
                             },
                             "call_identifier": {
                                 "type": "integer",
-                                "description": (
-                                    "The call_identifier that was provided by the previous search_information_in_galactapedia function. "
-                                )
+                                "description": "Call identifier from the previous search function.",
                             },
                         },
-                        "required": ["galactapedia_entry_url", "call_identifier"]
-                    }
-                }
+                        "required": ["galactapedia_entry_url", "call_identifier"],
+                    },
+                },
             },
-
         ]
 
-        # print_debug(f"tools definition: {json.dumps(tools, indent=2)}")
-        return tools
-    
     def cora_start_information(self):
+        # Prompt-Text TTS-freundlich
         result = self.get_news_of_the_day({})
-        if result.get("success", False) is False:
+        if not result.get("success", False):
             return ""
-        
-        result["additional_instructions"] = ("Give the user a summary of the description field only. Any other information is not relevant. Do not refer URLs or other technical information. ")
+        result["additional_instructions"] = (
+            "Give the user a concise summary of the description field only. Any other information is not relevant. "
+            "Do not mention URLs or technical details. Speak in a TTS-friendly format."
+        )
         return {"news_of_the_day": result}
-    
+
     def get_news_of_the_day(self, function_args):
         print_debug(f"{self.get_news_of_the_day.__name__} called.")
         printr.print(f"Executing function '{self.get_news_of_the_day.__name__}'.", tags="info")
+
         with requests.Session() as session:
-            session.headers.update({
-                'accept': 'application/json',
-                'Content-Type': 'application/json'
-            })
+            session.headers.update({"accept": "application/json", "Content-Type": "application/json"})
             try:
                 response = session.get(url=f"{self.wiki_base_url}?limit=1&page=1", timeout=5)
                 response.raise_for_status()
                 data = response.json()
-
-                total_pages = data.get('meta', {}).get('last_page', 0)
+                total_pages = data.get("meta", {}).get("last_page", 0)
                 if total_pages == 0:
-                    raise ValueError("Total pages not found in the response.")
+                    raise ValueError("Total pages not found.")
 
                 random_page = random.randint(1, total_pages)
                 random_page_response = session.get(url=f"{self.wiki_base_url}?limit=1&page={random_page}", timeout=5)
                 random_page_response.raise_for_status()
                 random_page_data = random_page_response.json()
 
-                api_url = random_page_data.get('data', [{}])[0].get('api_url')
+                api_url = random_page_data.get("data", [{}])[0].get("api_url")
                 if not api_url:
                     raise ValueError("API URL not found in the random page data.")
 
                 result = self.request_information_from_galactapedia_entry_url(
-                        session=session,
-                        function_args={
-                            "galactapedia_entry_url": api_url, 
-                            "call_identifier": self.current_call_identifier
-                        })
-                
-                if result.get("success", False) is False:
+                    session=session,
+                    function_args={
+                        "galactapedia_entry_url": api_url,
+                        "call_identifier": self.current_call_identifier,
+                    },
+                )
+                if not result.get("success", False):
                     return result
-                
-                result["additional_instructions"] = "Based on the given article, make a headline news summary. " + result["additional_instructions"]
+
+                # TTS-freundlicher Zusatz
+                result["additional_instructions"] = (
+                    "Based on the article, create a short headline news summary. " + result["additional_instructions"]
+                )
                 printr.print(f"News of the day: {json.dumps(result, indent=2)}", tags="info")
                 return result
 
-            except requests.exceptions.RequestException as e:
-                print_debug(f"{self.get_news_of_the_day.__name__} Request Error")
-                printr.print(f"News of the day: Request Error: {str(e)}", tags="error")
-                return {"success": False, "additional_instructions": "You currently have no access to the intergalactic news network. Create a short information about a random topic within the star citizen universe lore from your knowledge that might be interesting for the player. "}
-            except ValueError as e:
-                print_debug(f"{self.get_news_of_the_day.__name__} Value Error")
-                printr.print(f"News of the day: Value Error: {str(e)}", tags="error")
-                return {"success": False, "additional_instructions": "You currently have no access to the intergalactic news network. Create a short information about a random topic within the star citizen universe lore from your knowledge that might be interesting for the player. "}
-    
+            except (requests.exceptions.RequestException, ValueError) as e:
+                print_debug(f"{self.get_news_of_the_day.__name__} Error: {str(e)}")
+                printr.print(f"News of the day: Error: {str(e)}", tags="error")
+                return {
+                    "success": False,
+                    "additional_instructions": (
+                        "Currently no access to the intergalactic news network. Provide a short, TTS-friendly summary "
+                        "of any interesting Star Citizen lore you know."
+                    ),
+                }
+
     def search_information_in_galactapedia(self, function_args):
         search_url = f"{self.wiki_base_url}/search"
         search_term = function_args.get("search_term", "")
         print_debug(f"{self.search_information_in_galactapedia.__name__} called with '{search_term}'")
-        printr.print(f"Executing function '{self.search_information_in_galactapedia.__name__}' with search term '{search_term}'.", tags="info")
-        payload = {"query": search_term}
+        printr.print(
+            f"Executing function '{self.search_information_in_galactapedia.__name__}' with search term '{search_term}'.",
+            tags="info",
+        )
 
         with requests.Session() as session:
-            session.headers.update({
-                'accept': 'application/json',
-                'Content-Type': 'application/json',
-                'Accept-Encoding': 'gzip, deflate',
-                'Connection': 'keep-alive'
-            })
+            session.headers.update(
+                {
+                    "accept": "application/json",
+                    "Content-Type": "application/json",
+                    "Accept-Encoding": "gzip, deflate",
+                    "Connection": "keep-alive",
+                }
+            )
             try:
-                # Make a POST request to search for the term
-                search_response = session.post(search_url, json=payload, timeout=5)
+                search_response = session.post(search_url, json={"query": search_term}, timeout=5)
                 search_response.raise_for_status()
-
                 search_data = search_response.json()
+                results = search_data.get("data", [])
 
-                # Example response
-                #     "data": [
-                #         {
-                #         "id": "VY4Wnv7ZgW",
-                #         "title": "Banu-Human First Contact",
-                #         "slug": "banu-human-first-contact",
-                #         "thumbnail": "https://cig-galactapedia-prod.s3.amazonaws.com/upload/f20bf4e3-15a5-41b5-ada8-2115a4997bec",
-                #         "type": "Event",
-                #         "rsi_url": "https://robertsspaceindustries.com/galactapedia/article/VY4Wnv7ZgW-banu-human-first-contact",
-                #         "api_url": "https://api.star-citizen.wiki/api/v2/galactapedia/VY4Wnv7ZgW",
-                #         "created_at": "2021-02-08T00:47:01.000000Z"
-                #         },
-                #         {
-                #         "id": "RPPxJdLBJj",
-                #         "title": "Banu Language",
-                #         "slug": "banu-language",
-                #         "thumbnail": "https://cig-galactapedia-prod.s3.amazonaws.com/upload/3c107dd7-4385-4a72-bf31-6d8881a0e7e4",
-                #         "type": null,
-                #         "rsi_url": "https://robertsspaceindustries.com/galactapedia/article/RPPxJdLBJj-banu-language",
-                #         "api_url": "https://api.star-citizen.wiki/api/v2/galactapedia/RPPxJdLBJj",
-                #         "created_at": "2021-02-08T00:48:42.000000Z"
-                #         },
-
-                results = search_data.get('data', [])
                 if not results:
-                    printr.print(f"Search term '{search_term}' not found in the galactapedia. ", tags="info")
-                    return {"success": False, "additional_instructions": "Answer the question of the user with your general knowledge about the topic. Tell the player, that you cannot cite galactapedia. "}
-                
-                number_of_results = len(results)
+                    printr.print(f"No galactapedia matches for '{search_term}'.", tags="info")
+                    return {
+                        "success": False,
+                        "additional_instructions": (
+                            "Answer the user with general knowledge. Inform that you cannot cite galactapedia."
+                        ),
+                    }
 
                 self.current_call_identifier = random.randint(0, 1000000)
+                number_of_results = len(results)
+
                 if number_of_results == 1:
-                    api_url = results[0].get('api_url')
-                    
+                    api_url = results[0].get("api_url")
                     result = self.request_information_from_galactapedia_entry_url(
-                        session=session, 
+                        session=session,
                         function_args={
-                            "galactapedia_entry_url": api_url, 
-                            "call_identifier": self.current_call_identifier
-                        })
-                    printr.print(f"Found a single article about the topic. {json.dumps(result, indent=2)}", tags="info")
+                            "galactapedia_entry_url": api_url,
+                            "call_identifier": self.current_call_identifier,
+                        },
+                    )
+                    printr.print(
+                        f"Found a single article for the topic. {json.dumps(result, indent=2)}", tags="info"
+                    )
                     return result
 
                 articles = []
-
                 for i in range(min(number_of_results, 10)):
-                    result = results[i]
-                    title = result.get('title')
-                    api_url = result.get('api_url')
-                    article_type = result.get('type')
-                    articles.append({"title": title, "type": article_type, "galactapedia_entry_url": api_url})
+                    entry = results[i]
+                    articles.append({
+                        "title": entry.get("title"),
+                        "type": entry.get("type"),
+                        "galactapedia_entry_url": entry.get("api_url"),
+                    })
 
-                result = {"success": True, 
-                        "additional_instructions": (
-                            "You have found several articles about the topic. Ask the player, in what article he is interessted. "
-                            "Provide the titles of the articles as descriptive text. Do not include formatting informations or new lines. "and
-                            "Just list the titles in one sentence each as in this example: "
-                            "<example>Worüber möchtest Du mehr informationen: ArcCorp die Firma oder ArcCorp den Planeten?</example>"
-                            "If he is interested in one of the articles, "
-                            "execute the corresponding function with the provided galactapedia_entry_url. "
-                            "For subsequent requests, you have to provide the call_identifier. "), 
-                        "found_articles": articles, 
-                        "call_identifier": self.current_call_identifier}
-                printr.print(f"Found several articles about the topic. {json.dumps(result, indent=2)}", tags="info")
+                # TTS-freundlicher Text
+                result = {
+                    "success": True,
+                    "additional_instructions": (
+                        "Multiple galactapedia entries found. Ask the user which article is of interest. "
+                        "Mention only the titles in a TTS-friendly sentence. For example: Worueber moechtest Du "
+                        "mehr Informationen: ArcCorp the company or ArcCorp the planet? If the user picks one, "
+                        "call the function again with the correct galactapedia_entry_url and the call_identifier."
+                    ),
+                    "found_articles": articles,
+                    "call_identifier": self.current_call_identifier,
+                }
+                printr.print(f"Found multiple articles. {json.dumps(result, indent=2)}", tags="info")
                 return result
-                
+
             except requests.exceptions.RequestException as e:
                 if isinstance(e, requests.exceptions.HTTPError) and e.response.status_code == 404:
-                    printr.print("No entry found for the search term '{search_term}'. "
-                                "Please check the spelling or suggest a correction.", tags="info")
+                    printr.print("No entry found for the search term.", tags="info")
                     return {
                         "success": False,
                         "additional_instructions": (
-                                f"No entry found for the search term '{search_term}'. "
-                                "Answer the question of the user with your general knowledge about the topic. Tell the user, that you couln't find further information on the galactapedia. If you have no knoweldge about the topic, suggest to the player different better and corrected search terms or ask him to rephrase his question. "
-                            ),
-                        "error": str(e)
+                            f"No entry found for the search term '{search_term}'. Provide general info if possible, "
+                            "and inform the user that galactapedia has no data for that. If you have no info, "
+                            "suggest rephrasing or alternative search terms."
+                        ),
+                        "error": str(e),
                     }
-                else:
-                    print_debug(f"{self.search_information_in_galactapedia.__name__} exception: {str(e)}")
-                    printr.print(f"Error during search of '{search_term}' in the galactapedia: {str(e)} ", tags="info")
-                    return {
-                        "success": False,
-                        "additional_instructions": "Galactapedia is currently unavailable. Please try again later.",
-                        "error": str(e)
-                    }
-    
+                print_debug(f"{self.search_information_in_galactapedia.__name__} exception: {str(e)}")
+                printr.print(f"Error searching '{search_term}': {str(e)}", tags="info")
+                return {
+                    "success": False,
+                    "additional_instructions": "Galactapedia is currently unavailable, please try again later.",
+                    "error": str(e),
+                }
+
     def request_information_from_galactapedia_entry_url(self, function_args, session=None):
         if session is None:
             session = requests.Session()
-            session.headers.update({
-                'accept': 'application/json',
-                'Content-Type': 'application/json',
-                'Accept-Encoding': 'gzip, deflate',
-                'Connection': 'keep-alive'
-            })
+            session.headers.update(
+                {
+                    "accept": "application/json",
+                    "Content-Type": "application/json",
+                    "Accept-Encoding": "gzip, deflate",
+                    "Connection": "keep-alive",
+                }
+            )
+
         api_url = function_args.get("galactapedia_entry_url", "")
         call_identifier = function_args.get("call_identifier", None)
-        printr.print(f"Executing function '{self.request_information_from_galactapedia_entry_url.__name__}'. URL: {api_url}. ", tags="info")
+        printr.print(
+            f"Executing function '{self.request_information_from_galactapedia_entry_url.__name__}' for URL: {api_url}.",
+            tags="info",
+        )
+
         if self.current_call_identifier != call_identifier:
-            return {"success": False, "additional_instructions": (
-                "You are not allowed to make requests without a valid call_identifier. "
-                "Ask the user about what topic he wants to retrieve information and call the appropriate function. ")
+            return {
+                "success": False,
+                "additional_instructions": (
+                    "A valid call_identifier is required. Ask the user which article they want to see, "
+                    "then call the appropriate function."
+                ),
             }
-        
-        # Validate the API URL
-        if not re.match(r'^https:\/\/api\.star-citizen\.wiki\/api\/v2\/galactapedia\/', api_url[:api_url.find("/galactapedia/") + len("/galactapedia/")]):
-            printr.print(f"Unallowed URL: {api_url}. ", tags="error")
-            return {"success": False, "additional_instructions": "You are not allowed to request information from this URL. "}
-        
-        print_debug(f"{self.request_information_from_galactapedia_entry_url.__name__} called with API URL: {api_url}. ")
-              
+
+        # Regex-Check vereinfacht beibehalten, TTS-freundlicher Fehlertext
+        if not re.match(
+            r"^https:\/\/api\.star-citizen\.wiki\/api\/v2\/galactapedia\/",
+            api_url[: api_url.find("/galactapedia/") + len("/galactapedia/")],
+        ):
+            printr.print(f"Invalid URL: {api_url}", tags="error")
+            return {
+                "success": False,
+                "additional_instructions": "Not allowed to request information from this URL.",
+            }
+
+        print_debug(f"{self.request_information_from_galactapedia_entry_url.__name__} with API URL: {api_url}")
+
         try:
-            # Make a GET request to the API URL
             api_response = session.get(api_url, timeout=5)
             api_response.raise_for_status()
-            
             api_data = api_response.json()
-
-        #     Example response
-        #     {
-        #     "data": {
-        #         "id": "VY4Wnv7ZgW",
-        #         "title": "Banu-Human First Contact",
-        #         "slug": "banu-human-first-contact",
-        #         "thumbnail": "https:\/\/cig-galactapedia-prod.s3.amazonaws.com\/upload\/f20bf4e3-15a5-41b5-ada8-2115a4997bec",
-        #         "type": "Event",
-        #         "rsi_url": "https:\/\/robertsspaceindustries.com\/galactapedia\/article\/VY4Wnv7ZgW-banu-human-first-contact",
-        #         "api_url": "https:\/\/api.star-citizen.wiki\/api\/v2\/galactapedia\/VY4Wnv7ZgW",
-        #         "categories": [
-        #             {
-        #                 "id": "0OaeJmxqvO",
-        #                 "name": "Exploration"
-        #             },
-        #             {
-        #                 "id": "VyvD5PY1jl",
-        #                 "name": "Banu"
-        #             },
-        #             {
-        #                 "id": "boxGg8Bzg1",
-        #                 "name": "Politics"
-        #             },
-        #             {
-        #                 "id": "R6vqrLdp2e",
-        #                 "name": "Human"
-        #             }
-        #         ],
-        #         "tags": [
-        #             {
-        #                 "id": "0dQ4O3Myop",
-        #                 "name": "banu-human first contact"
-        #             },
-        #             {
-        #                 "id": "bmNr3xa9wP",
-        #                 "name": "first contact"
-        #             },
-        #             {
-        #                 "id": "bE3rmGx4aJ",
-        #                 "name": "vernon tar"
-        #             },
-        #             {
-        #                 "id": "box5k8dD8Z",
-        #                 "name": "davien system"
-        #             },
-        #             {
-        #                 "id": "VaZwadL8Nw",
-        #                 "name": "neal socolovich"
-        #             }
-        #         ],
-        #         "properties": [
-        #             {
-        #                 "name": "type",
-        #                 "value": "First contact"
-        #             },
-        #             {
-        #                 "name": "dateS",
-        #                 "value": "2438"
-        #             },
-        #             {
-        #                 "name": "location",
-        #                 "value": "Davien system"
-        #             },
-        #             {
-        #                 "name": "participants",
-        #                 "value": "Humans and Banu"
-        #             },
-        #             {
-        #                 "name": "results",
-        #                 "value": "Humans signed the first Interstellar Peace and Trade Accord with an alien civilization"
-        #             }
-        #         ],
-        #         "related_articles": [
-        #             {
-        #                 "id": "0NwpYPpNZ4",
-        #                 "title": "Banu",
-        #                 "url": "https:\/\/robertsspaceindustries.com\/galactapedia\/article\/0NwpYPpNZ4-banu",
-        #                 "api_url": "https:\/\/api.star-citizen.wiki\/api\/v2\/galactapedia\/0NwpYPpNZ4"
-        #             },
-        #             {
-        #                 "id": "RzPoJ1aP4z",
-        #                 "title": "Banu-Human Interstellar Peace Treaty",
-        #                 "url": "https:\/\/robertsspaceindustries.com\/galactapedia\/article\/RzPoJ1aP4z-banu-human-interstellar-peace-treaty",
-        #                 "api_url": "https:\/\/api.star-citizen.wiki\/api\/v2\/galactapedia\/RzPoJ1aP4z"
-        #             }
-        #         ],
-        #         "translations": {
-        #             "en_EN": "Humans and [Banu](https:\/\/robertsspaceindustries.com\/galactapedia\/article\/0NwpYPpNZ4-banu) first made contact in 2438, when navjumper Vernon Tar encountered a Banu fugitive in the outskirts of the [Davien system](https:\/\/robertsspaceindustries.com\/galactapedia\/article\/Rz2g71YlkY-davien-system). After mistakenly opening fire on the Banu vessel, Tar relayed his coordinates to the [United Nations of Earth (UNE)](https:\/\/robertsspaceindustries.com\/galactapedia\/article\/R4ZQpY83oO-united-nations-of-earth). A delegation party led by General [Neal Socolovich](https:\/\/robertsspaceindustries.com\/galactapedia\/article\/VJX7vxG2BG-neal-socolovich) were immediately dispatched to the system to reverse any possible diplomatic fallout and attempt to open communication. Two weeks later, representatives of the [Banu Protectorate](https:\/\/robertsspaceindustries.com\/galactapedia\/article\/Vgg795z2a3-banu-protectorate) arrived in Davien and made formal contact with Socolovich. In October of 2438, [Humans](https:\/\/robertsspaceindustries.com\/galactapedia\/article\/0Nwpnr6wa2-humans) signed their first [Interstellar Peace and Trade Accord](https:\/\/robertsspaceindustries.com\/galactapedia\/article\/RzPoJ1aP4z-banu-human-interstellar-peace-treaty) with an alien civilization.",
-        #             "de_DE": "Die Menschen und die [Banu](https:\/\/robertsspaceindustries.com\/galactapedia\/article\/0NwpYPpNZ4-banu) nahmen 2438 zum ersten Mal Kontakt auf, als Navjumper Vernon Tar in den Au\u00dfenbezirken des Davien-Systems auf einen Banu-Fl\u00fcchtling stie\u00df. Nachdem er f\u00e4lschlicherweise das Feuer auf das Banu-Schiff er\u00f6ffnet hatte, \u00fcbermittelte Tar seine Koordinaten an die Vereinten Nationen der Erde (UNE). Eine Delegation unter der Leitung von General Neal Socolovich wurde sofort in das System entsandt, um m\u00f6gliche diplomatische Konsequenzen abzuwenden und zu versuchen, die Kommunikation zu \u00f6ffnen. Zwei Wochen sp\u00e4ter trafen Vertreter des [Banu Protektorats](https:\/\/robertsspaceindustries.com\/galactapedia\/article\/Vgg795z2a3-banu-protectorate) in Davien ein und nahmen formellen Kontakt mit Socolovich auf. Im Oktober 2438 unterzeichneten die Menschen das erste [Interstellare Friedens- und Handelsabkommen](https:\/\/robertsspaceindustries.com\/galactapedia\/article\/RzPoJ1aP4z-banu-human-interstellar-peace-treaty) mit einer au\u00dferirdischen Zivilisation."
-        #         },
-        #         "created_at": "2021-02-08T00:47:01.000000Z"
-        #     },
-        #     "meta": {
-        #         "processed_at": "2024-05-10 20:39:16",
-        #         "valid_relations": [
-        #             "categories",
-        #             "properties",
-        #             "tags",
-        #             "related",
-        #             "translations"
-        #         ]
-        #     }
-        # }     
 
             result = {
                 "subject_title": api_data["data"]["title"],
                 "subject_type": api_data["data"]["type"],
                 "description": api_data["data"]["translations"]["en_EN"],
                 "additional_information": [
-                    {
-                        "name": prop["name"],
-                        "value": prop["value"]
-                    }
+                    {"name": prop["name"], "value": prop["value"]}
                     for prop in api_data["data"]["properties"]
                 ],
                 "related_articles": [
@@ -448,31 +314,43 @@ class LoreManager(FunctionManager):
                 ],
             }
 
-            printr.print(f"Information from the galactapedia: {json.dumps(result, indent=2)}", tags="info")
+            printr.print(f"Galactapedia info: {json.dumps(result, indent=2)}", tags="info")
+
+            # TTS-freundliche Prompts
             if api_data["data"]["related_articles"]:
-                self.current_call_identifier = random.randint(0, 1000000)  # Replace with your implementation of generating a confirmation key
-                return {"success": True, "additional_instructions": (
-                    "You have successfully retrieved information from the galactapedia. "
-                    "Give the user a summary of the description. Only provide more details, if he asks for it. "
-                    "If there are related articles, tell the user only the titles and ask if he wants more information about those topics. "
-                    "If he is interested in the related articles, make subsequent calls using the confirmation key to retrieve more "
-                    "information about the related articles. "
-                ), "result": result, "call_identifier": self.current_call_identifier}
-            else:
-                self.current_call_identifier = None
-                return {"success": True, "additional_instructions": (
-                    "You have successfully retrieved information from the galactapedia. "
-                    "Give the user a summary of the description. Only provide more details, if he asks for it. "
-                ), "result": result}
-                    
+                self.current_call_identifier = random.randint(0, 1000000)
+                return {
+                    "success": True,
+                    "additional_instructions": (
+                        "Information retrieved. Give the user a TTS-friendly summary of the description. "
+                        "Offer details only if asked. If there are related articles, mention their titles. "
+                        "If the user wants more info, call this function again with the new call_identifier."
+                    ),
+                    "result": result,
+                    "call_identifier": self.current_call_identifier,
+                }
+
+            self.current_call_identifier = None
+            return {
+                "success": True,
+                "additional_instructions": (
+                    "Information retrieved. Give the user a TTS-friendly summary of the description. "
+                    "Only provide more details if asked."
+                ),
+                "result": result,
+            }
+
         except requests.exceptions.RequestException as e:
             print_debug(f"{self.request_information_from_galactapedia_entry_url.__name__} exception: {str(e)}")
-            printr.print(f"Error during request of information from the galactapedia: {str(e)} ", tags="info")
-            return {"success": False, "additional_instructions": "You where not able to retrieve information from the galactapedia. Please try again later. ", "error": str(e)}
+            printr.print(f"Error requesting galactapedia info: {str(e)}", tags="info")
+            return {
+                "success": False,
+                "additional_instructions": "Could not retrieve galactapedia information. Please try again later.",
+                "error": str(e),
+            }
 
 
-# ─────────────────────────────────── ↓ TEST ↓ ─────────────────────────────────────────
 if __name__ == "__main__":
-    lm = LoreManager({},{})
+    lm = LoreManager({}, {})
     print("Subclasses of FunctionManager:", FunctionManager.__subclasses__())
     print(lm.get_news_of_the_day({}))

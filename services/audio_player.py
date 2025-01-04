@@ -47,7 +47,7 @@ class AudioPlayer:
         if add_beep:
             audio = self._add_beep_effect(audio, sample_rate)
 
-        audio = self.prepend_silence(audio, sample_rate, ms=150)
+        audio = self.prepend_silence(audio, sample_rate, ms=200)
 
         sd.play(audio, sample_rate)
 

@@ -115,16 +115,16 @@ class TddManager(FunctionManager):
     def get_function_prompt(self):
         return (
                 "When asked for trading information,  "
-                "find the best request_type for the trade inquiry of the player and make sure to follow the the given instructions: "
+                "find the best request_type for the trade inquiry of the player and make sure to follow the given instructions: "
                 "All locations can be planets, moons / satellites or tradeports. "
                 "For any of the parameters, make sure to only use one of the allowed values. If there is none that matches, ask for clarification. "
                 "The request_type should be one of the following: "
-                "- find_best_trade_route_starting_at_location: used, if the player beginns a trade route at a location. Requires only the user to provide the parameter 'location_name_from' "
+                "- find_best_trade_route_starting_at_location: used, if the player beginns a trade route at a specific trade port. Requires only the user to provide the parameter 'location_name_from' "
                 "- find_best_trade_route_between: used, if the player wants to trade between locations. Requires both 'location_name_from' and 'location_name_to' "
                 "- find_tradeport_at_location_to_sell_commodity: used if the player wants to sell a specific commodity at a given location. Requires 'commodity_name' and 'location_name_to' "
                 "- find_best_trade_route_for_commodity_between_locations: used if the player wants to trade a given commodity without specifying any buying location or selling location. Requires only 'commodity_name' "
                 "- find_locations_to_sell_commodity: used if the player wants to know where he can sell a given commodity independent of any location. Requires only 'commodity_name' "
-                "- find_best_trade_routes_around_location: used, if the player wants to trade at or around a given location. Requires only 'location_name_to' "
+                "- find_best_trade_routes_around_location: used, if the player wants to trade around at a specific area like a planetary system or moon. Requires only 'location_name_to' "
         )
 
     def get_trade_information_from_tdd_employee(self, function_args):
@@ -287,7 +287,7 @@ class TddManager(FunctionManager):
         return json.dumps(
             {"success": True, 
                 "instructions": (
-                    "You are now a new Trade and Developmenent Employee. Please briefly introduce yourself giving you a first name in the star citizen universe. "
+                    f"You are now a new Trade and Developmenent Employee. Please briefly introduce yourself giving you a first name in the star citizen universe. Your gender should match the voice you are using: {self.tdd_voice}. "
                     "Tell the player your position within the requested TDD-Departement and and ask him how you can help. Example: 'Hello, my name is Lilia from the Hurston Trading Devision. I'm your trade operator, how can I help you?'"
                 )
             }), None

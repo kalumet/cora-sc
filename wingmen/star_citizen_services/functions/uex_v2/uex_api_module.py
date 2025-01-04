@@ -42,8 +42,11 @@ PRICES_VEHICLES = "vehicles_purchases_prices"
 PRICES_ITEMS = "items_prices"
 CATEGORY_REFINERY_METHODS = "refineries_methods"
 
-# System IDs
-STANTON = 68
+
+ACTIVE_STAR_SYSTEMS = {
+    "Stanton": 68,
+    "Pyro": 64,
+}
 
 
 class UEXApi2():
@@ -103,8 +106,6 @@ class UEXApi2():
                 "MAX INVENTORY": 7
             }
 
-            # Beispiel-Systemcode
-            self.system_code = STANTON  # Beispiel: Stanton=68
 
             self.code_mapping = {}
             self.name_mapping = {}
@@ -123,7 +124,7 @@ class UEXApi2():
 
         return cls()
 
-    def get_api_endpoints_per_category(self, system_id=STANTON, category=None):
+    def get_api_endpoints_per_category(self, system_id, category=None):
         api_endpoints = {
                 CATEGORY_VEHICLES: f"{CATEGORY_VEHICLES}/",
                 CATEGORY_CITIES: f"{CATEGORY_CITIES}/id_star_system/{system_id}/",
@@ -144,7 +145,10 @@ class UEXApi2():
         
         return api_endpoints
         
-    def _fetch_from_file_or_api(self, category, max_age_seconds, api_call, **additional_category_filters):
+    def _fetch_from_file_or_api(self, category, **additional_category_filters):
+        file_age = self.max_ages[category]
+        max_age_seconds = self.max_ages[category]
+
         file_path = f"{self.root_data_path}/{category}"
         for attribut, value in additional_category_filters.items():
             file_path += f"_{attribut}-{value}"
@@ -152,7 +156,6 @@ class UEXApi2():
         file_path += ".json"
 
         file_data = None
-        file_age = max_age_seconds
         # Check if the file exists and is not too old
         if os.path.exists(file_path):
             file_age = time.time() - os.path.getmtime(file_path)
@@ -164,7 +167,7 @@ class UEXApi2():
             # print_debug(f"Loading from file {name}")
             return file_data, file_age
         
-        data = self._fetch_data_api(api_call, **additional_category_filters)
+        data = self._fetch_data_api(category, **additional_category_filters)
         if not data:
             # print_debug("Force loading from file")
             if not file_data:
@@ -202,7 +205,7 @@ class UEXApi2():
         
         for check_category in categories:
             if self._needs_refresh(check_category):
-                data, age = self._fetch_from_file_or_api(check_category, self.max_ages[check_category], self.get_api_endpoints_per_category(self.system_code, check_category))
+                data, age = self._fetch_from_file_or_api(check_category)
                 
                 self._write_code_mapping_to_file(data=data, category=check_category, api_value_field=NAME_FIELD_NAME, export_value_field_name=NAME_FIELD_NAME, export_code_field_name=ID_FIELD_NAME)
                 self.data[check_category] = {"data": data, "age": age}
@@ -262,20 +265,43 @@ class UEXApi2():
         with open(f"{self.root_data_path}/{category}_mapping.json", 'w', encoding='utf-8') as file:
             json.dump(json_data, file, ensure_ascii=False, indent=4)
  
-    def _fetch_data_api(self, endpoint, **additional_category_filters):
-        url = f"{self.base_url}{endpoint}"
-        response = self.session.get(url, params=additional_category_filters, timeout=30)
-        actual_url = response.request.url
-        if response.status_code == 200:
-            print_debug(f"Request: {actual_url}")
-            print_debug(f'result: {json.dumps(response.json(), indent=2)[0:100]}...')
-            return response.json()["data"]
-        else:
-            sent_headers = response.request.headers
-            print_debug(f"Error calling: {actual_url}")
-            print_debug(f"Sent headers: {json.dumps(dict(sent_headers), indent=2)}")
-            print_debug(f"Response Body: {json.dumps(response.json(), indent=2)}")
-            return None
+    def _fetch_data_api(self, category, **additional_category_filters):
+        
+        category_data = []
+        system_relevant_categories = {
+            CATEGORY_CITIES,
+            CATEGORY_TERMINALS,
+            CATEGORY_ORBITS,
+            CATEGORY_MOONS,
+            CATEGORY_OUTPOSTS,
+        }
+
+        # only one iteration, if category not dependent of star system    
+        for system_code in ACTIVE_STAR_SYSTEMS.values():
+            print_debug(f"Fetching data for system {system_code}")
+
+            endpoint = self.get_api_endpoints_per_category(system_code, category)
+
+            url = f"{self.base_url}{endpoint}"
+            response = self.session.get(url, params=additional_category_filters, timeout=30)
+            actual_url = response.request.url
+
+            if response.status_code == 200:
+                print_debug(f"Request: {actual_url}")
+                print_debug(f'result: {json.dumps(response.json(), indent=2)[0:100]}...')
+                if category in system_relevant_categories:
+                    category_data.extend(response.json()["data"])
+                else:
+                    return response.json()["data"]
+            else:
+                sent_headers = response.request.headers
+                print_debug(f"Error calling: {actual_url}")
+                print_debug(f"Sent headers: {json.dumps(dict(sent_headers), indent=2)}")
+                print_debug(f"Response Body: {json.dumps(response.json(), indent=2)}")
+                return None  # if there is one error, we stop the whole process
+        
+        return category_data
+
 
     def _filter_available_commodities(self, commodities_data, include_restricted_illegal, isOnlySellable=False):
         """
@@ -320,9 +346,7 @@ class UEXApi2():
         """
         if self._needs_refresh(price_category, **additional_category_filters):
             data, age = self._fetch_from_file_or_api(
-                price_category, 
-                self.max_ages[price_category], 
-                self.get_api_endpoints_per_category(self.system_code, price_category), 
+                price_category,
                 **additional_category_filters)
 
         # print_debug(f"price query result: {json.dumps(data, indent=2)[0:100]}...")
@@ -457,12 +481,14 @@ class UEXApi2():
     def _create_trade_info(self, buy_terminal, sell_terminal, commodity_code, buy_price, sell_price, profit):
         return {
             "commodity": self.code_mapping.get(CATEGORY_COMMODITIES, {}).get(commodity_code, ''),
-            "buy_at_tradeport_name": buy_terminal["terminal_name"],
-            "buy_moon": self.code_mapping[CATEGORY_MOONS].get(buy_terminal["id_moon"], ''),
-            "buy_orbit": self.code_mapping[CATEGORY_ORBITS].get(buy_terminal["id_orbit"], ''),
-            "sell_at_tradeport_name": sell_terminal["terminal_name"],
-            "sell_moon": self.code_mapping[CATEGORY_MOONS].get(sell_terminal["id_moon"], ''),
-            "sell_orbit": self.code_mapping[CATEGORY_ORBITS].get(sell_terminal["id_orbit"], ''),
+            "buy_at_tradeport_name": buy_terminal.get("terminal_name", ''),
+            "buy_moon": buy_terminal.get("moon_name", ''),
+            "buy_orbit": buy_terminal.get("orbit_name", ''),
+            "buy_system": buy_terminal.get("star_system_name", ''),
+            "sell_at_tradeport_name": sell_terminal.get("terminal_name", ''),
+            "sell_moon": sell_terminal.get("moon_name", ''),
+            "sell_orbit": sell_terminal.get("orbit_name", ''),
+            "sell_system": sell_terminal.get("star_system_name", ''),
             "buy_price": buy_price,
             "sell_price": sell_price,
             "profit": profit
@@ -650,10 +676,11 @@ class UEXApi2():
 
     def _build_trade_selling_info(self, commodity_code, best_sell, max_sell_price):
         return {
-                "commodity": self.code_mapping.get(CATEGORY_COMMODITIES, {}).get(commodity_code, ''),
+                "commodity": best_sell.get("commodity_name", ''),
                 "sell_at_tradeport_name": best_sell.get("terminal_name", ''),
-                "sell_moon": self.code_mapping.get(CATEGORY_MOONS, {}).get(best_sell.get("id_moon", ''), ''),
-                "sell_orbit": self.code_mapping.get(CATEGORY_ORBITS, {}).get(best_sell.get("id_orbit", ''), ''),
+                "sell_moon": best_sell.get("moon_name", ''),
+                "sell_orbit": best_sell.get("orbit_name", ''),
+                "sell_system": best_sell.get("star_system_name", ''),
                 "sell_price": max_sell_price
             }
 
@@ -928,7 +955,7 @@ class UEXApi2():
     def get_refineries(self):
         self._refresh_data()
         category = CATEGORY_TERMINALS
-        data, age = self._fetch_from_file_or_api(category, self.max_ages[category], self.get_api_endpoints_per_category(self.system_code, category), type="refinery")
+        data, age = self._fetch_from_file_or_api(category, type="refinery")
         return data 
     
     def get_terminal(self, tradeport_mapping_name, type="commodity", search_fields=["name"], cutoff=80):

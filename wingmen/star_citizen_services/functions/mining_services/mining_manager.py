@@ -232,6 +232,7 @@ class MiningManager(FunctionManager):
         }
 
     def mining_or_salvage_session_management(self, function_args):
+        printr.print(f"Executing function '{self.mining_or_salvage_session_management.__name__}'.", tags="info")
         confirmed_deletion = function_args.get("confirm_deletion", None)
         function_type = function_args["type"]
         printr.print(f'-> Work Session Management: {function_type} with args: \n{json.dumps(function_args, indent=2)}', tags="info")
@@ -296,6 +297,7 @@ class MiningManager(FunctionManager):
         return {"success": False, "message": "Session was not created."}
 
     def refinery_job_work_order_management(self, function_args):
+        printr.print(f"Executing function '{self.refinery_job_work_order_management.__name__}'.", tags="info")
         work_order_index = function_args.get("work_order_index", None)
         confirmed_deletion = function_args.get("confirm_deletion", None)
         function_type = function_args["type"]

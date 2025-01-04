@@ -15,6 +15,7 @@ class AudioPlayer:
 
     def play(self, stream: bytes):
         audio, sample_rate = self._get_audio_from_stream(stream)
+        sd.sleep(50)  # Add a short delay before playing
         sd.play(audio, sample_rate)
         sd.wait()
 

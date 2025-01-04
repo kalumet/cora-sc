@@ -3,9 +3,6 @@ import time
 import traceback
 import random
 import asyncio
-from difflib import SequenceMatcher
-from openai import OpenAI
-from elevenlabs import generate, stream, Voice, voices
 
 from services.printr import Printr
 from services.secret_keeper import SecretKeeper
@@ -217,12 +214,17 @@ class StarCitizenWingman(OpenAiWingman):
                 asyncio.run(self._play_to_user("Initialising Cora. Please wait a moment."))
 
                 print(f"Initial user message: {initial_user_message}")
-                initial_user_message = "Hello Cora, follow these instructions: 1. welcome me. 2. summarize in a natural conversational way the following information: " + initial_user_message
+                initial_user_message = "Follow these instructions: 1. welcome me. 2. summarize in a natural conversational way suitable for a tts engine the following information: " + initial_user_message
                 self._add_user_message(initial_user_message)
             
+                azure_config = None
+                if self.conversation_provider == "azure":
+                    azure_config = self._get_azure_config("conversation")
+
                 completion = self.openai.ask(
                     messages=self.messages,
-                    model=self.config["openai"].get("conversation_model")
+                    model=self.config["openai"].get("conversation_model"),
+                    azure_config=azure_config,
                 )
 
                 if completion is None:

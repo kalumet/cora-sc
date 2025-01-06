@@ -410,7 +410,7 @@ class MiningManager(FunctionManager):
             if material["yield"] <= 0:
                 continue  # material hasn't been selected to be refined
             ore_name = material["commodity_name"]
-            ore, success = find_best_match.find_best_match(ore_name, self.regolith.get_ship_ore_names(), score_cutoff=20)
+            ore, success = find_best_match.find_best_match(ore_name, self.regolith.get_ship_ore_names(), score_cutoff=0)
             if not success:
                 print_debug(f"couldn't identify ore '{ore_name}'")
                 continue

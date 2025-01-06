@@ -105,7 +105,6 @@ class RegolithAPI():
         list_of_name_fields = []
         list_of_name_fields.append(self.get_graphql_for_names("RefineryEnum"))
         list_of_name_fields.append(self.get_graphql_for_names("RefineryMethodEnum"))
-        list_of_name_fields.append(self.get_graphql_for_names("PlanetEnum"))
         list_of_name_fields.append(self.get_graphql_for_names("ActivityEnum"))
         list_of_name_fields.append(self.get_graphql_for_names("LocationEnum"))
         list_of_name_fields.append(self.get_graphql_for_names("ShipOreEnum"))
@@ -126,7 +125,6 @@ class RegolithAPI():
                 print_debug('retrieved all entity names from regolith')
                 self.refineries = [value["name"] for value in response["RefineryEnum"]["enumValues"]]
                 self.refinery_methods = [value["name"] for value in response["RefineryMethodEnum"]["enumValues"]]
-                self.gravity_wells = [value["name"] for value in response["PlanetEnum"]["enumValues"]]
                 self.activities = [value["name"] for value in response["ActivityEnum"]["enumValues"]]
                 self.locations = [value["name"] for value in response["LocationEnum"]["enumValues"]]
                 self.ship_ores = [value["name"] for value in response["ShipOreEnum"]["enumValues"]]
@@ -513,6 +511,19 @@ class RegolithAPI():
 
     def process_work_orders(self, data):
         current_time_ms = int(datetime.now().timestamp() * 1000)
+
+        # Zuerst Duplikate entfernen (hier anhand orderId).
+        # Wenn du orderId + sessionId für die Eindeutigkeit brauchst,
+        # kannst du stattdessen (order['orderId'], order['sessionId']) als Schlüssel benutzen.
+        unique_orders_map = {}
+        for o in data['profile']['workOrders']['items']:
+            if o['orderId'] not in unique_orders_map:
+                unique_orders_map[o['orderId']] = o
+
+        # In eine Liste umwandeln
+        unique_orders = list(unique_orders_map.values())
+
+        # Jetzt die eigentliche Logik
         refinery_groups = defaultdict(lambda: {
             'order_count': 0,
             'ores': set(),
@@ -522,52 +533,72 @@ class RegolithAPI():
         total_orders_in_processing = 0
         next_order_finish_duration = float('inf')  # Initialize to the largest possible number
 
-        for order in data['profile']['workOrders']['items']:
+        for order in unique_orders:
+            # Prüfen, ob der Auftrag noch läuft
             if order['processEndTime'] > current_time_ms:
                 total_orders_in_processing += 1
                 if order['processEndTime'] < next_order_finish_duration:
                     next_order_finish_duration = order['processEndTime']
 
+            # Wenn Auftrag fertig (d. h. Endzeit < jetzt) und noch nicht verkauft
             if not order['isSold'] and order['processEndTime'] < current_time_ms:
                 refinery = order['refinery']
                 session_id = order['sessionId']
 
                 # Update Zählungen und Daten sammeln
                 refinery_groups[refinery]['order_count'] += 1
-                refinery_groups[refinery]['ores'].update([ore['ore'] for ore in order['shipOres']])
+                refinery_groups[refinery]['ores'].update(
+                    [ore['ore'] for ore in order['shipOres']]
+                )
                 refinery_groups[refinery]['sessions'][session_id]['session_id'] = session_id
-                refinery_groups[refinery]['sessions'][session_id]['orders'].append({'orderId': order['orderId']})
+                refinery_groups[refinery]['sessions'][session_id]['orders'].append(
+                    {'orderId': order['orderId']}
+                )
 
-        # Gesamtzahl der raffinierten Aufträge
         total_refined_orders = sum(info['order_count'] for info in refinery_groups.values())
 
-        # Nearest process end time in a human-readable format
-        next_order_finish_duration = "No active orders" if total_orders_in_processing == 0 else time_string_converter.convert_seconds_to_str(int((next_order_finish_duration - current_time_ms) / 1000))
+        if total_orders_in_processing == 0:
+            next_order_finish_str = "No active orders"
+        else:
+            secs_remaining = (next_order_finish_duration - current_time_ms) / 1000
+            next_order_finish_str = time_string_converter.convert_seconds_to_str(int(secs_remaining))
 
         refinery_orders = []
+        # Sortiere nach der höchsten 'order_count'
         for refinery, info in sorted(refinery_groups.items(), key=lambda x: -x[1]['order_count']):
-            sessions_sorted = sorted(info['sessions'].values(), key=lambda x: -len(x['orders']))
+            sessions_sorted = sorted(
+                info['sessions'].values(),
+                key=lambda x: -len(x['orders'])
+            )
             refinery_entry = {
                 'refinery': refinery,
                 'order_count': info['order_count'],
                 'ores': list(info['ores']),
-                'sessions': [{'sessionId': session['session_id'], 'orders': session['orders']} for session in sessions_sorted]
+                'sessions': [
+                    {
+                        'sessionId': session['session_id'],
+                        'orders': session['orders']
+                    }
+                    for session in sessions_sorted
+                ]
             }
             refinery_orders.append(refinery_entry)
 
+        # Rückgabe
         if total_refined_orders == 0:
             return {
                 'total_finished_refinery_orders': total_refined_orders,
                 'total_refinery_orders_in_processing': total_orders_in_processing,
-                'next_refinery_job_finished_in': next_order_finish_duration,
+                'next_refinery_job_finished_in': next_order_finish_str,
             }
-        
+
         return {
             'total_finished_refinery_orders': total_refined_orders,
             'total_refinery_orders_in_processing': total_orders_in_processing,
-            'next_refinery_order_finished_in': next_order_finish_duration,
+            'next_refinery_order_finished_in': next_order_finish_str,
             'finished_refinery_orders': refinery_orders
         }
+
 
         # {
         #     "total_finished_refinery_orders": 3,

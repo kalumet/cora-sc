@@ -1,0 +1,107 @@
+{
+    "logs": [
+      {
+        "game_version": "R4_00",
+        "timestamp": "2025-01-05T10:04:43Z",
+        "log_type": "LOG",
+        "event_type": "ENTRY",
+        "location": "Hurston",
+        "notes": "Commander Artemis is en route to CRU-L1 Ambitious Dreamstation.",
+        "session_id": "session-1234",
+        "data": {}
+      },
+      {
+        "timestamp": "2025-01-05T10:11:58Z",
+        "type": "ERROR",
+        "event_type": "GAME_ERROR",
+        "location": "CRU-L1 Ambitious Dreamstation",
+        "notes": "Upon arrival, Commander Artemis received a 'Trespassing on Private Property' warning.",
+        "session_id": "session-1234",
+        "data": {}
+      },
+      {
+        "timestamp": "2025-01-05T10:29:51Z",
+        "type": "MINING",
+        "event_type": "START_SESSION",
+        "location": "Daymar",
+        "notes": "Beginn einer Mining-Session auf Daymar.",
+        "session_id": "session-1234",
+        "data": {
+            "start_location": "Brio's Breaker Yard",
+            "ship": "Prospector",
+            "direction": "Mining Area 141"
+        }
+      },
+      {
+        "timestamp": "2025-01-05T10:34:14Z",
+        "type": "MINING",
+        "event_type": "FOUND_DEPOSIT",
+        "location": "Daymar",
+        "notes": "",
+        "session_id": "session-1234",
+        "data": {
+          "deposit_type": "Felsig-Deposit",
+          "quantity": 3
+        }
+      },
+      {
+        "timestamp": "2025-01-05T10:35:02Z",
+        "type": "MINING",
+        "event_type": "MINING_ERROR",
+        "location": "Daymar",
+        "notes": "Beim Mining zu schnell gemeinert und den Stein zerstört.",
+        "session_id": "session-1234",
+        "data": {}
+      },
+      {
+        "timestamp": "2025-01-05T10:35:42Z",
+        "type": "MINING",
+        "event_type": "SCAN_DEPOSIT",
+        "location": "Daymar",
+        "notes": "Zweiter Stein gefunden mit 32% Bexalid und 43% Kupfer, Masse von 4480. Versuch es nochmal.",
+        "session_id": "session-1234",
+        "data": {
+          "deposit_type": "Felsig-Deposit",
+          "mass_kg": 4480,
+          "composition_percent": {
+            "Bexalit": 32,
+            "Copper": 43
+          }
+        }
+      },
+      {
+        "timestamp": "2025-01-05T10:43:35Z",
+        "type": "LOG",
+        "event_type": "ENTRY",
+        "location": "Daymar",
+        "notes": "Flug in Richtung 120 bis 140 zur Suche nach weiteren Steinen.",
+        "session_id": "session-1234",
+        "data": {}
+      },
+      {
+        "timestamp": "2025-01-05T10:45:14Z",
+        "type": "LOG",
+        "event_type": "ENTRY",
+        "location": "Daymar",
+        "notes": "Cluster von sechs Steinen gefunden, Scan nicht möglich. Weiterflug in Richtung 120 bis 140.",
+        "session_id": "session-1234",
+        "data": {}
+      },
+      {
+        "timestamp": "2025-01-05T10:50:16Z",
+        "type": "MINING",
+        "event_type": "STOP_SESSION",
+        "location": "Daymar",
+        "notes": "Flying back to Cru-L1 Ambitious Dreamstation.",
+        "session_id": "session-1234",
+        "data": {
+          "cargo_scu": {
+            "Bexalit": 12,
+            "Copper": 18,
+            "INERT_MATERIAL": 2
+          }
+        }
+      }
+    ]
+  }
+  

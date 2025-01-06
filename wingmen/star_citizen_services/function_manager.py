@@ -1,11 +1,18 @@
 import pkgutil
 import importlib
+import re
 from pathlib import Path
 from abc import ABC, abstractmethod
+from openai import OpenAI, APIStatusError, AzureOpenAI
+
+from services.open_ai import AzureConfig
+from services.printr import Printr
 
 from wingmen.star_citizen_services.ai_context_enum import AIContext
 
 DEBUG = False
+
+printr = Printr()
 
 
 def print_debug(to_print):
@@ -94,6 +101,9 @@ class FunctionManager(ABC):
     def __init__(self, config, secret_keeper):
         self.config = config
         self.secret_keeper = secret_keeper
+        self.conversation_client: OpenAI = None
+        self.name = self.__class__.__name__
+        self.conversation_model = "gpt-4o"
 
     def after_init(self):
         """  
@@ -106,6 +116,44 @@ class FunctionManager(ABC):
             This method can be implemented to retrieve information from the manager, that Cora should provide to the user on startup.
         """
         return ""
+    
+    def ask_ai(self, system_prompt: str, user_prompt: str, max_tokens=512, temperature=0.7, response_format={"type": "json_object"}):
+        """
+        Ask configured conversation provider for a response to the given prompts.
+            Params:
+                system_prompt: str - The system prompt to be sent to the conversation provider
+                user_prompt: str - The user prompt to be sent to the conversation provider
+                max_tokens: int - The maximum number of tokens to generate
+                temperature: float - The sampling temperature
+                response_format: dict - The response format to be returned. Default is a JSON object.
+        """
+        self._init_conversation_client()
+        try: 
+            completion = self.conversation_client.chat.completions.create(
+                model=self.conversation_model,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": system_prompt
+                    },
+                    {
+                        "role": "user",
+                        "content": user_prompt
+                    }
+                ],
+                max_tokens=max_tokens,
+                temperature=temperature,
+                response_format=response_format,
+            )
+            return completion
+        except APIStatusError as e:
+            self._handle_api_error(e)
+            return None
+        except UnicodeEncodeError:
+            printr.print_err(
+                "The OpenAI API key you provided is invalid. Please check the GUI settings or your 'secrets.yaml'"
+            )
+            return None
     
     @abstractmethod
     def register_functions(self, function_register):
@@ -134,6 +182,68 @@ class FunctionManager(ABC):
             This method returns the context this manager is associated to
         """
         pass
+
+    def _init_conversation_client(self):
+        """
+            This method initializes the conversation client for the manager on first use.
+        """
+        if not self.conversation_client:
+            openai_api_key = self.secret_keeper.retrieve(
+                requester=self.name,
+                key="openai",
+                friendly_key_name="OpenAI API key",
+                prompt_if_missing=True,
+            )
+            if not openai_api_key:
+                print("Missing 'openai' API key. Please provide a valid key in the settings.")
+            else:
+                openai_organization = self.config["openai"].get("organization")
+                openai_base_url = self.config["openai"].get("base_url")
+                self.conversation_client = OpenAI(
+                    api_key=openai_api_key,
+                    organization=openai_organization,
+                    base_url=openai_base_url,
+            )
+                
+            self.conversation_model = self.config["openai"].get("conversation_model")
+
+            if self.config["features"].get(
+                "conversation_provider", "openai"
+            ) == "azure":
+                azure_api_key = self.secret_keeper.retrieve(
+                        requester=self.name,
+                        key="azure_conversation",
+                        friendly_key_name="Azure Conversation API key",
+                        prompt_if_missing=True,
+                    )
+                
+                self.conversation_client = AzureOpenAI(
+                    api_key=azure_api_key,
+                    azure_endpoint=self.config["azure"]
+                    .get("conversation", {})
+                    .get("api_base_url", None),
+                    api_version=self.config["azure"].get("conversation", {}).get("api_version", None),
+                    azure_deployment=self.config["azure"]
+                    .get("conversation", {})
+                    .get("deployment_name", None),
+                )
+
+    def _handle_api_error(self, api_response):
+        printr.print_err(
+            f"The OpenAI API send the following error code {api_response.status_code} ({api_response.type})"
+        )
+        # get API message from appended JSON object in the "message" part of the exception
+        m = re.search(
+            r"'message': (?P<quote>['\"])(?P<message>.+?)(?P=quote)",
+            api_response.message,
+        )
+        if m is not None:
+            message = m["message"].replace(". ", ".\n")
+            printr.print(message, tags="err")
+        elif api_response.message:
+            printr.print(api_response.message, tags="err")
+        else:
+            printr.print("The API did not provide further information.", tags="err")
 
 # ─────────────────────────────────── ↓ EXAMPLE ↓ ─────────────────────────────────────────
 # from wingmen.star_citizen_services.function_manager import FunctionManager

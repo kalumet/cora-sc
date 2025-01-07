@@ -331,8 +331,8 @@ class AdvancedGenericLogManager(FunctionManager):
                         "properties": {
                             "log_type": {
                                 "type": "string",
-                                "description": "Filter nach Log-Type.",
-                                "enum": self._get_log_types()
+                                "description": "Filter nach Log-Type. Optional.",
+                                "enum": self._get_log_types() + [None]
                             },
                             "session": {
                                 "type": "boolean",
@@ -461,43 +461,32 @@ class AdvancedGenericLogManager(FunctionManager):
         """
         printr.print(f"Executing function '{self.build_log_entry_summary.__name__}'.", tags="info")
         log_type = args.get("log_type", None)
-        game_version = args.get("game_version", self.current_game_version)
         sessionId = self.current_play_session if args.get("session", False) else None
 
         # Filter aus full_logs
-        relevant_logs = self._filter_logs(self.full_logs, log_type, game_version, sessionId)
+        relevant_logs = self._filter_logs(self.full_logs, log_type=log_type, sessionId=sessionId)
         if not relevant_logs:
             return {
-                "success": True,
+                "success": False,
                 "summary": "",
                 "message": "Keine passenden Logs zum Zusammenfassen gefunden."
             }
 
         # per OpenAI zusammenfassen
+        summary_logs = {}
         try:
-            summary_text = self._openai_summarize_logs(relevant_logs)
+            summary_logs = self._openai_summarize_logs(relevant_logs)
         except Exception as e:
-            summary_text = f"(Fehler bei Zusammenfassung: {e})"
             print(f"Error in Zusammenfassung: {e}")
-            print(traceback.format_exc())
+            print(traceback.format_exc(e))
 
-        # Zusammenfassung in custom_summaries ablegen
-        summary_entry = {
-            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "filter": {
-                "log_type": log_type,
-                "game_version": game_version,
-                "session": self.current_play_session if sessionId else None
-            },
-            "summary_text": summary_text
-        }
-        self.summaries["custom_summaries"].append(summary_entry)
+        self.summaries["custom_summaries"].append(summary_logs)
         self._persist_to_file()
 
-        printr.print(f"Summary:\n{json.dumps(summary_text, indent=2)}", tags="info")
-        return {
+        printr.print(f"Summary:\n{json.dumps(summary_logs, indent=2)}", tags="info")
+        response = {
             "success": True,
-            "summary": summary_text,
+            "summary": summary_logs,
             "message": "Zusammenfassung gespeichert",
             "additional_instructions": (
                 "Fasse die Zusammenfassung narrativ zusammen, sodass sie gut für eine TTS-Engine ausgesprochen werden kann, "
@@ -506,6 +495,8 @@ class AdvancedGenericLogManager(FunctionManager):
                 "Gebe keine Jahreszahlen an."
             )
         }
+
+        return json.dumps(response, ensure_ascii=False)
 
     # ----------------------------------------------------------------
     # Interne Hilfsfunktionen
@@ -540,7 +531,7 @@ class AdvancedGenericLogManager(FunctionManager):
                 continue
             if game_version and log_item.get("game_version") != game_version:
                 continue
-            if sessionId and log_item.get("session_id") != sessionId:
+            if sessionId and log_item.get("session_id") == sessionId:
                 continue
             result.append(log_item)
         return result
@@ -570,7 +561,7 @@ class AdvancedGenericLogManager(FunctionManager):
 
         try:
             memory_logs = self._openai_summarize_logs(entries_to_summaries)
-            self.summaries["memory_summaries"].extend(memory_logs)
+            self.summaries["memory_summaries"].append(memory_logs)
         except Exception as e:
             print("Fehler bei Zusammenfassung von Log-Buch-Einträgen: {e}")
             print(traceback.print_exc(e))
@@ -594,7 +585,7 @@ class AdvancedGenericLogManager(FunctionManager):
         
         print_debug(f"OpenAI completion: {new_entry}")
 
-        return json.loads(new_entry)
+        return new_entry
 
     def _extract_json_response(self, completion):
         raw_answer = completion.choices[0].message.content.strip()

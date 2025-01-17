@@ -116,6 +116,7 @@ class MiningManager(FunctionManager):
         """
         function_register[self.refinery_job_work_order_management.__name__] = self.refinery_job_work_order_management
         function_register[self.mining_or_salvage_session_management.__name__] = self.mining_or_salvage_session_management
+        function_register[self.add_rock_scan_or_deposit_cluster_information.__name__] = self.add_rock_scan_or_deposit_cluster_information
     
     # @abstractmethod - overwritten
     def get_function_prompt(self) -> str:      
@@ -125,8 +126,9 @@ class MiningManager(FunctionManager):
         return (
             f"You are able to manage mining or salvaging sessions and corresponding refinery work orders. "
             f"The following functions allow you to help the player in this task. For each of them, don't make assumptions on the value and set to None if the user hasn't provided information about it. "
-            f"- {self.refinery_job_work_order_management.__name__}: call it to add 1, remove 1 or retrieve all refinery work orders / jobs of the active session. "
+            f"- {self.refinery_job_work_order_management.__name__}: call it to add 1, remove 1 or retrieve all refinery work orders / jobs of the active refinery session. This function does not require any further information from the user. "
             f"- {self.mining_or_salvage_session_management.__name__}: call it to create a new mining / salvage session, delete all finalised sessions or to retrieve the current session. It also allows to open the active session in the browser. "
+            f"- {self.add_rock_scan_or_deposit_cluster_information.__name__}: call it when the player wants to provide information about a scanned rock or found a new mining deposit cluster. "
             "Never make assumptions on the values. Ask the user to provide them. "
             # f"- {self.get_first_or_next_location_on_delivery_route.__name__}: get information about the next location the user should go. "
         )
@@ -165,7 +167,7 @@ class MiningManager(FunctionManager):
                 "type": "function",
                 "function": {
                     "name": self.mining_or_salvage_session_management.__name__,
-                    "description": "Allows the player to add, remove or get a work session for ship mining, vehicle mining or salvaging at Regolith.",
+                    "description": "Allows the player to create, remove or get a session for ship mining, vehicle mining or salvaging at Regolith.",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -200,7 +202,49 @@ class MiningManager(FunctionManager):
                         }
                     }
                 }
-            }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": self.add_rock_scan_or_deposit_cluster_information.__name__,
+                    "description": "Allows the player to add information about found mining deposit clusters and scan results.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "type": {
+                                "type": "string",
+                                "description": "The type of operation that the player wants to execute",
+                                "enum": ["save_scan_result", "add_new_cluster", None]
+                            },
+                            "cluster_count": {
+                                "type": "integer",
+                                "description": "Is only necessary for type 'add_new_cluster'. The number of rocks in the cluster. Do not ask for this value if type is 'save_scan_result'. Optional "
+                            },
+                            "cluster_type": {
+                                "type": "string",
+                                "description": "Is only necessary for type 'add_new_cluster'. The deposit / rock types within this cluster. Do not ask for this value if type is 'save_scan_result'. Optional ",
+                                "enum": [
+                                    "C-Type",
+                                    "E-Type",
+                                    "M-Type",
+                                    "P-Type",
+                                    "Q-Type",
+                                    "S-Type",
+                                    "Atacamite",
+                                    "Felsic",
+                                    "Gneiss",
+                                    "Granite",
+                                    "Igneous",
+                                    "Obsidian",
+                                    "Quartzite",
+                                    "Shale",
+                                    None]
+                            }
+                            
+                        }
+                    }
+                }
+            },
         ]
 
         return tools
@@ -307,19 +351,53 @@ class MiningManager(FunctionManager):
 
         return function_response
     
-    def manage_work_order(self, type="new", work_order_index=None, confirmed_deletion=None):
-        if type == "add_work_order":
-            image_path = screenshots.take_screenshot(self.mining_data_path, refinery="{refinery}", test=TEST)
+    def add_rock_scan_or_deposit_cluster_information(self, function_args):
+        printr.print(f"Executing function '{self.add_rock_scan_or_deposit_cluster_information.__name__}'. with args {json.dumps(function_args, indent=2)}", tags="info")
+        function_type = function_args["type"]
+        if not function_type or function_type == "save_scan_result":
+            image_path = screenshots.take_screenshot(self.mining_data_path, "scans", test=TEST)
             if not image_path:
                 return {"success": False, "instructions": "Could not take screenshot. Explain the player, that you only take screenshots, if the active window is Star Citizen. "}
-            cropped_image = screenshots.crop_screenshot(self.mining_data_path, image_path, [("UPPER_LEFT", "LOWER_LEFT", "AREA"), ("LOWER_RIGHT", "LOWER_RIGHT", "AREA")])
+            cropped_image = screenshots.crop_screenshot(f"{self.mining_data_path}/templates/scans", image_path, [("UPPER_LEFT", "UPPER_LEFT", "AREA"), ("LOWER_RIGHT", "LOWER_RIGHT", "AREA")])
+            base64_jpg_image = screenshots.convert_cv2_image_to_base64_jpeg(cropped_image)
+            scan_result = self.regolith.get_rock_scan_image_infos(base64_jpg_image)
+            if scan_result and "captureShipRockScan" in scan_result:
+                session_id = self.regolith.get_or_create_mining_session(name="Ship", activity="SHIP_MINING", refinery=None)
+                scout_finding_id, cluster_count = self.regolith.get_or_create_scouting_cluster(session_id)
+                function_response = self.regolith.add_ship_cluster_scan_results(session_id, scout_finding_id, cluster_count, scan_result["captureShipRockScan"])
+        
+        elif function_type == "add_new_cluster":
+            cluster_count = function_args.get("cluster_count", 0)
+            cluster_type = function_args.get("cluster_type", None)
+            session_id = self.regolith.get_or_create_mining_session(name="Ship", activity="SHIP_MINING", refinery=None)
+            scout_finding_id = self.regolith.create_scouting_cluster(session_id, cluster_count, cluster_type)
+            if scout_finding_id is None:
+                return {"success": False, "message": "Couldn't create a new cluster."}
+            function_response = {"success": True, "message": f"Created a new cluster with {cluster_count} rocks."}
+       
+        printr.print(f'-> Result: {json.dumps(function_response, indent=2)}', tags="info")
+
+        return function_response
+
+    def manage_work_order(self, type="new", work_order_index=None, confirmed_deletion=None):
+        if type == "add_work_order":
+            image_path = screenshots.take_screenshot(self.mining_data_path, "workorder", "images", test=TEST)
+            if not image_path:
+                return {"success": False, "instructions": "Could not take screenshot. Explain the player, that you only take screenshots, if the active window is Star Citizen. "}
+            cropped_image = screenshots.crop_screenshot(f"{self.mining_data_path}/templates/refineries", image_path, [("UPPER_LEFT", "LOWER_LEFT", "AREA"), ("LOWER_RIGHT", "LOWER_RIGHT", "AREA")])
+            
             retrieved_json, success = self.ocr.get_screenshot_texts(cropped_image, "workorder", refinery="{refinery}", test=TEST)
             if not success:
                 return {"success": False, "error": retrieved_json, "instructions": "Explain the player the reason for the work order not beeing able to be extracted. "}
 
             return self.add_work_order_regolith(retrieved_json)
-            # return self.add_work_order_uex(retrieved_json)
-        
+            
+            # if regolith api provides amt from screenshot, i can use this.
+            # base64_jpg_image = screenshots.convert_cv2_image_to_base64_jpeg(cropped_image)
+            # scan_result = self.regolith.get_work_order_image_infos(base64_jpg_image)
+
+            # return self.add_work_order_regolith_from_scan(scan_result)
+            
         if type == "get_all_work_orders":
             return self.regolith.get_active_work_orders()
             
@@ -360,6 +438,43 @@ class MiningManager(FunctionManager):
             # return {"success": True, "instructions": f"summarize in natural language of the player: {active_jobs_message} {jobs_done_message}"}
 
         return {"success": False, "message": "I couldn't identify the action to be taken. Please repeat. "}
+    
+    def add_work_order_regolith_from_scan(self, scan_result):
+        print_debug("\n ===== ADDING REGOLITH WORK ORDER ======")
+        
+        if "captureRefineryOrder" not in scan_result:
+            print_debug("No refinery work order information available.")
+            return {"success": False, "message": f"Couldn't retrieve data from {json.dumps(scan_result, indent=2)}."}
+        
+        current_time = int(time.time() * 1000)
+        session_id = self.regolith.get_or_create_mining_session(name="Ship", activity="SHIP_MINING", refinery=scan_result["captureRefineryOrder"]["refinery"])
+        if session_id is None:
+            print_debug(f"Couldn't get or create session.")
+            return {"success": False, "message": "Couldn't get or create session."}
+        
+        shipOres = scan_result["captureRefineryOrder"]["shipOres"]
+        cleaned_shipOres = [
+            {key: value for key, value in ore.items() if key != "amt"}
+            for ore in shipOres
+        ]
+
+        variables = {
+            "sessionId": session_id,
+            "shipOres": cleaned_shipOres,
+            "workOrder": {
+                "expenses": scan_result["captureRefineryOrder"]["expenses"],
+                "includeTransferFee": True,
+                "isRefined": False,
+                "isSold": False,
+                "method": scan_result["captureRefineryOrder"]["method"],  
+                "note": "Work order created by Cora - Your Star Citizen Ai-compagnion",
+                "processStartTime": current_time,
+                "processDurationS": scan_result["captureRefineryOrder"]["processDurationS"], 
+                "refinery": scan_result["captureRefineryOrder"]["refinery"],
+            }
+        }
+
+        return self.regolith.create_work_order(work_order_details=variables)
     
     def add_work_order_regolith(self, work_order):
         print_debug("\n ===== ADDING REGOLITH WORK ORDER ======")
@@ -404,6 +519,42 @@ class MiningManager(FunctionManager):
                 # "processEndTime": (current_time + (processing_time_s * 1000)), not supported, will be returned
                 "refinery": refinery["matched_value"],  
             }
+        }
+        materials = []
+        for material in work_order["work_order"]["selected_materials"]:
+            if material["yield"] <= 0:
+                continue  # material hasn't been selected to be refined
+            ore_name = material["commodity_name"]
+            ore, success = find_best_match.find_best_match(ore_name, self.regolith.get_ship_ore_names(), score_cutoff=0)
+            if not success:
+                print_debug(f"couldn't identify ore '{ore_name}'")
+                continue
+            print_debug(f'matched ore "{ore["matched_value"]}" with confidence {ore["score"]}')
+            
+            item = {
+                # "yield": material["yield"], not supported, is only returned
+                "amt": material["quantity"],  
+                "ore": ore["matched_value"]  
+            }
+            materials.append(item)
+
+        variables["shipOres"] = materials
+
+        return self.regolith.create_work_order(work_order_details=variables)
+    
+    def add_scan_result_regolith(self, scan_result):
+        print_debug("\n ===== ADDING REGOLITH SCAN Result ======")
+    
+        session_id = self.regolith.get_or_create_mining_session(name="Ship", activity="SHIP_MINING", refinery=None)
+        if session_id is None:
+            print_debug(f"Couldn't get or create session.")
+            return {"success": False, "message": "Couldn't get or create session."}
+        variables = {
+            "sessionId": session_id,
+            "scoutingFind": {
+                "state": "DISCOVERED",
+                "clusterCount": 1
+            },
         }
         materials = []
         for material in work_order["work_order"]["selected_materials"]:

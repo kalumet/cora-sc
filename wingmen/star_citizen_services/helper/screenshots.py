@@ -5,9 +5,11 @@ import traceback
 import cv2
 import pygetwindow
 import pyautogui
+import base64
 
 DEBUG = True
 TEST = False
+SHOW_SCREENSHOTS = False
 
 
 def print_debug(to_print):
@@ -125,28 +127,51 @@ def debug_show_screenshot(image, show_screenshot):
 
 def __get_best_template_matching_coordinates(data_dir_path, screenshot, area, requested_corner_coordinates):
     highest_score = -1
+    best_template = ""
     matching_coordinates = None
     next_template_index = 1
+    
+    # We'll store the final bounding rect for debug
+    final_top_left = None
+    final_w, final_h = None, None
 
     while True:
-        filename = f"{data_dir_path}/templates/template_{area.lower()}_{next_template_index}.png"
-        if not os.path.exists(filename):
-            break  # Exit the loop if the template file does not exist
+        filename = None
+        filename1 = f"{data_dir_path}/templates/template_{area.lower()}_{next_template_index}.png"
+        filename2 = f"{data_dir_path}/template_{area.lower()}_{next_template_index}.png"
+        
+        if os.path.exists(filename1):
+            filename = filename1
+        elif os.path.exists(filename2):
+            filename = filename2
+
+        if not filename:
+            print_debug(f"Filename does not exist:  {filename1} or {filename2}")
+            break  # No more templates available
 
         template = cv2.imread(filename, cv2.IMREAD_COLOR)
         if template is None:
-            break  # If the template could not be read, perhaps log an error
+            print_debug(f"Could not read {filename}")
+            break
 
-        # debug_show_screenshot(template, DEBUG)
-        # Perform the template matching
         proof_position = cv2.matchTemplate(screenshot, template, cv2.TM_CCOEFF_NORMED)
         _, max_val, _, max_loc = cv2.minMaxLoc(proof_position)
 
-        # Update the best match if the current score is higher
+        print_debug(f"matchTemplate for {filename} => max_val={max_val}")
+        print_debug(f"max_loc: {max_loc}")
+
+        # If this match is better than the previous best, update
         if max_val > highest_score:
             highest_score = max_val
+            best_template = filename
             h, w, _ = template.shape
-            # Adjust the coordinates based on the requested corner
+
+            # We'll store the top-left corner for debug drawing
+            # (top-left is always `max_loc`, because matchTemplate gives that corner).
+            final_top_left = max_loc
+            final_w, final_h = w, h
+
+            # Set matching_coordinates (the corner we *use* for cropping logic)
             if requested_corner_coordinates == "LOWER_LEFT":
                 matching_coordinates = (max_loc[0], max_loc[1] + h)
             elif requested_corner_coordinates == "LOWER_RIGHT":
@@ -160,6 +185,22 @@ def __get_best_template_matching_coordinates(data_dir_path, screenshot, area, re
 
         next_template_index += 1
 
+    print_debug(f"best template found: {best_template}")
+
+    # --- Debug Drawing Part ---
+    # If you want to visually confirm the final best match:
+    if DEBUG and SHOW_SCREENSHOTS and final_top_left is not None:
+        # We'll draw on a *copy* so as not to mutate the original screenshot
+        debug_img = screenshot.copy()
+        top_left = final_top_left
+        bottom_right = (top_left[0] + final_w, top_left[1] + final_h)
+
+        cv2.rectangle(debug_img, top_left, bottom_right, (0, 0, 255), 2)
+        cv2.imshow("Best Match Debug", debug_img)
+        print_debug("Press any key to continue...")
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+    
     return matching_coordinates
 
 
@@ -218,60 +259,71 @@ def crop_screenshot(data_dir_path, screenshot_file, areas_and_corners_and_cropst
         return None
 
     screenshot = cv2.imread(screenshot_file, cv2.IMREAD_COLOR)
-    x_min, y_min = 0, 0
-    x_max, y_max = screenshot.shape[1], screenshot.shape[0]
+    if screenshot is None:
+        print_debug(f"Could not open screenshot '{screenshot_file}'")
+        return None
 
-    vertical_applied = False
-    horizontal_applied = False
+    # Prüfen wir, ob wir 'AREA' in den Instruktionen haben
+    area_entries = [t for t in areas_and_corners_and_cropstrat if t[2] == "AREA"]
 
-    for area, corner, crop_strategy in areas_and_corners_and_cropstrat:
-        matching_coordinates = __get_best_template_matching_coordinates(data_dir_path, screenshot, area, corner)
-        if matching_coordinates:
-            x, y = matching_coordinates
+    if len(area_entries) == 2:
+        # => Wir machen den AREA-Cut
+        x_min, x_max, y_min, y_max = _crop_area(screenshot, data_dir_path, areas_and_corners_and_cropstrat)
+        if x_min is None or x_max is None or y_min is None or y_max is None:
+            print_debug("AREA cropping not possible => returning None")
+            return None
+        # Keine horizontal/vertical Auswahl
+        vertical_applied = False
+        horizontal_applied = False
 
-            if crop_strategy == "AREA":
-                x_min = min(x_max, x)
-                x_max = max(x_min, x)
-                y_min = min(y_max, y)
-                y_max = max(y_min, y)
+    else:
+        # => Wir gehen davon aus, wir haben VERTICAL/HORIZONTAL
+        x_min, x_max, y_min, y_max, vertical_applied, horizontal_applied = _crop_slices(
+            screenshot,
+            data_dir_path,
+            areas_and_corners_and_cropstrat
+        )
 
-            elif crop_strategy == "VERTICAL":
-                vertical_applied = True
-                if corner in ["UPPER_LEFT", "LOWER_LEFT"]:
-                    x_min = x
-                if corner in ["UPPER_RIGHT", "LOWER_RIGHT"]:
-                    x_max = x
+    # Rufe apply_quadrant_selection auf
+    cropped_screenshot = _apply_quadrant_selection(
+        screenshot, x_min, x_max, y_min, y_max,
+        vertical_applied, horizontal_applied,
+        select_sides
+    )
 
-            elif crop_strategy == "HORIZONTAL":
-                horizontal_applied = True
-                if corner in ["UPPER_LEFT", "UPPER_RIGHT"]:
-                    y_min = y
-                if corner in ["LOWER_LEFT", "LOWER_RIGHT"]:
-                    y_max = y
-        else:
-            print_debug(f"No match found for {area} with {corner} corner.")
-            continue
-
-    # For VERTICAL strategy, if only one side is defined, don't adjust the other side
-    if vertical_applied:
-        x_max = screenshot.shape[1] if x_max == 0 else x_max
-    # For HORIZONTAL strategy, if only one side is defined, don't adjust the other side
-    if horizontal_applied:
-        y_max = screenshot.shape[0] if y_max == 0 else y_max
-
-    cropped_screenshot = apply_quadrant_selection(screenshot, x_min, x_max, y_min, y_max, vertical_applied, horizontal_applied, select_sides)
-    
     if cropped_screenshot is not None and DEBUG:
+        # Speichere das gecroppte Bild mal ab
         filename = os.path.basename(screenshot_file)
         directory_path = os.path.dirname(screenshot_file)
         filename = f"cropped_{filename}"
-        full_path = os.path.normpath(os.path.join(directory_path, "debug", filename))
+        full_path = os.path.normpath(os.path.join(directory_path, filename))
         cv2.imwrite(full_path, cropped_screenshot)
+
+        # Debug-Anzeige
+        debug_show_screenshot(cropped_screenshot, SHOW_SCREENSHOTS)
     
     return cropped_screenshot
 
 
-def apply_quadrant_selection(screenshot, x_min, x_max, y_min, y_max, vertical_applied, horizontal_applied, select_sides):
+def convert_cv2_image_to_base64_jpeg(cv2_image):
+    """
+    Takes an OpenCV BGR image (ndarray) and returns a data-url string:
+    'data:image/jpeg;base64,<...>'
+    """
+    # Encode as JPEG in memory
+    success, encoded_img = cv2.imencode(".jpg", cv2_image)
+    if not success:
+        raise RuntimeError("Could not encode image to JPEG")
+
+    # encoded_img ist ein numpy-array => Byte-Array draus machen
+    base64_str = base64.b64encode(encoded_img).decode('utf-8')
+    
+    # data-URL bauen
+    data_url = f"data:image/jpeg;base64,{base64_str}"
+    return data_url
+
+
+def _apply_quadrant_selection(screenshot, x_min, x_max, y_min, y_max, vertical_applied, horizontal_applied, select_sides):
     if x_max <= x_min or y_max <= y_min:
         print_debug("Invalid crop dimensions.")
         return None
@@ -293,8 +345,144 @@ def apply_quadrant_selection(screenshot, x_min, x_max, y_min, y_max, vertical_ap
     return screenshot[y_min:y_max, x_min:x_max]
 
 
-# Example usage
-if __name__ == "__main__":
+def _crop_area(screenshot, data_dir_path, instructions):
+    """
+    Erwarte: 2 Templates (UPPER_LEFT, UPPER_LEFT, AREA) und (LOWER_RIGHT, LOWER_RIGHT, AREA).
+    Return: (x_min, x_max, y_min, y_max)
+    """
+    # Standard: Startwerte None
+    x_min = None
+    y_min = None
+    x_max = None
+    y_max = None
+
+    # Finde die Koordinaten beider Ecken
+    # Man kann hier auch mal "Vorsichtschecks" machen, ob es tatsächlich GENAU 2 Einträge gibt
+    # => wir filtern alle Einträge, die "AREA" als Strategie haben
+    area_entries = [t for t in instructions if t[2] == "AREA"]
+    # area_entries = [("UPPER_LEFT", "UPPER_LEFT", "AREA"), ("LOWER_RIGHT", "LOWER_RIGHT", "AREA")]
+    if len(area_entries) != 2:
+        print_debug("Warning: Expected EXACTLY 2 AREA instructions, but got something else.")
+        return None, None, None, None
+
+    for (area, corner, strategy) in area_entries:
+        coords = __get_best_template_matching_coordinates(data_dir_path, screenshot, area, corner)
+        if not coords:
+            print_debug(f"AREA corner not found: {area} / {corner}")
+            return None, None, None, None
+
+        this_x, this_y = coords
+
+        if area.upper() == "UPPER_LEFT":
+            # => definieren wir x_min, y_min
+            x_min = this_x
+            y_min = this_y
+        elif area.upper() == "LOWER_RIGHT":
+            # => definieren wir x_max, y_max
+            x_max = this_x
+            y_max = this_y
+        else:
+            # Falls Du wirklich nur UPPER_LEFT/LOWER_RIGHT willst,
+            # könnte man hier z.B. debuggen
+            print_debug(f"Skipping unknown area: {area}")
+
+    # Falls x_min/x_max etc. None sind => Return None
+    if x_min is None or x_max is None or y_min is None or y_max is None:
+        return None, None, None, None
+
+    # Ensure x_min < x_max, y_min < y_max (ggf. swap)
+    if x_min > x_max:
+        x_min, x_max = x_max, x_min
+    if y_min > y_max:
+        y_min, y_max = y_max, y_min
+
+    return x_min, x_max, y_min, y_max   
+
+
+def _crop_slices(screenshot, data_dir_path, instructions):
+    """
+    Verarbeite VERTICAL / HORIZONTAL Schnitte.
+
+    Szenarien laut Vorgabe:
+    - 1 Horizontal => links / rechts
+    - 1 Vertical => oben / unten
+    - 2 Horizontal => 'Mitte' zw. den 2 Koordinaten
+    - 2 Vertical => 'Mitte' zw. den 2 Koordinaten
+    - 1 Horizontal + 1 Vertical => Quadrant
+    - etc.
+
+    Return: (x_min, x_max, y_min, y_max, vertical_applied, horizontal_applied)
+    """
+    img_h, img_w = screenshot.shape[0], screenshot.shape[1]
+
+    # Defaults: das ganze Bild
+    x_min, x_max = 0, img_w
+    y_min, y_max = 0, img_h
+
+    # Finde alle "VERTICAL" und "HORIZONTAL" in instructions
+    vertical_entries = [(area, corner, strat) for (area, corner, strat) in instructions if strat == "VERTICAL"]
+    horizontal_entries = [(area, corner, strat) for (area, corner, strat) in instructions if strat == "HORIZONTAL"]
+
+    # Flags für apply_quadrant_selection
+    vertical_applied = len(vertical_entries) > 0
+    horizontal_applied = len(horizontal_entries) > 0
+
+    # --- Verarbeite VERTICAL ---
+    # Sammle x-Koordinaten
+    x_coords = []
+    for (area, corner, strat) in vertical_entries:
+        coords = __get_best_template_matching_coordinates(data_dir_path, screenshot, area, corner)
+        if coords:
+            this_x, this_y = coords
+            x_coords.append((corner, this_x))
+        else:
+            print_debug(f"No match found for vertical: {area}/{corner}")
+
+    # Falls x_coords length=1 => wir nehmen "Links oder Rechts" an
+    # Falls length=2 => wir nehmen die Mitte zwischen den beiden Koords
+    # Das kann man beliebig ausgestalten, hier nur exemplarisch
+
+    if len(x_coords) == 1:
+        corner, x_c = x_coords[0]
+        if corner in ["UPPER_LEFT", "LOWER_LEFT"]:
+            x_min = x_c
+        else:
+            x_max = x_c
+    elif len(x_coords) == 2:
+        # z.B. "Mitte" zwischen den beiden x-Koordinaten
+        x_sorted = sorted(x_coords, key=lambda e: e[1])
+        # x_sorted => [(cornerA, xA), (cornerB, xB)] mit xA <= xB
+        # Wir können jetzt sagen: wir wollen nur den Bereich zwischen xA und xB:
+        x_min = x_sorted[0][1]
+        x_max = x_sorted[1][1]
+
+    # --- Verarbeite HORIZONTAL ---
+    # Sammle y-Koordinaten
+    y_coords = []
+    for (area, corner, strat) in horizontal_entries:
+        coords = __get_best_template_matching_coordinates(data_dir_path, screenshot, area, corner)
+        if coords:
+            this_x, this_y = coords
+            y_coords.append((corner, this_y))
+        else:
+            print_debug(f"No match found for horizontal: {area}/{corner}")
+
+    if len(y_coords) == 1:
+        corner, y_c = y_coords[0]
+        if corner in ["UPPER_LEFT", "UPPER_RIGHT"]:
+            y_min = y_c
+        else:
+            y_max = y_c
+    elif len(y_coords) == 2:
+        # z.B. "Mitte" zwischen den beiden y-Koordinaten
+        y_sorted = sorted(y_coords, key=lambda e: e[1])
+        y_min = y_sorted[0][1]
+        y_max = y_sorted[1][1]
+
+    return x_min, x_max, y_min, y_max, vertical_applied, horizontal_applied
+
+
+def test_refineries(): 
     data_dir_path_test = "star_citizen_data/mining-data/"
     screenshot_file_test = "star_citizen_data/mining-data/examples/ScreenShot-2024-04-02_09-36-15-B2C.jpg"
     # areas_and_corners = [("UPPER_LEFT", "LOWER_LEFT", "AREA"), ("LOWER_RIGHT", "LOWER_RIGHT", "AREA")]
@@ -310,7 +498,7 @@ if __name__ == "__main__":
     areas_and_corners = [("UPPER_LEFT", "UPPER_LEFT", "VERTICAL"), ("LOWER_RIGHT", "LOWER_RIGHT", "HORIZONTAL")]
     cropped_image = crop_screenshot(data_dir_path_test, screenshot_file_test, areas_and_corners)
 
-    debug_show_screenshot(cropped_image, DEBUG)
+    debug_show_screenshot(cropped_image, True)
 
     # areas_and_corners = [("UPPER_LEFT", "UPPER_LEFT", "HORIZONTAL"), ("LOWER_RIGHT", "LOWER_RIGHT", "HORIZONTAL")]
     # cropped_image = crop_screenshot(data_dir_path_test, screenshot_file_test, areas_and_corners)
@@ -320,19 +508,62 @@ if __name__ == "__main__":
     areas_and_corners = [("UPPER_LEFT", "UPPER_LEFT", "VERTICAL"), ("LOWER_RIGHT", "LOWER_RIGHT", "HORIZONTAL")]
     cropped_image = crop_screenshot(data_dir_path_test, screenshot_file_test, areas_and_corners, ["TOP", "LEFT"])
 
-    debug_show_screenshot(cropped_image, DEBUG)
+    debug_show_screenshot(cropped_image, True)
 
     areas_and_corners = [("UPPER_LEFT", "UPPER_LEFT", "VERTICAL"), ("LOWER_RIGHT", "LOWER_RIGHT", "HORIZONTAL")]
     cropped_image = crop_screenshot(data_dir_path_test, screenshot_file_test, areas_and_corners, ["BOTTOM", "LEFT"])
 
-    debug_show_screenshot(cropped_image, DEBUG)
+    debug_show_screenshot(cropped_image, True)
 
     areas_and_corners = [("UPPER_LEFT", "UPPER_LEFT", "VERTICAL"), ("LOWER_RIGHT", "LOWER_RIGHT", "HORIZONTAL")]
     cropped_image = crop_screenshot(data_dir_path_test, screenshot_file_test, areas_and_corners, ["BOTTOM", "RIGHT"])
 
-    debug_show_screenshot(cropped_image, DEBUG)
+    debug_show_screenshot(cropped_image, True)
 
     areas_and_corners = [("UPPER_LEFT", "UPPER_LEFT", "VERTICAL"), ("LOWER_RIGHT", "LOWER_RIGHT", "HORIZONTAL")]
     cropped_image = crop_screenshot(data_dir_path_test, screenshot_file_test, areas_and_corners, ["TOP", "RIGHT"])
 
-    debug_show_screenshot(cropped_image, DEBUG)
+    debug_show_screenshot(cropped_image, True)
+
+
+def test_selling_terminal():
+    data_dir_path_test = "star_citizen_data/uex/kiosk_analyzer/commodity_info_area"
+    screenshot_file_test = "star_citizen_data/uex/kiosk_analyzer/examples/sell/screenshot_test-False_operation-sell_tradeport-TDORI_20250114_233403_980585.png"
+    # areas_and_corners = [("UPPER_LEFT", "LOWER_LEFT", "AREA"), ("LOWER_RIGHT", "LOWER_RIGHT", "AREA")]
+    # cropped_image = crop_screenshot(data_dir_path_test, screenshot_file_test, areas_and_corners)
+    cropped_image = crop_screenshot(data_dir_path_test, screenshot_file_test, [("UPPER_LEFT", "LOWER_LEFT", "HORIZONTAL"), ("UPPER_LEFT", "LOWER_LEFT", "VERTICAL")], ["BOTTOM", "RIGHT"])
+
+    debug_show_screenshot(cropped_image, True)
+
+
+def test_mining_scouting():
+    data_dir_path_test = "star_citizen_data/mining-data/templates/scans"
+    screenshot_file_test = "star_citizen_data/mining-data/examples/scans/Prospector_1.jpg"
+    # areas_and_corners = [("UPPER_LEFT", "LOWER_LEFT", "AREA"), ("LOWER_RIGHT", "LOWER_RIGHT", "AREA")]
+    # cropped_image = crop_screenshot(data_dir_path_test, screenshot_file_test, areas_and_corners)
+    print(f"testing screenshot: {screenshot_file_test}")
+    cropped_image = crop_screenshot(data_dir_path_test, screenshot_file_test, [("UPPER_LEFT", "UPPER_LEFT", "AREA"), ("LOWER_RIGHT", "LOWER_RIGHT", "AREA")])
+
+    debug_show_screenshot(cropped_image, True)
+
+    screenshot_file_test = "star_citizen_data/mining-data/examples/scans/Prospector_2.jpg"
+    # areas_and_corners = [("UPPER_LEFT", "LOWER_LEFT", "AREA"), ("LOWER_RIGHT", "LOWER_RIGHT", "AREA")]
+    # cropped_image = crop_screenshot(data_dir_path_test, screenshot_file_test, areas_and_corners)
+    print(f"testing screenshot: {screenshot_file_test}")
+    cropped_image = crop_screenshot(data_dir_path_test, screenshot_file_test, [("UPPER_LEFT", "UPPER_LEFT", "AREA"), ("LOWER_RIGHT", "LOWER_RIGHT", "AREA")])
+
+    debug_show_screenshot(cropped_image, True)
+
+    screenshot_file_test = "star_citizen_data/mining-data/examples/scans/Prospector_3.jpg"
+    # areas_and_corners = [("UPPER_LEFT", "LOWER_LEFT", "AREA"), ("LOWER_RIGHT", "LOWER_RIGHT", "AREA")]
+    # cropped_image = crop_screenshot(data_dir_path_test, screenshot_file_test, areas_and_corners)
+    print(f"testing screenshot: {screenshot_file_test}")
+    cropped_image = crop_screenshot(data_dir_path_test, screenshot_file_test, [("UPPER_LEFT", "UPPER_LEFT", "AREA"), ("LOWER_RIGHT", "LOWER_RIGHT", "AREA")])
+
+    debug_show_screenshot(cropped_image, True)
+
+
+# Example usage
+if __name__ == "__main__":
+    test_mining_scouting()
+    test_selling_terminal()

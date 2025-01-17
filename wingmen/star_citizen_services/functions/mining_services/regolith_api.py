@@ -508,7 +508,222 @@ class RegolithAPI():
         """)
         
         return query  
+    
+    def get_or_create_scouting_cluster(self, session_id): 
+        query = gql("""
+                    query getSessionScouting($sessionId: ID!) {
+            session(sessionId: $sessionId) {
+                sessionId
+                scouting {
+                items {
+                    ...ScoutingFindFragment
+                    __typename
+                }
+                nextToken
+                __typename
+                }
+                __typename
+            }
+            }
 
+            fragment ScoutingFindFragment on ScoutingFindInterface {
+            ...ScoutingFindBaseFragment
+            state
+            __typename
+            }
+
+            fragment ScoutingFindBaseFragment on ScoutingFindInterface {
+            sessionId
+            scoutingFindId
+            createdAt
+            updatedAt
+            clusterType
+            clusterCount
+            note
+            __typename
+            }
+        """)
+
+        variables = {
+            "sessionId": session_id
+        }
+
+        try:
+            response = self.client.execute(query, variable_values=variables)
+            
+            if 'errors' in response:
+                print("Error during GraphQL-Request:")
+                for error in response['errors']:
+                    print(error['message'])
+                
+                return False
+            else:
+                scouting_items = response["session"]["scouting"]["items"]
+                
+                if not scouting_items:
+                    # Keine Einträge vorhanden
+                    scoutingFindId = self.create_scouting_cluster(session_id)
+                    print_debug(f"Created new scouting item: {scoutingFindId}")
+                    return scoutingFindId, 0
+                else:
+                    # Es existiert bereits mindestens ein Eintrag                
+                    # Sortiere absteigend nach createdAt:
+                    cluster = sorted(scouting_items, key=lambda i: i["createdAt"], reverse=True)[0]
+                    return cluster["scoutingFindId"], cluster["clusterCount"]
+        except Exception as e:
+            print(f"Error trying to delete mining session: {str(e)}:\n{traceback.print_stack()}")
+            return False
+
+    def create_scouting_cluster(self, session_id, cluster_count=0, cluster_type=None):
+        mutation = gql("""mutation addScoutingFind($sessionId: ID!, $scoutingFind: ScoutingFindInput!, $shipRocks: [ShipRockInput!]) {
+                addScoutingFind(
+                    sessionId: $sessionId
+                    scoutingFind: $scoutingFind
+                    shipRocks: $shipRocks
+                ) {
+                    ...ScoutingFindFragment
+                    __typename
+                }
+                }
+
+                fragment ScoutingFindFragment on ScoutingFindInterface {
+                ...ScoutingFindBaseFragment
+                state
+                __typename
+                }
+
+                fragment ScoutingFindBaseFragment on ScoutingFindInterface {
+                sessionId
+                scoutingFindId
+                createdAt
+                updatedAt
+                clusterType
+                clusterCount
+                note
+                }
+        """)
+
+        variables = {
+                "sessionId": session_id,
+                "scoutingFind": {
+                    "state": "DISCOVERED",
+                    "clusterCount": cluster_count,
+                    "note": "{'info': 'This cluster has been discovered by Cora - your AI Compagnion.'" + (f", 'cluster_type': '{cluster_type}'" if cluster_type else "") + "}"
+                },
+                "shipRocks": []
+            }
+        
+        try:
+            response = self.client.execute(mutation, variable_values=variables)
+            
+            if 'errors' in response:
+                print("Error during GraphQL-Request:")
+                for error in response['errors']:
+                    print(error['message'])
+                
+                return None
+            else:
+                return response["addScoutingFind"]["scoutingFindId"]
+        except Exception as e:
+            print(f"Error trying creating cluster: {str(e)}:\n{traceback.print_stack()}")
+            return None
+
+    def add_ship_cluster_scan_results(self, session_id, scouting_find_id, cluster_count, ship_rock_scan_result):
+        mutation = gql(
+            """mutation updateScoutingFind($sessionId: ID!, $scoutingFindId: ID!, $scoutingFind: ScoutingFindInput!, $shipRocks: [ShipRockInput!]) {
+                updateScoutingFind(
+                    sessionId: $sessionId
+                    scoutingFindId: $scoutingFindId
+                    scoutingFind: $scoutingFind
+                    shipRocks: $shipRocks
+                ) {
+                    ...ScoutingFindFragment
+                    __typename
+                }
+            }
+
+            fragment ScoutingFindFragment on ScoutingFindInterface {
+                ...ScoutingFindBaseFragment
+                state
+                __typename
+            }
+
+            fragment ScoutingFindBaseFragment on ScoutingFindInterface {
+                sessionId
+                scoutingFindId
+                clusterCount
+                note
+                ... on ShipClusterFind {
+                    shipRocks {
+                        ...ShipRockFragment
+                        __typename
+                    }
+                    __typename
+                }
+            }
+
+            fragment ShipRockFragment on ShipRock {
+                mass
+                inst
+                res
+                state
+                ores {
+                    ore
+                    percent
+                    __typename
+                }
+                __typename
+            }
+            """
+        )
+
+        ores = ship_rock_scan_result["ores"]
+        cleaned_ores = [
+            {key: value for key, value in ore.items() if key != "__typename"}
+            for ore in ores
+        ]
+
+        variables = {
+            "sessionId": session_id,
+            "scoutingFindId": scouting_find_id,
+            "scoutingFind": {
+                "state": "DISCOVERED"
+            },
+            "shipRocks": [
+                {
+                    "mass": ship_rock_scan_result["mass"],
+                    "state": "READY",
+                    "inst": ship_rock_scan_result["inst"],
+                    "res": ship_rock_scan_result["res"],
+                    "ores": cleaned_ores
+                }
+            ]
+        }
+
+        try:
+            response = self.client.execute(mutation, variable_values=variables)
+            
+            if 'errors' in response:
+                print("Error during GraphQL-Request:")
+                for error in response['errors']:
+                    print(error['message'])
+                
+                return {
+                    "success": False,
+                    "message": response['errors'],
+                }
+            else:
+                return {
+                    "success": True,
+                    "message": "scan results saved",
+                }
+        except Exception as e:
+            print(f"Error during save scan: {str(e)}:\n{traceback.print_stack()}")
+            return {
+                    "success": False,
+                    "message": f"Unable to save scan. Check the logs because of {str(e)}. ",
+                }
+    
     def process_work_orders(self, data):
         current_time_ms = int(datetime.now().timestamp() * 1000)
 
@@ -728,6 +943,72 @@ class RegolithAPI():
         except Exception as e:
             print(f"Error during session deletion {str(e)}: \n{traceback.print_stack()}")
             return False
+        
+    def get_work_order_image_infos(self, base64_jpg_url_string):
+        """
+            Expects a "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQ" String 
+        """
+        print_debug(f"retrieving work order information")
+        
+        # GraphQL-Mutation als String, minimiert auf erforderliche Felder
+        query = gql("""
+            query captureRefineryOrder($imgUrl: String!) {
+                captureRefineryOrder(imgUrl: $imgUrl) {
+                    expenses {
+                    amount
+                    name
+                    }
+                    processDurationS
+                    refinery
+                    method
+                    shipOres {
+                    amt
+                    ore
+                    yield
+                    }
+                }
+            }
+        """)   
+        return self._get_image_infos(query, base64_jpg_url_string)
+
+    def get_rock_scan_image_infos(self, base64_jpg_url_string):
+        query = gql("""
+                query captureShipRockScan($imgUrl: String!) {
+                    captureShipRockScan(imgUrl: $imgUrl) {
+                        mass
+                        inst
+                        res
+                        ores {
+                        ore
+                        percent
+                        __typename
+                        }
+                        __typename
+                    }
+                }
+            """) 
+        return self._get_image_infos(query, base64_jpg_url_string)
+
+    def _get_image_infos(self, query_str, base64_jpg_url_string):
+        variables = {
+            "imgUrl": base64_jpg_url_string
+        }
+
+        try:
+            response = self.client.execute(query_str, variable_values=variables)
+            
+            if 'errors' in response:
+                print("Fehler bei der GraphQL-Anfrage:")
+                for error in response['errors']:
+                    print(error['message'])
+                return {"success": False, "message": "There was an error when I tried to retrieve image information. I'm very sorry. "}
+            else:
+                print_debug(f'retrieved image information: {json.dumps(response, indent=2)}')
+                return response
+        except Exception as e:
+            print(f"Error during work order creation {str(e)}: \n{traceback.print_stack()}")
+            return {"success": False, "message": "Sorry, but regolith seems not to be available currently. "}
+
 
 # Example usage
 if __name__ == "__main__":

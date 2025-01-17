@@ -21,7 +21,6 @@ from wingmen.star_citizen_services.functions.uex_v2.uex_api_module import UEXApi
 
 
 DEBUG = True
-SHOW_SCREENSHOTS = False
 TEST = False
 
 

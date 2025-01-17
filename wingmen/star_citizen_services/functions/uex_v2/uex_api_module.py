@@ -445,7 +445,8 @@ class UEXApi2():
             CATEGORY_ORBITS:  "id_orbit",
             CATEGORY_MOONS:   "id_moon",
             CATEGORY_CITIES:  "id_city",
-            CATEGORY_OUTPOSTS:"id_outpost",
+            CATEGORY_OUTPOSTS: "id_outpost",
+            CATEGORY_TERMINALS: "id_terminal"
         }
         base = param_map.get(location_category)
         if not base:
@@ -1280,7 +1281,7 @@ class UEXApi2():
     
     def get_location(self, location_mapping_name):
         self._refresh_data()
-        location_categories = [CATEGORY_SYSTEMS, CATEGORY_ORBITS, CATEGORY_MOONS, CATEGORY_CITIES, CATEGORY_OUTPOSTS]
+        location_categories = [CATEGORY_SYSTEMS, CATEGORY_ORBITS, CATEGORY_MOONS, CATEGORY_CITIES, CATEGORY_OUTPOSTS, CATEGORY_TERMINALS]
         
         for category in location_categories:
             location_mapping, success = find_best_match.find_best_match(

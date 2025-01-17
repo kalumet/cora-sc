@@ -352,7 +352,7 @@ class AdvancedGenericLogManager(FunctionManager):
         """
         Speichert einen neuen Log-Eintrag, automatisch mit Zeitstempel.
         """
-        printr.print(f"Executing function '{self.add_log_entry.__name__}'.", tags="info")
+        printr.print(f"Executing function '{self.add_log_entry.__name__}' with params:\n {json.dumps(args, indent=2)}", tags="info")
 
         notes = args.get("notes")
         new_session = args.get("new_session", False)
@@ -417,7 +417,7 @@ class AdvancedGenericLogManager(FunctionManager):
         Ansonsten, wenn Logs älter als was in memory ist, kann es sein,
         dass wir nur Summaries zurückgeben.
         """
-        printr.print(f"Executing function '{self.get_logs_entries.__name__}'.", tags="info")
+        printr.print(f"Executing function '{self.get_logs_entries.__name__}' with params:\n {json.dumps(args, indent=2)}.", tags="info")
         log_type = args.get("log_type", None)
         game_version = args.get("game_version", self.current_game_version)
         sessionId = self.current_play_session if args.get("session", False) else None
@@ -459,7 +459,7 @@ class AdvancedGenericLogManager(FunctionManager):
         'summaries.custom_summaries'.
         Filter: log_type, game_version, older_than
         """
-        printr.print(f"Executing function '{self.build_log_entry_summary.__name__}'.", tags="info")
+        printr.print(f"Executing function '{self.build_log_entry_summary.__name__}' with params:\n {json.dumps(args, indent=2)}.", tags="info")
         log_type = args.get("log_type", None)
         sessionId = self.current_play_session if args.get("session", False) else None
 
@@ -527,7 +527,7 @@ class AdvancedGenericLogManager(FunctionManager):
         """
         result = []
         for log_item in logs_list:
-            if log_type and log_item.get("type") != log_type:
+            if log_type and log_item.get("log_type") != log_type:
                 continue
             if game_version and log_item.get("game_version") != game_version:
                 continue

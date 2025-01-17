@@ -95,16 +95,16 @@ class LoreManager(FunctionManager):
             },
         ]
 
-    def cora_start_information(self):
-        # Prompt-Text TTS-freundlich
-        result = self.get_news_of_the_day({})
-        if not result.get("success", False):
-            return ""
-        result["additional_instructions"] = (
-            "Give the user a concise summary of the description field only. Any other information is not relevant. "
-            "Do not mention URLs or technical details. Speak in a TTS-friendly format."
-        )
-        return {"news_of_the_day": result}
+    # def cora_start_information(self):
+    #     # Prompt-Text TTS-freundlich
+    #     result = self.get_news_of_the_day({})
+    #     if not result.get("success", False):
+    #         return ""
+    #     result["additional_instructions"] = (
+    #         "Give the user a concise summary of the description field only. Any other information is not relevant. "
+    #         "Do not mention URLs or technical details. Speak in a TTS-friendly format."
+    #     )
+    #     return {"news_of_the_day": result}
 
     def get_news_of_the_day(self, function_args):
         print_debug(f"{self.get_news_of_the_day.__name__} called.")

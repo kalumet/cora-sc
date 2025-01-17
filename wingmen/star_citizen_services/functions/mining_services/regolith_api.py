@@ -55,6 +55,7 @@ class RegolithAPI():
         self.locations = None
         self.ship_ores = None
         self.activities = None
+        self.lookups = None
 
     def open_session_in_browser(self, session_id=None):
         if not session_id:
@@ -1009,6 +1010,85 @@ class RegolithAPI():
             print(f"Error during work order creation {str(e)}: \n{traceback.print_stack()}")
             return {"success": False, "message": "Sorry, but regolith seems not to be available currently. "}
 
+    def fetch_lookups(self):
+        """
+        Fetches lookup data from the GraphQL API.
+        """
+        query = gql("""
+            query GetLookups {
+                lookups {
+                    CIG {
+                    oreProcessingLookup
+                    refineryBonusLookup
+                    methodsBonusLookup
+                    }
+                }
+            }
+            """) 
+        
+        try:
+            response = self.client.execute(query)
+            
+            if 'errors' in response:
+                print("Fehler bei der GraphQL-Anfrage:")
+                for error in response['errors']:
+                    print(error['message'])
+                return None
+            else:
+                return response["lookups"]["CIG"]
+        except Exception as e:
+            print(f"Error during work order creation {str(e)}: \n{traceback.print_stack()}")
+            return None
+
+    def ore_amt_calc(self, ore_yield, ore, refinery, method):
+        """
+        Calculates the final ore amount after applying processing, refinery, and method bonuses.
+
+        Args:
+            ore_yield (float): Initial ore yield.
+            ore (str): Type of ore.
+            refinery (str): Name of the refinery.
+            method (str): Refining method used.
+            api_url (str): GraphQL API URL to fetch lookup data.
+
+        Returns:
+            int: Final ore amount rounded to the nearest integer.
+        """
+        # Fetch lookup data
+        if self.lookups is None: 
+            self.lookups = self.fetch_lookups()
+        ore_processing_lookup = self.lookups["oreProcessingLookup"]
+        refinery_bonus_lookup = self.lookups["refineryBonusLookup"]
+        methods_bonus_lookup = self.lookups["methodsBonusLookup"]
+
+        # Default bonuses
+        processing_bonus = 1
+        refinery_bonus = 1
+        method_bonus = 1
+
+        # Refinery bonus lookup
+        if refinery not in refinery_bonus_lookup:
+            print(f"Refinery {refinery} not found.")
+        elif ore not in refinery_bonus_lookup[refinery]:
+            print(f"Ore {ore} not found in refinery {refinery}.")
+        else:
+            refinery_bonus = refinery_bonus_lookup[refinery][ore][0]
+
+        # Method bonus lookup
+        if method not in methods_bonus_lookup:
+            print(f"Method {method} not found.")
+        else:
+            method_bonus = methods_bonus_lookup[method][0]
+
+        # Ore processing bonus lookup
+        if ore not in ore_processing_lookup:
+            print(f"Ore {ore} not found in ore processing lookup.")
+        else:
+            processing_bonus = ore_processing_lookup[ore][0]
+
+        # Final calculation
+        final_ore_yield = ore_yield / (processing_bonus * refinery_bonus * method_bonus)
+        return round(final_ore_yield)
 
 # Example usage
 if __name__ == "__main__":

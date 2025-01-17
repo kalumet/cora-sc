@@ -386,17 +386,18 @@ class MiningManager(FunctionManager):
                 return {"success": False, "instructions": "Could not take screenshot. Explain the player, that you only take screenshots, if the active window is Star Citizen. "}
             cropped_image = screenshots.crop_screenshot(f"{self.mining_data_path}/templates/refineries", image_path, [("UPPER_LEFT", "LOWER_LEFT", "AREA"), ("LOWER_RIGHT", "LOWER_RIGHT", "AREA")])
             
-            retrieved_json, success = self.ocr.get_screenshot_texts(cropped_image, "workorder", refinery="{refinery}", test=TEST)
-            if not success:
-                return {"success": False, "error": retrieved_json, "instructions": "Explain the player the reason for the work order not beeing able to be extracted. "}
+            # open ai image recognition
+            # retrieved_json, success = self.ocr.get_screenshot_texts(cropped_image, "workorder", refinery="{refinery}", test=TEST)
+            # if not success:
+            #     return {"success": False, "error": retrieved_json, "instructions": "Explain the player the reason for the work order not beeing able to be extracted. "}
 
-            return self.add_work_order_regolith(retrieved_json)
+            # return self.add_work_order_regolith(retrieved_json)
             
             # if regolith api provides amt from screenshot, i can use this.
-            # base64_jpg_image = screenshots.convert_cv2_image_to_base64_jpeg(cropped_image)
-            # scan_result = self.regolith.get_work_order_image_infos(base64_jpg_image)
+            base64_jpg_image = screenshots.convert_cv2_image_to_base64_jpeg(cropped_image)
+            scan_result = self.regolith.get_work_order_image_infos(base64_jpg_image)
 
-            # return self.add_work_order_regolith_from_scan(scan_result)
+            return self.add_work_order_regolith_from_scan(scan_result)
             
         if type == "get_all_work_orders":
             return self.regolith.get_active_work_orders()
@@ -453,18 +454,19 @@ class MiningManager(FunctionManager):
             return {"success": False, "message": "Couldn't get or create session."}
         
         shipOres = scan_result["captureRefineryOrder"]["shipOres"]
-        cleaned_shipOres = [
-            {key: value for key, value in ore.items() if key != "amt"}
-            for ore in shipOres
-        ]
+
+        for ore in shipOres:
+            amt = self.regolith.ore_amt_calc(ore["yield"], ore["ore"], scan_result["captureRefineryOrder"]["refinery"], scan_result["captureRefineryOrder"]["method"] )
+            ore["amt"] = amt
+            del ore["yield"]  # Remove the "yield" key from the dictionary
 
         variables = {
             "sessionId": session_id,
-            "shipOres": cleaned_shipOres,
+            "shipOres": shipOres,
             "workOrder": {
                 "expenses": scan_result["captureRefineryOrder"]["expenses"],
                 "includeTransferFee": True,
-                "isRefined": False,
+                "isRefined": True,
                 "isSold": False,
                 "method": scan_result["captureRefineryOrder"]["method"],  
                 "note": "Work order created by Cora - Your Star Citizen Ai-compagnion",

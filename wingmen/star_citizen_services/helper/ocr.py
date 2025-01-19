@@ -95,7 +95,7 @@ class OCR:
                 )
 
                 if response.status_code != 200:
-                    print_debug(f'request error: {response.json()["error"]["type"]}. Check the file {filename} for details.')
+                    print(f'request error: {response.json()["error"]["type"]}. Check the file {filename} for details.')
                     self.save_debug_data(subdir_path, placeholder_part, timestamp, img_str, response)
                     return "Error calling gpt vision.", False
                 

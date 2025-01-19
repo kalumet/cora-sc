@@ -363,8 +363,13 @@ class MiningManager(FunctionManager):
             scan_result = self.regolith.get_rock_scan_image_infos(base64_jpg_image)
             if scan_result and "captureShipRockScan" in scan_result:
                 session_id = self.regolith.get_or_create_mining_session(name="Ship", activity="SHIP_MINING", refinery=None)
-                scout_finding_id, cluster_count = self.regolith.get_or_create_scouting_cluster(session_id)
-                function_response = self.regolith.add_ship_cluster_scan_results(session_id, scout_finding_id, cluster_count, scan_result["captureShipRockScan"])
+                if scan_result["captureShipRockScan"] is None:
+                    return {
+                        "success": False,
+                        "message": "Could not identify scan, please try again. "
+                    }
+                cluster = self.regolith.get_or_create_scouting_cluster(session_id)
+                function_response = self.regolith.add_ship_cluster_scan_results(session_id, cluster, scan_result["captureShipRockScan"])
         
         elif function_type == "add_new_cluster":
             cluster_count = function_args.get("cluster_count", 0)

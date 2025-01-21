@@ -190,6 +190,18 @@ class MiningManager(FunctionManager):
                                 "description": "Only relevant for new sessions: The refinery where the ores will be processed. Is mandatory. Do not make assumptions on the value. ",
                                 "enum": self.regolith.get_refinery_names() + [None]
                             },
+                            "location": {
+                                "type": "string",
+                                "description": "Only relevant for new sessions: The planet, moon or asteroid field where the mining or salvaging takes place. Do not make assumptions on the value. "
+                            },
+                            "start_poi": {
+                                "type": "string",
+                                "description": "Only relevant for new sessions: At what starting POI does the scouting begins. Do not make assumptions on the value. "
+                            },
+                            "direction": {
+                                "type": "string",
+                                "description": "Only relevant for new sessions: In which direction does the scouting mainly focussing. Is either a POI name or a compass direction. Do not make assumptions on the value. "
+                            },
                             "session_id": {
                                 "type": "string",
                                 "description": "The session_id of the session the player wants to open in his browser. "
@@ -282,7 +294,7 @@ class MiningManager(FunctionManager):
         printr.print(f'-> Work Session Management: {function_type} with args: \n{json.dumps(function_args, indent=2)}', tags="info")
         function_response = self.manage_work_session(type=function_type, function_args=function_args, confirmed_deletion=confirmed_deletion)
         printr.print(f'-> Result: {json.dumps(function_response, indent=2)}', tags="info")
-
+        self.overlay.display_overlay_text("DONE", vertical_position_ratio=3, display_duration=5000)
         return function_response
 
     def manage_work_session(self, type, function_args, confirmed_deletion):
@@ -328,13 +340,16 @@ class MiningManager(FunctionManager):
         name = function_args.get("name", None)
         activity = function_args.get("activity", None)
         refinery = function_args.get("refinery", None)
+        location = function_args.get("location", None)
+        start_poi = function_args.get("start_poi", None)
+        direction = function_args.get("direction", None)
 
         if activity is None: 
             return {"success": False, "message": f"Please provide the activity you want the session to track. One of: {self.regolith.get_activity_names()}"}
         if activity == "SHIP_MINING" and refinery is None:
             return {"success": False, "message": "Please provide the refinery name to create a mining session. "}
         
-        session_id = self.regolith.create_mining_session(name, activity, refinery)
+        session_id = self.regolith.create_mining_session(name, activity, refinery, location, start_poi, direction)
         if session_id is not None:
             return {"success": True, "message": "Session created. "}
         
@@ -348,7 +363,7 @@ class MiningManager(FunctionManager):
         printr.print(f'-> Refinery Management: {function_type}', tags="info")
         function_response = self.manage_work_order(type=function_type, work_order_index=work_order_index, confirmed_deletion=confirmed_deletion)
         printr.print(f'-> Result: {json.dumps(function_response, indent=2)}', tags="info")
-
+        self.overlay.display_overlay_text("Cora: Done", vertical_position_ratio=3, display_duration=5000)
         return function_response
     
     def add_rock_scan_or_deposit_cluster_information(self, function_args):
@@ -357,13 +372,17 @@ class MiningManager(FunctionManager):
         if not function_type or function_type == "save_scan_result":
             image_path = screenshots.take_screenshot(self.mining_data_path, "scans", test=TEST)
             if not image_path:
+                self.overlay.display_overlay_text("Cora: Error", vertical_position_ratio=3, display_duration=5000)
                 return {"success": False, "instructions": "Could not take screenshot. Explain the player, that you only take screenshots, if the active window is Star Citizen. "}
+            self.overlay.display_overlay_text("Screenshot taken", vertical_position_ratio=3, display_duration=5000)
+            
             cropped_image = screenshots.crop_screenshot(f"{self.mining_data_path}/templates/scans", image_path, [("UPPER_LEFT", "UPPER_LEFT", "AREA"), ("LOWER_RIGHT", "LOWER_RIGHT", "AREA")])
             base64_jpg_image = screenshots.convert_cv2_image_to_base64_jpeg(cropped_image)
             scan_result = self.regolith.get_rock_scan_image_infos(base64_jpg_image)
             if scan_result and "captureShipRockScan" in scan_result:
                 session_id = self.regolith.get_or_create_mining_session(name="Ship", activity="SHIP_MINING", refinery=None)
                 if scan_result["captureShipRockScan"] is None:
+                    self.overlay.display_overlay_text("Cora: Error", vertical_position_ratio=3, display_duration=5000)
                     return {
                         "success": False,
                         "message": "Could not identify scan, please try again. "
@@ -377,10 +396,12 @@ class MiningManager(FunctionManager):
             session_id = self.regolith.get_or_create_mining_session(name="Ship", activity="SHIP_MINING", refinery=None)
             scout_finding_id = self.regolith.create_scouting_cluster(session_id, cluster_count, cluster_type)
             if scout_finding_id is None:
+                self.overlay.display_overlay_text("Cora: Error", vertical_position_ratio=3, display_duration=5000)
                 return {"success": False, "message": "Couldn't create a new cluster."}
             function_response = {"success": True, "message": f"Created a new cluster with {cluster_count} rocks."}
        
         printr.print(f'-> Result: {json.dumps(function_response, indent=2)}', tags="info")
+        self.overlay.display_overlay_text("Cora: Done", vertical_position_ratio=3, display_duration=5000)
 
         return function_response
 
@@ -389,7 +410,10 @@ class MiningManager(FunctionManager):
             image_path = screenshots.take_screenshot(self.mining_data_path, "workorder", "images", test=TEST)
             if not image_path:
                 return {"success": False, "instructions": "Could not take screenshot. Explain the player, that you only take screenshots, if the active window is Star Citizen. "}
-            cropped_image = screenshots.crop_screenshot(f"{self.mining_data_path}/templates/refineries", image_path, [("UPPER_LEFT", "LOWER_LEFT", "AREA"), ("LOWER_RIGHT", "LOWER_RIGHT", "AREA")])
+            
+            self.overlay.display_overlay_text("Screenshot taken", vertical_position_ratio=3, display_duration=5000)
+
+            cropped_image = screenshots.crop_screenshot(data_dir_path=f"{self.mining_data_path}/templates/refineries", screenshot_file=image_path, areas_and_corners_and_cropstrat=[("UPPER_LEFT", "LOWER_LEFT", "AREA"), ("LOWER_RIGHT", "LOWER_RIGHT", "AREA")], cash_key="workorder")
             
             # open ai image recognition
             # retrieved_json, success = self.ocr.get_screenshot_texts(cropped_image, "workorder", refinery="{refinery}", test=TEST)

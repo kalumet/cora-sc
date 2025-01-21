@@ -125,28 +125,42 @@ def debug_show_screenshot(image, show_screenshot):
         return
 
 
-def __get_best_template_matching_coordinates(data_dir_path, screenshot, area, requested_corner_coordinates):
+def __get_best_template_matching_coordinates(data_dir_path, screenshot, image_area, template_corner, cash_key=None):
     highest_score = -1
     best_template = ""
     matching_coordinates = None
     next_template_index = 1
-    
+
     # We'll store the final bounding rect for debug
     final_top_left = None
     final_w, final_h = None, None
 
+    # Construct the cache key
+    if cash_key:
+        cash_key = f"{cash_key}_{image_area}_{template_corner}"
+        cache_file = os.path.join(data_dir_path, "template_cache.txt")
+        
+        # Check if the cache file exists and contains the key
+        if os.path.exists(cache_file):
+            with open(cache_file, "r") as f:
+                for line in f:
+                    key, x, y = line.strip().split(",")
+                    if key == cash_key:
+                        print_debug(f"Cache hit for key: {cash_key}: {x}, {y}")
+                        return (int(x), int(y))
+
     while True:
         filename = None
-        filename1 = f"{data_dir_path}/templates/template_{area.lower()}_{next_template_index}.png"
-        filename2 = f"{data_dir_path}/template_{area.lower()}_{next_template_index}.png"
-        
+        filename1 = f"{data_dir_path}/templates/template_{image_area.lower()}_{next_template_index}.png"
+        filename2 = f"{data_dir_path}/template_{image_area.lower()}_{next_template_index}.png"
+
         if os.path.exists(filename1):
             filename = filename1
         elif os.path.exists(filename2):
             filename = filename2
 
         if not filename:
-            print_debug(f"Filename does not exist:  {filename1} or {filename2}")
+            # print_debug(f"Filename does not exist: {filename1} or {filename2}")
             break  # No more templates available
 
         template = cv2.imread(filename, cv2.IMREAD_COLOR)
@@ -172,20 +186,26 @@ def __get_best_template_matching_coordinates(data_dir_path, screenshot, area, re
             final_w, final_h = w, h
 
             # Set matching_coordinates (the corner we *use* for cropping logic)
-            if requested_corner_coordinates == "LOWER_LEFT":
+            if template_corner == "LOWER_LEFT":
                 matching_coordinates = (max_loc[0], max_loc[1] + h)
-            elif requested_corner_coordinates == "LOWER_RIGHT":
+            elif template_corner == "LOWER_RIGHT":
                 matching_coordinates = (max_loc[0] + w, max_loc[1] + h)
-            elif requested_corner_coordinates == "UPPER_RIGHT":
+            elif template_corner == "UPPER_RIGHT":
                 matching_coordinates = (max_loc[0] + w, max_loc[1])
-            elif requested_corner_coordinates == "UPPER_LEFT":
+            elif template_corner == "UPPER_LEFT":
                 matching_coordinates = max_loc
             else:
-                raise ValueError(f"Unknown requested_corner_coordinates: {requested_corner_coordinates}")
+                raise ValueError(f"Unknown requested_corner_coordinates: {template_corner}")
 
         next_template_index += 1
 
-    print_debug(f"best template found: {best_template}")
+    print_debug(f"best template found: {best_template} with score {highest_score} and coordinates {matching_coordinates}")
+
+    # Save the result to the cache file
+    if cash_key and matching_coordinates:
+        with open(cache_file, "a") as f:
+            print_debug(f"Writing cache entry for key: {cash_key}: {matching_coordinates}")
+            f.write(f"{cash_key},{matching_coordinates[0]},{matching_coordinates[1]}\n")
 
     # --- Debug Drawing Part ---
     # If you want to visually confirm the final best match:
@@ -200,11 +220,11 @@ def __get_best_template_matching_coordinates(data_dir_path, screenshot, area, re
         print_debug("Press any key to continue...")
         cv2.waitKey(0)
         cv2.destroyAllWindows()
-    
+
     return matching_coordinates
 
 
-def crop_screenshot(data_dir_path, screenshot_file, areas_and_corners_and_cropstrat, select_sides=None):
+def crop_screenshot(data_dir_path, screenshot_file, areas_and_corners_and_cropstrat, cash_key=None, select_sides=None):
     """
     Crops a screenshot based on template matching against specified areas of the screenshot. This method supports 
     flexible cropping strategies, allowing for area-based, vertical, or horizontal cropping.
@@ -268,7 +288,7 @@ def crop_screenshot(data_dir_path, screenshot_file, areas_and_corners_and_cropst
 
     if len(area_entries) == 2:
         # => Wir machen den AREA-Cut
-        x_min, x_max, y_min, y_max = _crop_area(screenshot, data_dir_path, areas_and_corners_and_cropstrat)
+        x_min, x_max, y_min, y_max = _crop_area(screenshot, data_dir_path, areas_and_corners_and_cropstrat, cash_key)
         if x_min is None or x_max is None or y_min is None or y_max is None:
             print_debug("AREA cropping not possible => returning None")
             return None
@@ -281,7 +301,8 @@ def crop_screenshot(data_dir_path, screenshot_file, areas_and_corners_and_cropst
         x_min, x_max, y_min, y_max, vertical_applied, horizontal_applied = _crop_slices(
             screenshot,
             data_dir_path,
-            areas_and_corners_and_cropstrat
+            areas_and_corners_and_cropstrat,
+            cash_key
         )
 
     # Rufe apply_quadrant_selection auf
@@ -345,7 +366,7 @@ def _apply_quadrant_selection(screenshot, x_min, x_max, y_min, y_max, vertical_a
     return screenshot[y_min:y_max, x_min:x_max]
 
 
-def _crop_area(screenshot, data_dir_path, instructions):
+def _crop_area(screenshot, data_dir_path, instructions, cash_key=None):
     """
     Erwarte: 2 Templates (UPPER_LEFT, UPPER_LEFT, AREA) und (LOWER_RIGHT, LOWER_RIGHT, AREA).
     Return: (x_min, x_max, y_min, y_max)
@@ -366,7 +387,7 @@ def _crop_area(screenshot, data_dir_path, instructions):
         return None, None, None, None
 
     for (area, corner, strategy) in area_entries:
-        coords = __get_best_template_matching_coordinates(data_dir_path, screenshot, area, corner)
+        coords = __get_best_template_matching_coordinates(data_dir_path=data_dir_path, screenshot=screenshot, cash_key=cash_key, image_area=area, template_corner=corner)
         if not coords:
             print_debug(f"AREA corner not found: {area} / {corner}")
             return None, None, None, None
@@ -399,7 +420,7 @@ def _crop_area(screenshot, data_dir_path, instructions):
     return x_min, x_max, y_min, y_max   
 
 
-def _crop_slices(screenshot, data_dir_path, instructions):
+def _crop_slices(screenshot, data_dir_path, instructions, cash_key=None):
     """
     Verarbeite VERTICAL / HORIZONTAL Schnitte.
 
@@ -431,7 +452,7 @@ def _crop_slices(screenshot, data_dir_path, instructions):
     # Sammle x-Koordinaten
     x_coords = []
     for (area, corner, strat) in vertical_entries:
-        coords = __get_best_template_matching_coordinates(data_dir_path, screenshot, area, corner)
+        coords = __get_best_template_matching_coordinates(data_dir_path=data_dir_path, screenshot=screenshot, cash_key=cash_key, image_area=area, template_corner=corner)
         if coords:
             this_x, this_y = coords
             x_coords.append((corner, this_x))
@@ -531,8 +552,19 @@ def test_selling_terminal():
     screenshot_file_test = "star_citizen_data/uex/kiosk_analyzer/examples/sell/screenshot_test-False_operation-sell_tradeport-TDORI_20250114_233403_980585.png"
     # areas_and_corners = [("UPPER_LEFT", "LOWER_LEFT", "AREA"), ("LOWER_RIGHT", "LOWER_RIGHT", "AREA")]
     # cropped_image = crop_screenshot(data_dir_path_test, screenshot_file_test, areas_and_corners)
-    cropped_image = crop_screenshot(data_dir_path_test, screenshot_file_test, [("UPPER_LEFT", "LOWER_LEFT", "HORIZONTAL"), ("UPPER_LEFT", "LOWER_LEFT", "VERTICAL")], ["BOTTOM", "RIGHT"])
+    cropped_image = crop_screenshot(data_dir_path=data_dir_path_test, screenshot_file=screenshot_file_test, areas_and_corners_and_cropstrat=[("UPPER_LEFT", "LOWER_LEFT", "HORIZONTAL"), ("UPPER_LEFT", "LOWER_LEFT", "VERTICAL")], cash_key='Ori', select_sides=["BOTTOM", "RIGHT"])
+    debug_show_screenshot(cropped_image, True)
 
+    screenshot_file_test = "star_citizen_data/uex/kiosk_analyzer/examples/sell/screenshot_test-False_operation-sell_tradeport-TDA18_20250121_161512_577425.png"
+    cropped_image = crop_screenshot(data_dir_path=data_dir_path_test, screenshot_file=screenshot_file_test, areas_and_corners_and_cropstrat=[("UPPER_LEFT", "LOWER_LEFT", "HORIZONTAL"), ("UPPER_LEFT", "LOWER_LEFT", "VERTICAL"), ("UPPER_RIGHT", "LOWER_RIGHT", "VERTICAL")], cash_key='A18', select_sides=["BOTTOM", "RIGHT"])
+    debug_show_screenshot(cropped_image, True)
+
+    screenshot_file_test = "star_citizen_data/uex/kiosk_analyzer/examples/sell/screenshot_test-False_operation-sell_tradeport-TDA18_20250121_161512_577425.png"
+    cropped_image = crop_screenshot(data_dir_path=data_dir_path_test, screenshot_file=screenshot_file_test, areas_and_corners_and_cropstrat=[("UPPER_LEFT", "LOWER_LEFT", "AREA"), ("LOWER_RIGHT", "LOWER_RIGHT", "AREA")], cash_key='A18')
+    debug_show_screenshot(cropped_image, True)
+
+    screenshot_file_test = "star_citizen_data/uex/kiosk_analyzer/examples/sell/screenshot_test-False_operation-sell_tradeport-TDA18_20250121_161512_577425.png"
+    cropped_image = crop_screenshot(data_dir_path=data_dir_path_test, screenshot_file=screenshot_file_test, areas_and_corners_and_cropstrat=[("UPPER_LEFT", "LOWER_LEFT", "AREA"), ("LOWER_RIGHT", "LOWER_RIGHT", "AREA")], cash_key='A18')
     debug_show_screenshot(cropped_image, True)
 
 
@@ -565,5 +597,5 @@ def test_mining_scouting():
 
 # Example usage
 if __name__ == "__main__":
-    test_mining_scouting()
+    # test_mining_scouting()
     test_selling_terminal()

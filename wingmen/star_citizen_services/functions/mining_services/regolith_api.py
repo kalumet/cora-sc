@@ -392,7 +392,7 @@ class RegolithAPI:
             session_id = self.create_mining_session(name, activity, refinery)
         return session_id
 
-    def create_mining_session(self, name, activity, refinery):
+    def create_mining_session(self, name, activity, refinery, location, start_poi, direction):
         now = datetime.now()
         # Zuerst das Datum mit führenden Nullen formatieren
         formatted_date_with_zero = now.strftime("%A, %b %d, %I %p")
@@ -415,11 +415,17 @@ class RegolithAPI:
         }
         """
         )
+        notes = {
+            "info": "This session has been created by Cora - your AI Compagnion. ",
+            "location": location,
+            "start_poi": start_poi,
+            "direction": direction,
+        }
 
         variables = {
             "session": {
                 "name": f"C-Session: {name if name else ''} {formatted_date}",
-                "note": "This session has been created by Cora - your AI Compagnion. ",
+                "note": json.dumps(notes, indent=2),
             },
             "sessionSettings": {
                 "activity": activity if activity else "SHIP_MINING",

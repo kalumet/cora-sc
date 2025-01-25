@@ -7,7 +7,7 @@ import pygetwindow
 import pyautogui
 import base64
 
-DEBUG = True
+DEBUG = False
 TEST = False
 SHOW_SCREENSHOTS = False
 

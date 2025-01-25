@@ -5,7 +5,7 @@ from screeninfo import get_monitors
 
 from gui.root import WingmanUI  
 
-DEBUG = True
+DEBUG = False
 TEST = False
 
 

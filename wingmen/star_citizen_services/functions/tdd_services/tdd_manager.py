@@ -89,8 +89,8 @@ class TddManager(FunctionManager):
                                     "The possible request_types the user can ask for. This defines what other parameters are required for this request to be fulfillable. "
                                 ),
                                 "enum": ["find_best_trade_route_starting_at_location", 
-                                         "find_best_trade_route_for_commodity_between_locations", "find_locations_to_sell_commodity", 
-                                         "find_best_trade_route_between, find_tradeport_at_location_to_sell_commodity, find_best_trade_routes_around_location"]
+                                         "find_best_trade_route_for_commodity_between_locations", "find_any_locations_to_sell_commodity", 
+                                         "find_best_trade_route_between, find_tradeports_at_given_location_for_commodity, find_best_trade_routes_around_location"]
                             },
                         },
                         "required": ["request_type"]
@@ -121,14 +121,15 @@ class TddManager(FunctionManager):
                 "The request_type should be one of the following: "
                 "- find_best_trade_route_starting_at_location: used, if the player beginns a trade route at a specific trade port. Requires only the user to provide the parameter 'location_name_from' "
                 "- find_best_trade_route_between: used, if the player wants to trade between locations. Requires both 'location_name_from' and 'location_name_to' "
-                "- find_tradeport_at_location_to_sell_commodity: used if the player wants to sell a specific commodity at a given location. Requires 'commodity_name' and 'location_name_to' "
+                "- find_tradeports_at_given_location_for_commodity: used if the player wants to sell a specific commodity at a given location. Requires 'commodity_name' and 'location_name_to' "
                 "- find_best_trade_route_for_commodity_between_locations: used if the player wants to trade a given commodity without specifying any buying location or selling location. Requires only 'commodity_name' "
-                "- find_locations_to_sell_commodity: used if the player wants to know where he can sell a given commodity independent of any location. Requires only 'commodity_name' "
+                "- find_any_locations_to_sell_commodity: used if the player wants to know where he can sell a given commodity independent of any location. Requires only 'commodity_name' "
                 "- find_best_trade_routes_around_location: used, if the player wants to trade around at a specific area like a planetary system or moon. Requires only 'location_name_to' "
         )
 
     def get_trade_information_from_tdd_employee(self, function_args):
         print_debug(f"trade request: {function_args}")
+        printr.print(f'Executing function call {self.get_trade_information_from_tdd_employee.__name__} with args {function_args}', tags="info") 
         
         request_type = function_args.get("request_type", "")
                 
@@ -185,7 +186,7 @@ class TddManager(FunctionManager):
             transform_numbers_in_words.transform_numbers(function_response)
             return function_response
 
-        if request_type == "find_tradeport_at_location_to_sell_commodity":
+        if request_type == "find_tradeports_at_given_location_for_commodity":
             
             location_name = function_args.get("location_name_to", None)
            
@@ -233,7 +234,7 @@ class TddManager(FunctionManager):
             transform_numbers_in_words.transform_numbers(function_response)
             return function_response
 
-        if request_type == "find_locations_to_sell_commodity":
+        if request_type == "find_any_locations_to_sell_commodity":
             
             function_response = self.uex_service.find_best_selling_location_for_commodity_code(commodity_name=function_args.get("commodity_name", None))
             

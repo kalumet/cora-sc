@@ -125,7 +125,7 @@ class UexDataRunnerManager(FunctionManager):
         """ 
         Provides the openai function definition for this manager. 
         """
-        tradeport_names = self.uex2_service.get_category_names(category="terminals", field_name="nickname", filter=("type", "commodity"))
+        tradeport_names = self.uex2_service.get_category_names(category="terminals", field_name="name")
         commodity_names = self.uex2_service.get_category_names("commodities")
 
         tools = [
@@ -138,10 +138,15 @@ class UexDataRunnerManager(FunctionManager):
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "player_provided_tradeport_name": {
+                            "player_provided_terminal_name": {
                                 "type": "string",
-                                "description": "The tradeport name provided by the user. Ask, if he didn't provide a tradeport name.",
+                                "description": "The terminal name provided by the user. Ask, if he didn't provide a terminal / tradeport name.",
                                 "enum": tradeport_names
+                            },
+                            "terminal_type": {
+                                "type": "string",
+                                "description": "The type of terminal that the user is asking for. ",
+                                "enum": ["commodity","item","commodity_raw","vehicle_buy","vehicle_rent","fuel","refinery_audit", None]
                             },
                             "operation": {
                                 "type": "string",
@@ -161,9 +166,9 @@ class UexDataRunnerManager(FunctionManager):
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "player_provided_tradeport_name": {
+                            "player_provided_terminal_name": {
                                 "type": "string",
-                                "description": "The tradeport name provided by the user. ",
+                                "description": "The terminal name of the tradepaort. ",
                                 "enum": tradeport_names
                             },
                             "operation": {
@@ -222,7 +227,7 @@ class UexDataRunnerManager(FunctionManager):
             function_response = {"success": False, "instruction": f"User needs to validate the following data: {json.dumps(function_args)}"}
             return function_response, None
 
-        tradeport = self.uex2_service.get_terminal(function_args.get("player_provided_tradeport_name", None))
+        tradeport = self.uex2_service.get_terminal(tradeport_mapping_name=function_args.get("player_provided_terminal_name", None), type=function_args.get("terminal_type", "commodity"), search_fields=["nickname", "name", "space_station_name", "outpost_name", "city_name"])
         if not tradeport:
             function_response = {"success": False, "instruction": "You could not identify the tradeport. Ask the user to repeat clearly the name."}
             return function_response, None
@@ -278,11 +283,11 @@ class UexDataRunnerManager(FunctionManager):
         printr.print(f'-> Command: Analysing commodity prices to be sent to uex corp. Doing screenshot analysis. Only commodity information and only if active window is star citizen for {function_args}.')
         self.overlay.display_overlay_text("Trying to submit all prices ...")
         print_debug(function_args)
-        if not function_args.get("player_provided_tradeport_name"):
+        if not function_args.get("player_provided_terminal_name"):
             function_response = json.dumps({"success": False, "instruction": "Ask the player to provide the tradeport name for which he wants the prices to be transmitted"})
             return function_response, None
         
-        tradeport = self.uex2_service.get_terminal(function_args["player_provided_tradeport_name"], search_fields=["nickname", "name", "space_station_name", "outpost_name", "city_name"])
+        tradeport = self.uex2_service.get_terminal(function_args["player_provided_terminal_name"], type=function_args["terminal_type"], search_fields=["nickname", "name", "space_station_name", "outpost_name", "city_name"])
 
         if not tradeport:
             function_response = json.dumps({"success": False, "instruction": 'Could not identify the given tradeport name. Please repeat clearly the tradeport name.'})

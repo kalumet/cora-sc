@@ -391,6 +391,7 @@ class UEXApi2():
             self.data[category_key] = {"data": data, "age": age}
 
         # In diesem Fall ist 'data' ein Dict mit Keys=IDs => values() => list
+        # TODO values könnte leer sein
         data = list(self.data[category_key].get("data").values())
         print_debug(f"uex community trades: {json.dumps(data, indent=2)[0:100]}...")
         # Filter out entries with negative score or negative profit

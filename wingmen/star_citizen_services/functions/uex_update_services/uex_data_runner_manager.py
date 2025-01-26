@@ -286,8 +286,10 @@ class UexDataRunnerManager(FunctionManager):
         if not function_args.get("player_provided_terminal_name"):
             function_response = json.dumps({"success": False, "instruction": "Ask the player to provide the tradeport name for which he wants the prices to be transmitted"})
             return function_response, None
-        
-        tradeport = self.uex2_service.get_terminal(function_args["player_provided_terminal_name"], type=function_args["terminal_type"], search_fields=["nickname", "name", "space_station_name", "outpost_name", "city_name"])
+
+        terminal_type = function_args.get("terminal_type", "commodity")    
+    
+        tradeport = self.uex2_service.get_terminal(function_args["player_provided_terminal_name"], type=terminal_type, search_fields=["nickname", "name", "space_station_name", "outpost_name", "city_name"])
 
         if not tradeport:
             function_response = json.dumps({"success": False, "instruction": 'Could not identify the given tradeport name. Please repeat clearly the tradeport name.'})

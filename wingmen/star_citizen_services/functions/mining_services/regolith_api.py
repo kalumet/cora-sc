@@ -57,9 +57,11 @@ class RegolithAPI:
             transport=self.transport, fetch_schema_from_transport=False
         )
         self.active_session_id = None
+        self.active_session = None
         self.refineries = None
         self.refinery_methods = None
-        self.gravity_wells = None
+        self.gravity_wells_names = None
+        self.gravity_wells_mapping = None
         self.locations = None
         self.ship_ores = None
         self.activities = None
@@ -156,7 +158,26 @@ class RegolithAPI:
                 f"Error during entity name retrieval from regolith: {str(e)}:\n{traceback.print_stack()}"
             )
             return
-
+    
+    def get_cluster_types(self):
+        return [
+            'CTYPE',
+            'ETYPE',
+            'ITYPE',
+            'MTYPE',
+            'PTYPE',
+            'QTYPE',
+            'STYPE'
+            'ATACAMITE',
+            'FELSIC',
+            'GNEISS',
+            'GRANITE',
+            'IGNEOUS',
+            'OBSIDIAN',
+            'QUARTZITE',
+            'SHALE'
+        ]
+    
     def get_refinery_names(self):
         if self.refineries is not None:
             return self.refineries
@@ -210,13 +231,19 @@ class RegolithAPI:
             return []
 
     def get_gravity_wells(self):
-        if self.gravity_wells is not None:
-            return self.gravity_wells
+        if self.gravity_wells_names is not None:
+            return self.gravity_wells_names
 
-        enum_type = gql("{" + self.get_graphql_for_names("PlanetEnum") + "}")
+        gravity_wells = gql("""query getPublicLookups {
+            lookups {
+                UEX {
+                bodies 
+                }
+            }
+            }""")
 
         try:
-            response = self.client.execute(enum_type)
+            response = self.client.execute(gravity_wells)
 
             if "errors" in response:
                 print("Error during GraphQL-Request:")
@@ -225,10 +252,13 @@ class RegolithAPI:
                 return []
             else:
                 print_debug("Gravity wells name retrieved")
-                self.gravity_wells = [
-                    value["name"] for value in response["PlanetEnum"]["enumValues"]
+                self.gravity_wells_names = [
+                    value["name"] for value in response["lookups"]["UEX"]["bodies"]
                 ]
-                return self.gravity_wells
+                self.gravity_wells_mapping = {
+                    value["name"]: value["code"] for value in response["lookups"]["UEX"]["bodies"]
+                }
+                return self.gravity_wells_names
         except Exception as e:
             print(
                 f"Error during gravity wells retrieval: {str(e)}:\n{traceback.print_stack()}"
@@ -334,6 +364,9 @@ class RegolithAPI:
                 createdAt
                 finishedAt
                 state
+                sessionSettings {
+                        ...SessionSettingFragment
+                    }
                 }
 
                 fragment SessionSummaryFragment on Session {
@@ -343,6 +376,10 @@ class RegolithAPI:
                     allPaid
                     refineries
                 }
+                }
+
+                fragment SessionSettingFragment on SessionSettings {
+                gravityWell
                 }
 
         """
@@ -377,6 +414,7 @@ class RegolithAPI:
                     return None
 
                 self.active_session_id = newest_active_session["sessionId"]
+                self.active_session = newest_active_session
                 return self.active_session_id
 
         except Exception as e:
@@ -410,7 +448,19 @@ class RegolithAPI:
             workOrderDefaults: $workOrderDefaults
             ) {
                 sessionId
-                __typename
+                name
+                createdAt
+                finishedAt
+                state
+                sessionSettings {
+                gravityWell
+                }
+                summary {
+                aUEC
+                oreSCU
+                allPaid
+                refineries
+                }
             }
         }
         """
@@ -433,6 +483,7 @@ class RegolithAPI:
                 "allowUnverifiedUsers": False,
                 "usersCanAddUsers": True,
                 "usersCanInviteUsers": True,
+                "gravityWell": self.gravity_wells_mapping.get(location, None),
             },
         }
 
@@ -458,7 +509,8 @@ class RegolithAPI:
                 return None
             else:
                 print_debug("Mining Session created")
-                self.active_session_id = response.get("createSession", {}).get(
+                self.active_session = response.get("createSession", {})
+                self.active_session_id = self.active_session.get(
                     "sessionId", None
                 )
                 return self.active_session_id
@@ -656,6 +708,7 @@ class RegolithAPI:
                         inst
                         res
                         state
+                        rockType
                         ores {
                             ore
                             percent
@@ -718,6 +771,8 @@ class RegolithAPI:
                 createdAt
                 clusterType
                 clusterCount
+                gravityWell
+                includeInSurvey
                 note
                 ... on ShipClusterFind {
                     shipRocks {
@@ -744,6 +799,8 @@ class RegolithAPI:
             "scoutingFind": {
                 "state": "DISCOVERED",
                 "clusterCount": cluster_count,
+                "gravityWell": self.active_session["sessionSettings"]["gravityWell"],
+                "includeInSurvey": True,
                 "note": "{'info': 'This cluster has been discovered by Cora - your AI Compagnion.'"
                 + (f", 'cluster_type': '{cluster_type}'" if cluster_type else "")
                 + "}",
@@ -792,6 +849,7 @@ class RegolithAPI:
                 sessionId
                 scoutingFindId
                 clusterCount
+                includeInSurvey
                 note
                 ... on ShipClusterFind {
                     shipRocks {
@@ -805,6 +863,7 @@ class RegolithAPI:
                 inst
                 res
                 state
+                rockType
                 ores {
                     ore
                     percent
@@ -819,23 +878,32 @@ class RegolithAPI:
             for ore in ores
         ]
 
+        total_percent = sum(ore["percent"] for ore in cleaned_ores)
+        if 1 - total_percent > 0:
+            cleaned_ores.append({"ore": "INERTMATERIAL", "percent": 1 - total_percent})
+
         ship_rocks = cluster.get("shipRocks", [])
         ship_rocks.append({
                     "mass": ship_rock_scan_result["mass"],
                     "state": "READY",
                     "inst": ship_rock_scan_result["inst"],
                     "res": ship_rock_scan_result["res"],
+                    "rockType": ship_rock_scan_result["rockType"],
                     "ores": cleaned_ores,
                 })
 
         variables = {
             "sessionId": session_id,
             "scoutingFindId": cluster["scoutingFindId"],
-            "scoutingFind": {"state": "DISCOVERED"},
+            "scoutingFind": {
+                "state": "DISCOVERED",
+                "includeInSurvey": True,
+            },
             "shipRocks": ship_rocks,
         }
 
         try:
+            print_debug(f"Adding ship cluster scan results: {json.dumps(variables, indent=2)}")
             response = self.client.execute(mutation, variable_values=variables)
 
             if "errors" in response:
@@ -1149,12 +1217,11 @@ class RegolithAPI:
                         mass
                         inst
                         res
+                        rockType
                         ores {
                         ore
                         percent
-                        __typename
                         }
-                        __typename
                     }
                 }
             """

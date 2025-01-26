@@ -19,6 +19,7 @@ from wingmen.star_citizen_services.functions.uex_v2 import uex_api_module
 
 DEBUG = True
 TEST = False
+REGOLITH_TEST = False
 printr = Printr()
 
 
@@ -65,6 +66,11 @@ class MiningManager(FunctionManager):
             requester="MiningManager",
             key="regolith_secret_key",
             friendly_key_name="Regolith secret api key",
+            prompt_if_missing=True
+        ) if not REGOLITH_TEST else secret_keeper.retrieve(
+            requester="MiningManager",
+            key="regolith_secret_key_test",
+            friendly_key_name="Regolith secret api key for test",
             prompt_if_missing=True
         )
         self.regolith = RegolithAPI(config=config, x_api_key=regolith_api_key)
@@ -152,14 +158,10 @@ class MiningManager(FunctionManager):
                             "type": {
                                 "type": "string",
                                 "description": "The type of operation that the player wants to execute",
-                                "enum": ["add_work_order", "get_all_work_orders", None]
-                            },
-                            "confirm_deletion": {
-                                "type": "string",
-                                "description": "User confirmed deletion",
-                                "enum": ["confirmed", "notconfirmed", None]
+                                "enum": ["add_work_order", "get_all_work_orders"]
                             }
-                        }
+                        },
+                        "required": ["type"]
                     }
                 }
             },
@@ -173,8 +175,8 @@ class MiningManager(FunctionManager):
                         "properties": {
                             "type": {
                                 "type": "string",
-                                "description": "The type of operation that the player wants to execute. ",
-                                "enum": ["new_session", "delete_processed_sessions", "open_session_in_browser"]
+                                "description": "The type of operation that the player wants to execute. Default: new_session",
+                                "enum": ["new_session", "open_session_in_browser"]
                             },
                             "name": {
                                 "type": "string",
@@ -183,35 +185,32 @@ class MiningManager(FunctionManager):
                             "activity": {
                                 "type": "string",
                                 "description": "Only relevant for new sessions: The activity of this session.  Do not make assumptions on the value. ",
-                                "enum": self.regolith.get_activity_names() + [None]
+                                "enum": self.regolith.get_activity_names()
                             },
                             "refinery": {
                                 "type": "string",
                                 "description": "Only relevant for new sessions: The refinery where the ores will be processed. Is mandatory. Do not make assumptions on the value. ",
-                                "enum": self.regolith.get_refinery_names() + [None]
+                                "enum": self.regolith.get_refinery_names()
                             },
-                            "location": {
+                            "gravityWell": {
                                 "type": "string",
-                                "description": "Only relevant for new sessions: The planet, moon or asteroid field where the mining or salvaging takes place. Do not make assumptions on the value. "
+                                "description": "Only relevant for new sessions: The planet, moon or asteroid field where the mining or salvaging takes place. Do not make assumptions on the value. ",
+                                "enum": self.regolith.get_gravity_wells() + [None]
                             },
-                            "start_poi": {
+                            "scouting_start_location": {
                                 "type": "string",
-                                "description": "Only relevant for new sessions: At what starting POI does the scouting begins. Do not make assumptions on the value. "
+                                "description": "Only relevant for new sessions: At what starting POI does the scouting begins. Do not make assumptions on the value. It should be a name of an outpost, station, planet or gravityWell location. "
                             },
-                            "direction": {
+                            "scouting_direction": {
                                 "type": "string",
-                                "description": "Only relevant for new sessions: In which direction does the scouting mainly focussing. Is either a POI name or a compass direction. Do not make assumptions on the value. "
+                                "description": "Only relevant for new sessions: In which scouting_direction does the scouting mainly focussing. Is either a POI name or a compass scouting_direction. Do not make assumptions on the value. "
                             },
                             "session_id": {
                                 "type": "string",
                                 "description": "The session_id of the session the player wants to open in his browser. "
-                            },
-                            "confirm_deletion": {
-                                "type": "string",
-                                "description": "User confirmed deletion. Only relevant if the user wants to delete sessions, ask for explizit confirmation. ",
-                                "enum": ["confirmed", "notconfirmed", None]
                             }
-                        }
+                        },
+                        "required": ["type"]
                     }
                 }
             },
@@ -226,7 +225,7 @@ class MiningManager(FunctionManager):
                             "type": {
                                 "type": "string",
                                 "description": "The type of operation that the player wants to execute",
-                                "enum": ["save_scan_result", "add_new_cluster", None]
+                                "enum": ["save_scan_result", "add_new_cluster"]
                             },
                             "cluster_count": {
                                 "type": "integer",
@@ -235,25 +234,11 @@ class MiningManager(FunctionManager):
                             "cluster_type": {
                                 "type": "string",
                                 "description": "Is only necessary for type 'add_new_cluster'. The deposit / rock types within this cluster. Do not ask for this value if type is 'save_scan_result'. Optional ",
-                                "enum": [
-                                    "C-Type",
-                                    "E-Type",
-                                    "M-Type",
-                                    "P-Type",
-                                    "Q-Type",
-                                    "S-Type",
-                                    "Atacamite",
-                                    "Felsic",
-                                    "Gneiss",
-                                    "Granite",
-                                    "Igneous",
-                                    "Obsidian",
-                                    "Quartzite",
-                                    "Shale",
-                                    None]
+                                "enum": self.regolith.get_cluster_types() + [None]
                             }
                             
-                        }
+                        },
+                        "required": ["type"]
                     }
                 }
             },
@@ -289,15 +274,15 @@ class MiningManager(FunctionManager):
 
     def mining_or_salvage_session_management(self, function_args):
         printr.print(f"Executing function '{self.mining_or_salvage_session_management.__name__}'.", tags="info")
-        confirmed_deletion = function_args.get("confirm_deletion", None)
+
         function_type = function_args["type"]
         printr.print(f'-> Work Session Management: {function_type} with args: \n{json.dumps(function_args, indent=2)}', tags="info")
-        function_response = self.manage_work_session(type=function_type, function_args=function_args, confirmed_deletion=confirmed_deletion)
+        function_response = self.manage_work_session(type=function_type, function_args=function_args)
         printr.print(f'-> Result: {json.dumps(function_response, indent=2)}', tags="info")
         self.overlay.display_overlay_text("DONE", vertical_position_ratio=3, display_duration=5000)
         return function_response
 
-    def manage_work_session(self, type, function_args, confirmed_deletion):
+    def manage_work_session(self, type, function_args):
         if type == "new_session":
             return self.create_session(function_args)
         
@@ -308,48 +293,22 @@ class MiningManager(FunctionManager):
                 return {"success": False, "message": f"I couldn't open the browser{' as there is no active session. ' if self.regolith.active_session_id is None else '. '}"}
             return {"success": True}
         
-        if type == "delete_processed_sessions":
-            if not confirmed_deletion:
-                return {"success": False, "message": "Do you really want to delete all processed sessions? "}
-            return self.regolith.delete_processed_sessions()
-            
-            # self.refinery_jobs, success = self.uex2_service.get_refinery_jobs()
-            # if not success:
-            #     return {"success": False, "error": self.refinery_jobs, 
-            #             "instructions": "There has been an error trying retrieving current refinery work orders."}
-            # if len(self.refinery_jobs) <= 0:
-            #     return {"success": False, "instructions": "No current refinery work orders."}
-            
-            # current_time = int(time.time())
-            # deleted_ids = []
-            # errors = []
-            # for job in self.refinery_jobs:
-            #     if job["date_expiration"] <= current_time:
-            #         response, success = self.uex2_service.delete_refinery_job(job["id"])
-            #         if success:
-            #             deleted_ids.append(job["id"])
-            #         else: 
-            #             errors.append((job["id"], response))
-                                      
-            # deleted_ids_str = ", ".join(str(id) for id in deleted_ids)
-            # errors_str = "; ".join(f"ID {job_id}: {error}" for job_id, error in errors)
-
-            # return {"instructions": f"Sumarize in a consize sentence in natural language of the player: Deleted Job IDs: {deleted_ids_str}. Errors: {errors_str}. "}
 
     def create_session(self, function_args):
         name = function_args.get("name", None)
         activity = function_args.get("activity", None)
         refinery = function_args.get("refinery", None)
-        location = function_args.get("location", None)
-        start_poi = function_args.get("start_poi", None)
-        direction = function_args.get("direction", None)
+        gravityWell = function_args.get("gravityWell", None)
+        scouting_start_location = function_args.get("scouting_start_location", None)
+        scouting_direction = function_args.get("scouting_direction", None)
 
         if activity is None: 
             return {"success": False, "message": f"Please provide the activity you want the session to track. One of: {self.regolith.get_activity_names()}"}
-        if activity == "SHIP_MINING" and refinery is None:
-            return {"success": False, "message": "Please provide the refinery name to create a mining session. "}
+                
+        if activity == "SHIP_MINING" and refinery is None or gravityWell is None:
+            return {"success": False, "message": f"Please provide the {'refinery name' if refinery is None else 'gravity well'} to create a mining session. "}
         
-        session_id = self.regolith.create_mining_session(name, activity, refinery, location, start_poi, direction)
+        session_id = self.regolith.create_mining_session(name, activity, refinery, gravityWell, scouting_start_location, scouting_direction)
         if session_id is not None:
             return {"success": True, "message": "Session created. "}
         
@@ -358,10 +317,9 @@ class MiningManager(FunctionManager):
     def refinery_job_work_order_management(self, function_args):
         printr.print(f"Executing function '{self.refinery_job_work_order_management.__name__}'.", tags="info")
         work_order_index = function_args.get("work_order_index", None)
-        confirmed_deletion = function_args.get("confirm_deletion", None)
         function_type = function_args["type"]
         printr.print(f'-> Refinery Management: {function_type}', tags="info")
-        function_response = self.manage_work_order(type=function_type, work_order_index=work_order_index, confirmed_deletion=confirmed_deletion)
+        function_response = self.manage_work_order(type=function_type, work_order_index=work_order_index)
         printr.print(f'-> Result: {json.dumps(function_response, indent=2)}', tags="info")
         self.overlay.display_overlay_text("Cora: Done", vertical_position_ratio=3, display_duration=5000)
         return function_response
@@ -369,6 +327,7 @@ class MiningManager(FunctionManager):
     def add_rock_scan_or_deposit_cluster_information(self, function_args):
         printr.print(f"Executing function '{self.add_rock_scan_or_deposit_cluster_information.__name__}'. with args {json.dumps(function_args, indent=2)}", tags="info")
         function_type = function_args["type"]
+        
         if not function_type or function_type == "save_scan_result":
             image_path = screenshots.take_screenshot(self.mining_data_path, "scans", test=TEST)
             if not image_path:
@@ -405,7 +364,7 @@ class MiningManager(FunctionManager):
 
         return function_response
 
-    def manage_work_order(self, type="new", work_order_index=None, confirmed_deletion=None):
+    def manage_work_order(self, type="new", work_order_index=None):
         if type == "add_work_order":
             image_path = screenshots.take_screenshot(self.mining_data_path, "workorder", "images", test=TEST)
             if not image_path:
@@ -430,42 +389,6 @@ class MiningManager(FunctionManager):
             
         if type == "get_all_work_orders":
             return self.regolith.get_active_work_orders()
-            
-            # self.refinery_jobs, success = self.uex2_service.get_refinery_jobs()
-            # if not success:
-            #     return {"success": False, "error": self.refinery_jobs, 
-            #             "instructions": "There has been an error trying retrieving current refinery work orders."}
-            # if len(self.refinery_jobs) <= 0:
-            #     return {"success": False, "instructions": "No current refinery work orders."}
-            
-            # self.activate_refinery_job_monitoring(self.refinery_jobs)
-            # terminal_counts = {}
-            # jobs_done_message = "No finished refinery jobs."
-            
-            # if len(self.processed_jobs) > 0:
-            #     for job in self.processed_jobs:
-            #         terminal_name = job["terminal_name"]
-            #         if terminal_name in terminal_counts:
-            #             terminal_counts[terminal_name] += 1
-            #         else:
-            #             terminal_counts[terminal_name] = 1
-                
-            #     jobs_done_message = f"{len(self.processed_jobs)} jobs have completed. jobs={json.dumps(terminal_counts)}. "
-            
-            # active_jobs_message = "No active jobs."
-            # if len(self.active_jobs) > 0:
-            #     current_time = int(time.time())
-            #     next_job = min(
-            #         [job for job in self.active_jobs if job["date_expiration"] > current_time],
-            #         key=lambda job: job["date_expiration"],
-            #         default=None
-            #     )
-            #     next_job_terminal = next_job["terminal_name"]
-            #     duration = time_string_converter.convert_seconds_to_str(next_job["date_expiration"] - current_time)
-
-            #     active_jobs_message = f"{len(self.active_jobs)} active jobs, the next being finished in {duration} at '{next_job_terminal}'. "
-            
-            # return {"success": True, "instructions": f"summarize in natural language of the player: {active_jobs_message} {jobs_done_message}"}
 
         return {"success": False, "message": "I couldn't identify the action to be taken. Please repeat. "}
     

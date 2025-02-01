@@ -150,10 +150,11 @@ class OCR:
         with open(img_path, 'wb') as f:
             f.write(base64.b64decode(img_str))
 
-                    # Create the full path and filename
+        # Create the full path and filename
         filename = f"open_ai_full_response_{placeholder_part}_{timestamp}.json"
         full_path = os.path.normpath(os.path.join(path, filename))
-                    # Write JSON data to a file
+        
+        # Write JSON data to a file
         with open(full_path, 'w', encoding="UTF-8") as file:
             json.dump(response.json(), file, indent=4)
         return filename

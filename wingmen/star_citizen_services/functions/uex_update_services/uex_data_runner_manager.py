@@ -422,4 +422,4 @@ class UexDataRunnerManager(FunctionManager):
         
         self.overlay.display_overlay_text(f'UEX Corp: acknowledged the data transmittion. ', display_duration=1500)
         
-        return {"success": True}  # we don't want cora to repeat what we see on screen, if everything was fine
+        return "Ok"  # we don't want cora to repeat what we see on screen, if everything was fine

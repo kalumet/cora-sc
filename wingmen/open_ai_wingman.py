@@ -6,6 +6,8 @@ from services.open_ai import AzureConfig, OpenAi
 from services.printr import Printr
 from services.secret_keeper import SecretKeeper
 from wingmen.wingman import Wingman
+from groq import Groq
+import os
 
 printr = Printr()
 
@@ -71,6 +73,16 @@ class OpenAiWingman(Wingman):
             openai_organization = self.config["openai"].get("organization")
             openai_base_url = self.config["openai"].get("base_url")
             self.openai = OpenAi(openai_api_key, openai_organization, openai_base_url)
+
+        if self.stt_provider == "groq":
+            self.groq_key = self.secret_keeper.retrieve(
+                requester=self.name,
+                key="groq_stt",
+                friendly_key_name="Groq STT API key",
+                prompt_if_missing=True,
+            )
+            if not self.groq_key:
+                errors.append("Missing 'groq_stt' key.")
 
         self.__validate_elevenlabs_config(errors)
 
@@ -187,6 +199,17 @@ class OpenAiWingman(Wingman):
             str | None: The transcript of the audio file or None if the transcription failed.
         """
         response_format = "json"
+
+        if self.stt_provider == "groq":
+            model_name = self.config.get("groq", {}).get("whisper_model", "whisper-large-v3-turbo")
+            client = Groq(api_key=self.groq_key)
+            with open(audio_input_wav, "rb") as file:
+                result = client.audio.transcriptions.create(
+                    file=(audio_input_wav, file.read()),
+                    model=model_name,
+                    # ...any extra params...
+                )
+            return (result.text, None)
 
         azure_config = None
         if self.stt_provider == "azure":
@@ -550,7 +573,6 @@ class OpenAiWingman(Wingman):
         ]
         return tools
 
-
     def _get_message_role(self, message):
         """Helper method to get the role of the message regardless of its type."""
         if isinstance(message, Mapping):
@@ -561,3 +583,5 @@ class OpenAiWingman(Wingman):
             raise TypeError(
                 f"Message is neither a mapping nor has a 'role' attribute: {message}"
             )
+
+

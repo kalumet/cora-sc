@@ -23,7 +23,7 @@ features:
   # ─────────────────────── Speech to text Provider ─────────────────────────
   # You can override the speech to text provider to use a different one than the default.
   # Note that the other providers may have additional config blocks as shown below for edge_tts. These are only used if the provider is set here.
-  stt_provider: openai # available: openai, azure
+  stt_provider: groq # available: openai, azure, groq
 
   # ─────────────────────── Conversation Provider ─────────────────────────
   # You can override the conversation provider to use a different one than the default.
@@ -63,11 +63,11 @@ openai:
   # gpt-4 is more powerful than gpt-3.5 but also 10x more expensive.
   # gpt-3.5 is the default and should be enough for most use cases.
   # If something is not working as expected, you might want to test it with gpt-4.
-  conversation_model: gpt-3.5-turbo-0125 # available: gpt-3.5-turbo-1106, gpt-4-1106-preview (and more)
+  conversation_model: gpt-4o-mini # available: gpt-4o, gpt-4o-mini, gpt-3.5-turbo-1106, gpt-4-1106-preview (and more)
 
   # This model summarizes function responses, like API call responses etc.
   # In most cases gpt-3.5 should be enough.
-  summarize_model: gpt-4o # gpt-3.5-turbo-0125 # available: gpt-3.5-turbo-1106, gpt-4-1106-preview (and more)
+  summarize_model: gpt-4o-mini # gpt-3.5-turbo-0125 # available: gpt-4o, gpt-4o-mini, gpt-3.5-turbo-1106, gpt-4-1106-preview (and more)
 
   # The voice to use for OpenAI text-to-speech.
   # Only used if features > tts_provider is set to 'openai' above.
@@ -120,20 +120,23 @@ elevenlabs:
 # Please also provide your Azure API keys in the secrets.yaml.
 azure:
   whisper:
-    api_base_url: xxx # https://xxx.openai.azure.com/
-    api_version: 2023-09-01-preview # The API version to use. For a list of supported versions, see here: https://learn.microsoft.com/en-us/azure/ai-services/openai/reference
-    deployment_name: xxx # The deployment name e.g. 'whisper'
+    api_base_url: https://cora-ai.openai.azure.com/ # https://xxx.openai.azure.com/
+    api_version: 2024-06-01 # The API version to use. For a list of supported versions, see here: https://learn.microsoft.com/en-us/azure/ai-services/openai/reference
+    deployment_name: whisper # The deployment name e.g. 'whisper'
   conversation:
-    api_base_url: xxx # https://xxx.openai.azure.com/
-    api_version: 2023-09-01-preview # The API version to use. For a list of supported versions, see here: https://learn.microsoft.com/en-us/azure/ai-services/openai/reference
-    deployment_name: xxx # The deployment name e.g. 'whisper'
+    api_base_url: https://cora-ai.openai.azure.com/ # https://xxx.openai.azure.com/
+    api_version: 2024-08-01-preview # The API version to use. For a list of supported versions, see here: https://learn.microsoft.com/en-us/azure/ai-services/openai/reference
+    deployment_name: gpt-4o # The deployment name e.g. 'whisper'
   summarize:
-    api_base_url: xxx # https://xxx.openai.azure.com/
-    api_version: 2023-09-01-preview # The API version to use. For a list of supported versions, see here: https://learn.microsoft.com/en-us/azure/ai-services/openai/reference
-    deployment_name: xxx # The deployment name e.g. 'whisper'
+    api_base_url: https://cora-ai.openai.azure.com/ # https://xxx.openai.azure.com/
+    api_version: 2024-08-01-preview # The API version to use. For a list of supported versions, see here: https://learn.microsoft.com/en-us/azure/ai-services/openai/reference
+    deployment_name: gpt-4o-mini # The deployment name e.g. 'whisper'
   tts:
-    region: westeurope
-    voice: en-US-JaneNeural
+    api_base_url: https://cora-ai.openai.azure.com/ # https://xxx.openai.azure.com/
+    api_version: 2024-10-01-preview # The API version to use. For a list of supported versions, see here: https://learn.microsoft.com/en-us/azure/ai-services/openai/reference
+    deployment_name: tts # The deployment name e.g. 'whisper'
+    region: swedencentral
+    voice: nova
     detect_language: true
 
 
@@ -264,13 +267,13 @@ wingmen:
     command_languages: 
       - de_DE
       - fr_FR 
-    update_keybindings: True # True | False - set to True, if you have a new keybinding file exported and you want to update the keybinding files in the star_citizen_data directory.
-    regenerate_all_instant_commands: True # True | False - only set to True if you want to regenerate all instant activation commands (i.e. if you changed your player language). This will take a while. 
+    update_keybindings: False # True | False - set to True, if you have a new keybinding file exported and you want to update the keybinding files in the star_citizen_data directory.
+    regenerate_all_instant_commands: False # True | False - only set to True if you want to regenerate all instant activation commands (i.e. if you changed your player language). This will take a while. 
     sc-keybind-mappings:
       keybindings-directory: "keybindings/" # subdirectory of data-root-directory above, where you will find the keybinding files generated by Cora
       sc_installation_dir: C:/Program Files/Roberts Space Industries/StarCitizen # the installation directory of your star citizen game
-      sc_active_channel: LIVE # LIVE or PTU or EPTU TECH-PREVIEW - The channel you are playing on
-      sc_channel_version: R3_23 # R3_23 or R3_22 - The version of the channel you are playing on
+      sc_active_channel: HOTFIX # HOTFIX 4.0_PREVIEW LIVE or PTU or EPTU TECH-PREVIEW - The channel you are playing on
+      sc_channel_version: R4_00 # R4_00, R3_24  - The version of the channel you are playing on
 
 
       # the name of the exported keybinding file. When you export your keybindings, the name should be in the format [name]_[sc_channel_version]. 
@@ -840,4 +843,4 @@ wingmen:
           - Discord Stummschalten
           - Discord aktivieren
           - Unmute Discord
-        responses: False     
+        responses: False

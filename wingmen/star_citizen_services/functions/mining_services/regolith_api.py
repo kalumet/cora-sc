@@ -2,6 +2,8 @@ import time
 import json
 import webbrowser
 import traceback
+import os
+import base64
 from collections import defaultdict
 
 from datetime import datetime
@@ -23,9 +25,11 @@ def print_debug(to_print):
 class RegolithAPI:
 
     def __init__(self, config, x_api_key):
+        self.config = config
+
         # Initialize your instance here, if not already initialized
         if not hasattr(self, "is_initialized"):
-            self.root_data_path = "star_citizen_data/regolith"
+            self.root_data_path = f'{self.config["data-root-directory"]}mining-data'
 
             self.base_api_url = (
                 "https://api.regolith.rocks/staging/"
@@ -253,10 +257,10 @@ class RegolithAPI:
             else:
                 print_debug("Gravity wells name retrieved")
                 self.gravity_wells_names = [
-                    value["name"] for value in response["lookups"]["UEX"]["bodies"]
+                    value["label"] for value in response["lookups"]["UEX"]["bodies"]
                 ]
                 self.gravity_wells_mapping = {
-                    value["name"]: value["code"] for value in response["lookups"]["UEX"]["bodies"]
+                    value["label"]: value["id"] for value in response["lookups"]["UEX"]["bodies"]
                 }
                 return self.gravity_wells_names
         except Exception as e:
@@ -593,30 +597,33 @@ class RegolithAPI:
                     "message": "There was an error when I tried to retrieve active work orders. I'm very sorry. ",
                 }
             else:
-                finished_work_orders = self.process_work_orders(response)
+                work_order_data = self.process_work_orders(response)
                 print_debug(
-                    f"Work orders retrieved. {json.dumps(finished_work_orders, indent=2)}"
+                    f"Work orders retrieved. {json.dumps(work_order_data, indent=2)}"
                 )
 
-                if finished_work_orders["total_finished_refinery_orders"] > 0:
+                if work_order_data["total_finished_refinery_orders"] > 0:
                     return {
                         "success": True,
                         "instructions": (
-                            "Give a summary to the player in his language of his work orders ready for pickup and still processing orders. "
+                            "Give a summary to the player in his language of his work orders ready for pickup and those that are still being processed. "
                             "The first refinery mentioned contains the most processed orders to be picked up. Tell him the refinery and the number of orders ready. "
-                            "Further, tell him when the next refinery order is going to be finished. "
                             "Ask the player, if he wants to open this session in the browser. "
                         ),
-                        "data": finished_work_orders,
+                        "data": work_order_data,
                     }
 
-                return {
-                    "success": True,
-                    "instructions": (
-                        "Respond in the players language. Tell him when the next refinery order is going to be finished, if any. "
-                    ),
-                    "data": finished_work_orders,
-                }
+                if work_order_data["total_refinery_orders_in_processing"] > 0:
+                    return {
+                        "success": True,
+                        "instructions": (
+                            "Respond in the players language. Tell him when the next refinery order is going to be finished. "
+                        ),
+                        "data": work_order_data,
+                    }
+                
+                return None
+
         except Exception as e:
             print(
                 f"Error during work order retrieval {str(e)}: \n{traceback.print_stack()}"
@@ -772,7 +779,6 @@ class RegolithAPI:
                 clusterType
                 clusterCount
                 gravityWell
-                includeInSurvey
                 note
                 ... on ShipClusterFind {
                     shipRocks {
@@ -800,7 +806,6 @@ class RegolithAPI:
                 "state": "DISCOVERED",
                 "clusterCount": cluster_count,
                 "gravityWell": self.active_session["sessionSettings"]["gravityWell"],
-                "includeInSurvey": True,
                 "note": "{'info': 'This cluster has been discovered by Cora - your AI Compagnion.'"
                 + (f", 'cluster_type': '{cluster_type}'" if cluster_type else "")
                 + "}",
@@ -913,18 +918,20 @@ class RegolithAPI:
 
                 return {
                     "success": False,
-                    "message": response["errors"],
+                    "response_instructions": "Shortly tell why the scan couldn't be saved. ",
+                    "result": response["errors"],
                 }
             else:
                 return {
                     "success": True,
-                    "message": "scan results saved",
+                    "response_instructions": "Shortly confirm that the scan has been saved, like: 'Scan saved'"
                 }
         except Exception as e:
             print(f"Error during save scan: {str(e)}:\n{traceback.print_stack()}")
             return {
                 "success": False,
-                "message": f"Unable to save scan. Check the logs because of {str(e)}. ",
+                "response_instructions": "Tell there was a technical error. ",
+                "result": f"Unable to save scan. Check the logs because of {str(e)}. ",
             }
 
     def process_work_orders(self, data):
@@ -1009,22 +1016,27 @@ class RegolithAPI:
                 ],
             }
             refinery_orders.append(refinery_entry)
-
+       
         # Rückgabe
-        if total_refined_orders == 0:
+        if total_refined_orders > 0 and total_orders_in_processing > 0:
             return {
                 "total_finished_refinery_orders": total_refined_orders,
                 "total_refinery_orders_in_processing": total_orders_in_processing,
                 "next_refinery_job_finished_in": next_order_finish_str,
             }
-
-        return {
-            "total_finished_refinery_orders": total_refined_orders,
-            "total_refinery_orders_in_processing": total_orders_in_processing,
-            "next_refinery_order_finished_in": next_order_finish_str,
-            "finished_refinery_orders": refinery_orders,
-        }
-
+        elif total_refined_orders > 0 and total_orders_in_processing == 0:
+            return {
+                "total_finished_refinery_orders": total_refined_orders,
+                "finished_refinery_orders": refinery_orders,
+            }
+        elif total_refined_orders == 0 and total_orders_in_processing > 0:
+            return {
+                "total_refinery_orders_in_processing": total_orders_in_processing,
+                "next_refinery_job_finished_in": next_order_finish_str,
+            }
+        
+        return None
+    
         # {
         #     "total_finished_refinery_orders": 3,
         #     "total_refinery_orders_in_processing": 0,
@@ -1207,7 +1219,7 @@ class RegolithAPI:
             }
         """
         )
-        return self._get_image_infos(query, base64_jpg_url_string)
+        return self._get_image_infos(query, base64_jpg_url_string, "work_order")
 
     def get_rock_scan_image_infos(self, base64_jpg_url_string):
         query = gql(
@@ -1226,9 +1238,9 @@ class RegolithAPI:
                 }
             """
         )
-        return self._get_image_infos(query, base64_jpg_url_string)
+        return self._get_image_infos(query, base64_jpg_url_string, "rock_scan")
 
-    def _get_image_infos(self, query_str, base64_jpg_url_string):
+    def _get_image_infos(self, query_str, base64_jpg_url_string, image_type=None ):
         variables = {"imgUrl": base64_jpg_url_string}
 
         try:
@@ -1238,6 +1250,7 @@ class RegolithAPI:
                 print("Fehler bei der GraphQL-Anfrage:")
                 for error in response["errors"]:
                     print(error["message"])
+                self._save_debug_data("image_infos", base64_jpg_url_string, json.dumps(response["errors"]))
                 return {
                     "success": False,
                     "message": "There was an error when I tried to retrieve image information. I'm very sorry. ",
@@ -1251,10 +1264,33 @@ class RegolithAPI:
             print(
                 f"Error during work order creation {str(e)}: \n{traceback.print_stack()}"
             )
+            self._save_debug_data(image_type=image_type, image_data=base64_jpg_url_string, error_message=str(e))
             return {
                 "success": False,
                 "message": "Sorry, but regolith seems not to be available currently. ",
             }
+
+    def _save_debug_data(self, image_type=None, image_data=None, error_message=None):
+        """
+        Saves image data and error messages to the debug_data directory.
+        The filename depends on file_type and a timestamp.
+        """
+        debug_dir = os.path.join("debug_data", image_type)
+        os.makedirs(debug_dir, exist_ok=True)
+
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+
+        if image_data:
+            filename = f"{'cropped_screenshot'}_{timestamp}.jpg"
+            image_path = os.path.join(debug_dir, filename)
+            with open(image_path, "wb") as img_file:
+                img_file.write(base64.b64decode(image_data.split(",")[1]))
+
+        if error_message:
+            filename = f"{'regolith_error'}_{timestamp}.txt"
+            error_path = os.path.join(debug_dir, filename)
+            with open(error_path, "w") as err_file:
+                err_file.write(error_message)
 
     def fetch_lookups(self):
         """

@@ -265,12 +265,7 @@ class MiningManager(FunctionManager):
         if result and not result["success"]:
             return ""  # we don't tell the user that errors occured
         
-        if result["data"]["total_finished_refinery_orders"] == 0 and result["data"]["total_refinery_orders_in_processing"] == 0:
-            return ""
-        
-        return {
-            "mining_session_work_order_request": result
-        }
+        return result
 
     def mining_or_salvage_session_management(self, function_args):
         printr.print(f"Executing function '{self.mining_or_salvage_session_management.__name__}'.", tags="info")
@@ -293,7 +288,8 @@ class MiningManager(FunctionManager):
                 return {"success": False, "message": f"I couldn't open the browser{' as there is no active session. ' if self.regolith.active_session_id is None else '. '}"}
             return {"success": True}
         
-
+        return {"success": False, "message": "I couldn't identify the action to be taken. Please repeat. "}
+        
     def create_session(self, function_args):
         name = function_args.get("name", None)
         activity = function_args.get("activity", None)
@@ -338,16 +334,15 @@ class MiningManager(FunctionManager):
             cropped_image = screenshots.crop_screenshot(f"{self.mining_data_path}/templates/scans", image_path, [("UPPER_LEFT", "UPPER_LEFT", "AREA"), ("LOWER_RIGHT", "LOWER_RIGHT", "AREA")])
             base64_jpg_image = screenshots.convert_cv2_image_to_base64_jpeg(cropped_image)
             scan_result = self.regolith.get_rock_scan_image_infos(base64_jpg_image)
-            if scan_result and "captureShipRockScan" in scan_result:
-                session_id = self.regolith.get_or_create_mining_session(name="Ship", activity="SHIP_MINING", refinery=None)
-                if scan_result["captureShipRockScan"] is None:
-                    self.overlay.display_overlay_text("Cora: Error", vertical_position_ratio=3, display_duration=5000)
-                    return {
-                        "success": False,
-                        "message": "Could not identify scan, please try again. "
-                    }
-                cluster = self.regolith.get_or_create_scouting_cluster(session_id)
-                function_response = self.regolith.add_ship_cluster_scan_results(session_id, cluster, scan_result["captureShipRockScan"])
+
+            if "success" in scan_result and scan_result["success"] is False:
+                self.overlay.display_overlay_text("Cora: Error", vertical_position_ratio=3, display_duration=5000)
+                return scan_result
+           
+            session_id = self.regolith.get_or_create_mining_session(name="Ship", activity="SHIP_MINING", refinery=None)
+            cluster = self.regolith.get_or_create_scouting_cluster(session_id)
+            function_response = self.regolith.add_ship_cluster_scan_results(session_id, cluster, scan_result["captureShipRockScan"])
+            self.overlay.display_overlay_text("Cora: saved.", vertical_position_ratio=3, display_duration=5000)
         
         elif function_type == "add_new_cluster":
             cluster_count = function_args.get("cluster_count", 0)
@@ -358,9 +353,9 @@ class MiningManager(FunctionManager):
                 self.overlay.display_overlay_text("Cora: Error", vertical_position_ratio=3, display_duration=5000)
                 return {"success": False, "message": "Couldn't create a new cluster."}
             function_response = {"success": True, "message": f"Created a new cluster with {cluster_count} rocks."}
+            self.overlay.display_overlay_text("Cora: Done", vertical_position_ratio=3, display_duration=5000)
        
         printr.print(f'-> Result: {json.dumps(function_response, indent=2)}', tags="info")
-        self.overlay.display_overlay_text("Cora: Done", vertical_position_ratio=3, display_duration=5000)
 
         return function_response
 
@@ -368,6 +363,7 @@ class MiningManager(FunctionManager):
         if type == "add_work_order":
             image_path = screenshots.take_screenshot(self.mining_data_path, "workorder", "images", test=TEST)
             if not image_path:
+                self.overlay.display_overlay_text("Cora: Error", vertical_position_ratio=3, display_duration=5000)
                 return {"success": False, "instructions": "Could not take screenshot. Explain the player, that you only take screenshots, if the active window is Star Citizen. "}
             
             self.overlay.display_overlay_text("Screenshot taken", vertical_position_ratio=3, display_duration=5000)
@@ -385,6 +381,10 @@ class MiningManager(FunctionManager):
             base64_jpg_image = screenshots.convert_cv2_image_to_base64_jpeg(cropped_image)
             scan_result = self.regolith.get_work_order_image_infos(base64_jpg_image)
 
+            if "success" in scan_result and scan_result["success"] is False:
+                self.overlay.display_overlay_text("Cora: Error", vertical_position_ratio=3, display_duration=5000)
+                return scan_result
+            
             return self.add_work_order_regolith_from_scan(scan_result)
             
         if type == "get_all_work_orders":
@@ -394,10 +394,6 @@ class MiningManager(FunctionManager):
     
     def add_work_order_regolith_from_scan(self, scan_result):
         print_debug("\n ===== ADDING REGOLITH WORK ORDER ======")
-        
-        if "captureRefineryOrder" not in scan_result:
-            print_debug("No refinery work order information available.")
-            return {"success": False, "message": f"Couldn't retrieve data from {json.dumps(scan_result, indent=2)}."}
         
         current_time = int(time.time() * 1000)
         session_id = self.regolith.get_or_create_mining_session(name="Ship", activity="SHIP_MINING", refinery=scan_result["captureRefineryOrder"]["refinery"])

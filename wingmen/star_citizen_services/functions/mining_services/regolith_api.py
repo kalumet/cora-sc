@@ -5,48 +5,45 @@ import traceback
 import os
 import base64
 from collections import defaultdict
-
 from datetime import datetime
 from gql import gql, Client
 from gql.transport.requests import RequestsHTTPTransport
-
 from wingmen.star_citizen_services.helper import time_string_converter
 
-
-DEBUG = True
+DEBUG = False
 TEST = False
 SHIP_CLUSTER_TYPES = [
-    'CTYPE',
-    'ETYPE',
-    'ITYPE',
-    'MTYPE',
-    'PTYPE',
-    'QTYPE',
-    'STYPE'
-    'ATACAMITE',
-    'FELSIC',
-    'GNEISS',
-    'GRANITE',
-    'IGNEOUS',
-    'OBSIDIAN',
-    'QUARTZITE',
-    'SHALE',
+    "CTYPE",
+    "ETYPE",
+    "ITYPE",
+    "MTYPE",
+    "PTYPE",
+    "QTYPE",
+    "STYPE",
+    "ATACAMITE",
+    "FELSIC",
+    "GNEISS",
+    "GRANITE",
+    "IGNEOUS",
+    "OBSIDIAN",
+    "QUARTZITE",
+    "SHALE",
 ]
 
 VEHICLE_CLUSTER_TYPES = [
-    'FEYNMALINE',
-    'BERADOM',
-    'GLACOSITE',
+    "FEYNMALINE",
+    "BERADOM",
+    "GLACOSITE",
 ]
 
 FPS_CLUSTER_TYPES = [
-    'JANALITE',
-    'HADANITE',
-    'APHORITE',
-    'DOLIVINE',
-    'CARINITE',
-    'JACLIUM',
-    'SALDYNIUM'
+    "JANALITE",
+    "HADANITE",
+    "APHORITE",
+    "DOLIVINE",
+    "CARINITE",
+    "JACLIUM",
+    "SALDYNIUM",
 ]
 
 
@@ -139,7 +136,8 @@ class RegolithAPI:
             )
             return False
 
-    def get_graphql_for_names(self, object_name):
+    @staticmethod
+    def get_graphql_for_names(object_name):
         return (
             f'{object_name}: __type(name: "{object_name}") {{'
             " name"
@@ -152,12 +150,13 @@ class RegolithAPI:
 
     def initialize_all_names(self):
         # Erstelle die Queries für RefineryEnum und RefineryMethodEnum
-        list_of_name_fields = []
-        list_of_name_fields.append(self.get_graphql_for_names("RefineryEnum"))
-        list_of_name_fields.append(self.get_graphql_for_names("RefineryMethodEnum"))
-        list_of_name_fields.append(self.get_graphql_for_names("ActivityEnum"))
-        list_of_name_fields.append(self.get_graphql_for_names("LocationEnum"))
-        list_of_name_fields.append(self.get_graphql_for_names("ShipOreEnum"))
+        list_of_name_fields = [
+            self.get_graphql_for_names("RefineryEnum"),
+            self.get_graphql_for_names("RefineryMethodEnum"),
+            self.get_graphql_for_names("ActivityEnum"),
+            self.get_graphql_for_names("LocationEnum"),
+            self.get_graphql_for_names("ShipOreEnum"),
+        ]
 
         # Kombiniere die beiden Queries zu einer einzigen Query
         combined_query = "{" + " ".join(list_of_name_fields) + "}"
@@ -195,10 +194,11 @@ class RegolithAPI:
                 f"Error during entity name retrieval from regolith: {str(e)}:\n{traceback.print_stack()}"
             )
             return
-    
-    def get_cluster_types(self):
+
+    @staticmethod
+    def get_cluster_types():
         return SHIP_CLUSTER_TYPES + VEHICLE_CLUSTER_TYPES + FPS_CLUSTER_TYPES
-    
+
     def get_refinery_names(self):
         if self.refineries is not None:
             return self.refineries
@@ -255,13 +255,15 @@ class RegolithAPI:
         if self.gravity_wells_names is not None:
             return self.gravity_wells_names
 
-        gravity_wells = gql("""query getPublicLookups {
+        gravity_wells = gql(
+            """query getPublicLookups {
             lookups {
                 UEX {
                 bodies 
                 }
             }
-            }""")
+            }"""
+        )
 
         try:
             response = self.client.execute(gravity_wells)
@@ -277,7 +279,8 @@ class RegolithAPI:
                     value["label"] for value in response["lookups"]["UEX"]["bodies"]
                 ]
                 self.gravity_wells_mapping = {
-                    value["label"]: value["id"] for value in response["lookups"]["UEX"]["bodies"]
+                    value["label"]: value["id"]
+                    for value in response["lookups"]["UEX"]["bodies"]
                 }
                 return self.gravity_wells_names
         except Exception as e:
@@ -441,7 +444,9 @@ class RegolithAPI:
             session_id = self.create_mining_session(name, activity, refinery)
         return session_id
 
-    def create_mining_session(self, name, activity, refinery, location, start_poi, direction):
+    def create_mining_session(
+        self, name, activity, refinery, start_poi=None, direction=None, location=None
+    ) -> [None, int]:
         now = datetime.now()
         # Zuerst das Datum mit führenden Nullen formatieren
         formatted_date_with_zero = now.strftime("%A, %b %d, %I %p")
@@ -449,10 +454,14 @@ class RegolithAPI:
         # Führende Null von der Stunde entfernen, falls vorhanden
         formatted_date = formatted_date_with_zero.replace(" 0", " ")
 
-        # GraphQL-Mutation als String, minimiert auf erforderliche Felder
+        # GrafQL-Mutation als String, minimiert auf erforderliche Felder
         mutation = gql(
             """
-        mutation createSession($session: SessionInput!, $sessionSettings: SessionSettingsInput, $workOrderDefaults: WorkOrderDefaultsInput) {
+        mutation createSession(
+            $session: SessionInput!, 
+            $sessionSettings: SessionSettingsInput, 
+            $workOrderDefaults: WorkOrderDefaultsInput
+        ) {
             createSession(
             session: $session
             sessionSettings: $sessionSettings
@@ -500,8 +509,8 @@ class RegolithAPI:
                 "isRefined": True,
             }
 
-        if refinery:
-            variables["workOrderDefaults"]["refinery"] = refinery
+            if refinery:
+                variables["workOrderDefaults"]["refinery"] = refinery
 
         try:
             response = self.client.execute(mutation, variable_values=variables)
@@ -515,9 +524,7 @@ class RegolithAPI:
             else:
                 print_debug("Mining Session created")
                 self.active_session = response.get("createSession", {})
-                self.active_session_id = self.active_session.get(
-                    "sessionId", None
-                )
+                self.active_session_id = self.active_session.get("sessionId", None)
                 return self.active_session_id
         except Exception as e:
             print(
@@ -603,38 +610,38 @@ class RegolithAPI:
                     f"Work orders retrieved. {json.dumps(work_order_data, indent=2)}"
                 )
 
-                instructions = "Give a narrative summary (that can be read out) focussing on: "
-                result = {
-                    "success": False,
-                    "data": None,
-                    "response_instructions": None
-                }
+                instructions = (
+                    "Give a narrative summary (that can be read out) focussing on: "
+                )
+                result = {"success": False, "data": None, "response_instructions": None}
 
                 if work_order_data is None:
                     result["message"] = "No work orders available."
                     return result
 
-                if "total_finished_refinery_orders" in work_order_data and work_order_data["total_finished_refinery_orders"] > 0:
+                if (
+                    "total_finished_refinery_orders" in work_order_data
+                    and work_order_data["total_finished_refinery_orders"] > 0
+                ):
                     result["success"] = True
                     result["data"] = work_order_data
-                    instructions += (
-                        "total refinery work orders finished and where they can be picked up. "
-                    )
+                    instructions += "total refinery work orders finished and where they can be picked up. "
 
-                if "total_refinery_orders_in_processing" in work_order_data and work_order_data["total_refinery_orders_in_processing"] > 0:
+                if (
+                    "total_refinery_orders_in_processing" in work_order_data
+                    and work_order_data["total_refinery_orders_in_processing"] > 0
+                ):
                     result["success"] = True
                     result["data"] = work_order_data
-                    instructions += (
-                        "total refinery work orders in processing and when the next one will be finished. "
-                    )
-                   
+                    instructions += "total refinery work orders in processing and when the next one will be finished. "
+
                 if result["success"]:
                     instructions += (
                         " Also ask if he wants to open the session in the browser. "
-                    ) 
+                    )
                     result["response_instructions"] = instructions
                     return result
-                
+
                 return None
 
         except Exception as e:
@@ -646,7 +653,8 @@ class RegolithAPI:
                 "message": "Sorry, but regolith seems not to be available currently. ",
             }
 
-    def get_active_work_session_query(self):
+    @staticmethod
+    def get_active_work_session_query():
         query = gql(
             """
             query getUserProfil($nextToken: String) {
@@ -770,12 +778,14 @@ class RegolithAPI:
             return False
 
     def create_scouting_cluster(self, session_id, cluster_count=0, cluster_type=None):
-        
-        mutation = ""
-        variables = {}
         if cluster_type and cluster_type in SHIP_CLUSTER_TYPES:
             mutation = gql(
-                """mutation addScoutingFind($sessionId: ID!, $scoutingFind: ScoutingFindInput!, $shipRocks: [ShipRockInput!]) {
+                """
+                mutation addScoutingFind(
+                    $sessionId: ID!, 
+                    $scoutingFind: ScoutingFindInput!, 
+                    $shipRocks: [ShipRockInput!]
+                ) {
                     addScoutingFind(
                         sessionId: $sessionId
                         scoutingFind: $scoutingFind
@@ -823,7 +833,9 @@ class RegolithAPI:
                 "scoutingFind": {
                     "state": "DISCOVERED",
                     "clusterCount": cluster_count,
-                    "gravityWell": self.active_session["sessionSettings"]["gravityWell"],
+                    "gravityWell": self.active_session["sessionSettings"][
+                        "gravityWell"
+                    ],
                     "includeInSurvey": True,
                     "note": "{'info': 'This cluster has been discovered by Cora - your AI Compagnion.'"
                     + (f", 'cluster_type': '{cluster_type}'" if cluster_type else "")
@@ -833,7 +845,12 @@ class RegolithAPI:
             }
         else:
             mutation = gql(
-                """mutation addScoutingFind($sessionId: ID!, $scoutingFind: ScoutingFindInput!, $vehicleRocks: [VehicleRockInput!]) {
+                """
+                mutation addScoutingFind(
+                    $sessionId: ID!, 
+                    $scoutingFind: ScoutingFindInput!, 
+                    $vehicleRocks: [VehicleRockInput!]
+                ) {
                     addScoutingFind(
                         sessionId: $sessionId
                         scoutingFind: $scoutingFind
@@ -876,22 +893,16 @@ class RegolithAPI:
                 "scoutingFind": {
                     "state": "DISCOVERED",
                     "clusterCount": cluster_count,
-                    "gravityWell": self.active_session["sessionSettings"]["gravityWell"],
+                    "gravityWell": self.active_session["sessionSettings"][
+                        "gravityWell"
+                    ],
                     "includeInSurvey": True,
                     "note": "{'info': 'This cluster has been discovered by Cora - your AI Compagnion.'"
-                            + (f", 'cluster_type': '{cluster_type}'" if cluster_type else "")
-                            + "}",
+                    + (f", 'cluster_type': '{cluster_type}'" if cluster_type else "")
+                    + "}",
                 },
                 "vehicleRocks": [
-                    {
-                        "mass": 0.15,
-                        "ores": [
-                            {
-                                "percent": 1,
-                                "ore": cluster_type
-                            }
-                        ]
-                    }
+                    {"mass": 0.15, "ores": [{"percent": 1, "ore": cluster_type}]}
                     for _ in range(cluster_count)
                 ],
             }
@@ -913,11 +924,15 @@ class RegolithAPI:
             )
             return None
 
-    def add_ship_cluster_scan_results(
-        self, session_id, cluster, ship_rock_scan_result
-    ):
+    def add_ship_cluster_scan_results(self, session_id, cluster, ship_rock_scan_result):
         mutation = gql(
-            """mutation updateScoutingFind($sessionId: ID!, $scoutingFindId: ID!, $scoutingFind: ScoutingFindInput!, $shipRocks: [ShipRockInput!]) {
+            """
+            mutation updateScoutingFind(
+                $sessionId: ID!, 
+                $scoutingFindId: ID!, 
+                $scoutingFind: ScoutingFindInput!, 
+                $shipRocks: [ShipRockInput!]
+            ) {
                 updateScoutingFind(
                     sessionId: $sessionId
                     scoutingFindId: $scoutingFindId
@@ -965,7 +980,7 @@ class RegolithAPI:
             return {
                 "success": False,
                 "response_instructions": "Tell user there's no valid scan data.",
-                "result": "The scan result is empty or invalid."
+                "result": "The scan result is empty or invalid.",
             }
         ores = ship_rock_scan_result["ores"]
         cleaned_ores = [
@@ -978,14 +993,16 @@ class RegolithAPI:
             cleaned_ores.append({"ore": "INERTMATERIAL", "percent": 1 - total_percent})
 
         ship_rocks = cluster.get("shipRocks", [])
-        ship_rocks.append({
-                    "mass": ship_rock_scan_result["mass"],
-                    "state": "READY",
-                    "inst": ship_rock_scan_result["inst"],
-                    "res": ship_rock_scan_result["res"],
-                    "rockType": ship_rock_scan_result["rockType"],
-                    "ores": cleaned_ores,
-                })
+        ship_rocks.append(
+            {
+                "mass": ship_rock_scan_result["mass"],
+                "state": "READY",
+                "inst": ship_rock_scan_result["inst"],
+                "res": ship_rock_scan_result["res"],
+                "rockType": ship_rock_scan_result["rockType"],
+                "ores": cleaned_ores,
+            }
+        )
 
         variables = {
             "sessionId": session_id,
@@ -998,7 +1015,9 @@ class RegolithAPI:
         }
 
         try:
-            print_debug(f"Adding ship cluster scan results: {json.dumps(variables, indent=2)}")
+            print_debug(
+                f"Adding ship cluster scan results: {json.dumps(variables, indent=2)}"
+            )
             response = self.client.execute(mutation, variable_values=variables)
 
             if "errors" in response:
@@ -1014,7 +1033,7 @@ class RegolithAPI:
             else:
                 return {
                     "success": True,
-                    "response_instructions": "Shortly confirm that the scan has been saved, like: 'Scan saved'"
+                    "response_instructions": "Shortly confirm that the scan has been saved, like: 'Scan saved'",
                 }
         except Exception as e:
             print(f"Error during save scan: {str(e)}:\n{traceback.print_stack()}")
@@ -1024,7 +1043,8 @@ class RegolithAPI:
                 "result": f"Unable to save scan. Check the logs because of {str(e)}. ",
             }
 
-    def process_work_orders(self, data):
+    @staticmethod
+    def process_work_orders(data):
         current_time_ms = int(datetime.now().timestamp() * 1000)
 
         # Zuerst Duplikate entfernen (hier anhand orderId).
@@ -1106,7 +1126,7 @@ class RegolithAPI:
                 ],
             }
             refinery_orders.append(refinery_entry)
-       
+
         # Rückgabe
         if total_refined_orders > 0 and total_orders_in_processing > 0:
             return {
@@ -1124,9 +1144,9 @@ class RegolithAPI:
                 "total_refinery_orders_in_processing": total_orders_in_processing,
                 "next_refinery_job_finished_in": next_order_finish_str,
             }
-        
+
         return None
-    
+
         # {
         #     "total_finished_refinery_orders": 3,
         #     "total_refinery_orders_in_processing": 0,
@@ -1288,7 +1308,7 @@ class RegolithAPI:
         """
         print_debug(f"retrieving work order information")
 
-        # GraphQL-Mutation als String, minimiert auf erforderliche Felder
+        # GrafQL-Mutation als String, minimiert auf erforderliche Felder
         query = gql(
             """
             query captureRefineryOrder($imgUrl: String!) {
@@ -1309,7 +1329,9 @@ class RegolithAPI:
             }
         """
         )
-        return self._get_image_infos(query, base64_jpg_url_string, "captureRefineryOrder")
+        return self._get_image_infos(
+            query, base64_jpg_url_string, "captureRefineryOrder"
+        )
 
     def get_rock_scan_image_infos(self, base64_jpg_url_string):
         query = gql(
@@ -1328,9 +1350,11 @@ class RegolithAPI:
                 }
             """
         )
-        return self._get_image_infos(query, base64_jpg_url_string, "captureShipRockScan")
+        return self._get_image_infos(
+            query, base64_jpg_url_string, "captureShipRockScan"
+        )
 
-    def _get_image_infos(self, query_str, base64_jpg_url_string, image_type=None ):
+    def _get_image_infos(self, query_str, base64_jpg_url_string, image_type=None):
         variables = {"imgUrl": base64_jpg_url_string}
 
         try:
@@ -1340,7 +1364,9 @@ class RegolithAPI:
                 print("Fehler bei der GraphQL-Anfrage:")
                 for error in response["errors"]:
                     print(error["message"])
-                self._save_debug_data("image_infos", base64_jpg_url_string, json.dumps(response["errors"]))
+                self._save_debug_data(
+                    "image_infos", base64_jpg_url_string, json.dumps(response["errors"])
+                )
                 return {
                     "success": False,
                     "message": "There was an error when I tried to retrieve image information. I'm very sorry. ",
@@ -1354,13 +1380,18 @@ class RegolithAPI:
             print(
                 f"Error during {image_type} creation {str(e)}: \n{traceback.print_stack()}"
             )
-            self._save_debug_data(image_type=image_type, image_data=base64_jpg_url_string, error_message=str(e))
+            self._save_debug_data(
+                image_type=image_type,
+                image_data=base64_jpg_url_string,
+                error_message=str(e),
+            )
             return {
                 "success": False,
                 "message": "Sorry, but regolith seems not to be available currently. ",
             }
 
-    def _save_debug_data(self, image_type=None, image_data=None, error_message=None):
+    @staticmethod
+    def _save_debug_data(image_type=None, image_data=None, error_message=None):
         """
         Saves image data and error messages to the debug_data directory.
         The filename depends on file_type and a timestamp.
@@ -1425,7 +1456,6 @@ class RegolithAPI:
             ore (str): Type of ore.
             refinery (str): Name of the refinery.
             method (str): Refining method used.
-            api_url (str): GraphQL API URL to fetch lookup data.
 
         Returns:
             int: Final ore amount rounded to the nearest integer.

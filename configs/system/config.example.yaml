@@ -319,7 +319,8 @@ wingmen:
           vision_signature_single_inflight: True # Do not queue a new Vision AI crop until the current request finished.
           vision_signature_near_duplicate_enabled: True # Compare pixels locally and skip crops that look like a recently sent crop.
           vision_signature_near_duplicate_cooldown_seconds: 30.0 # How long a similar crop suppresses another Vision AI request.
-          vision_signature_near_duplicate_max_mean_delta: 18.0 # Average normalized text-mask delta under this threshold counts as near-duplicate.
+          vision_signature_similar_cache_min_template_score: 0.95 # Require close glyph agreement before reusing a value.
+          vision_signature_similar_cache_min_tile_score: 0.92 # Each aligned digit region must agree, not just the whole image.
           vision_signature_near_duplicate_history_size: 8 # Number of recent Vision AI crops kept for near-duplicate comparison.
           vision_signature_error_backoff_seconds: 30.0 # Backoff after transient Vision AI errors such as rate limits or 5xx responses.
           vision_signature_inflight_timeout_seconds: 60.0 # Clear a stuck Vision AI in-flight request after this many seconds.
@@ -331,7 +332,7 @@ wingmen:
           vision_signature_save_crops: True # Save sent number crops for later local recognizer training.
           vision_signature_training_dir: debug_data/signature_training # Relative to mining-data; stores crops and auto-label JSONL, including unknown but readable values.
           vision_signature_max_output_tokens: 512 # Response token limit for the small digit-only signature extraction prompt.
-          local_signature_ocr_enabled: False # Disable local Tesseract OCR; Vision AI is the live recognition source and training label source.
+          local_signature_ocr_enabled: True # Read locally first; fall back to Vision AI when unavailable or uncertain.
           save_number_crops: False # Save OCR scan crops to mining-data/screenshots/signatures for debugging.
           overwrite_number_crop: True # If saving crops, overwrite latest_signature_number.png instead of creating timestamped files.
           log_observed_clusters: True # Appends stable observations to mining-data/debug_data/signature_cluster_observations.jsonl.
@@ -352,16 +353,17 @@ wingmen:
           signature_number_crop_vertical_padding: 8 # Extra pixels above and below the icon row kept for OCR context.
           debug_log_ocr_candidates: False # Logs OCR variant candidates; useful while tuning recognition.
           debug_log_ocr_timing: True # Logs whether OCR found digits and how long the simple OCR pass took.
-          ocr_psm_modes: [7, 8, 13] # Only used when local_signature_ocr_enabled is True.
-          ocr_variant_names: [gray, light_text, light_text_closed, light_text_thick, otsu, adaptive] # Only used when local_signature_ocr_enabled is True.
+          ocr_psm_modes: [8, 7, 13] # Only used when local_signature_ocr_enabled is True.
+          ocr_variant_names: [glyph_180, glyph_200, native_gray, native_otsu] # Only used when local_signature_ocr_enabled is True.
+          ocr_tick_budget_seconds: 0.75 # Total Tesseract time budget per scan tick.
           ocr_tesseract_timeout_seconds: 2.0 # Only used when local_signature_ocr_enabled is True.
-          ocr_fuzzy_reference_match: True # Correct unknown OCR values to a very close known reference value when the match is unambiguous.
+          ocr_fuzzy_reference_match: False # Correct unknown OCR values to a very close known reference value when the match is unambiguous.
           ocr_fuzzy_max_distance: 1 # Maximum Levenshtein digit edits allowed for fuzzy correction, e.g. 8460 -> 8480.
           ocr_fuzzy_max_weighted_distance: 0.5 # Maximum weighted OCR-confusion distance; favors likely digit confusions like 6 vs 8.
           ocr_fuzzy_max_numeric_delta: 100 # Maximum numeric difference allowed for fuzzy correction.
           ocr_fuzzy_require_same_length: True # Only fuzzy-match values with the same number of digits.
-          ocr_fuzzy_allow_missing_leading_one: True # Allow correction like 1475 -> 11475 when adding a leading 1 gives an exact known signature.
-          save_ocr_debug_variants: True # In debug mode, save latest OCR input variants to mining-data/debug_data/signature_ocr_variants.
+          ocr_fuzzy_allow_missing_leading_one: False # Allow correction like 1475 -> 11475 when adding a leading 1 gives an exact known signature.
+          save_ocr_debug_variants: False # In debug mode, save latest OCR input variants to mining-data/debug_data/signature_ocr_variants.
           status_dot_size: 10 # Diameter in pixels of the blinking status dot left of the scan area.
           status_dot_offset_pixels: 16 # Horizontal distance from the scan area's left edge to the status dot center.
           status_dot_blink_ms: 450 # Blink interval for the status dot in milliseconds.

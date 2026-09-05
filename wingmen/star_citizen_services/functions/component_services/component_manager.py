@@ -1,5 +1,6 @@
 import requests
 import json
+import math
 
 from services.printr import Printr
 from wingmen.star_citizen_services.function_manager import FunctionManager
@@ -174,18 +175,17 @@ class ComponentManager(FunctionManager):
                         "size": item.get("size"),
                         "class": item.get("class"),
                         "grade": item.get("grade"),
-                        "purchasable_ingame": len(item.get("shops", [])) > 0,
+                        "purchasable_ingame": bool(item.get("shops")),
                         "price": None,
                         "price_location": None
                     }
 
                     # Get cheapest price if available
-                    uex_prices = item.get("uex_prices", [])
-                    if uex_prices:
-                        # Find the cheapest price based on price_buy
-                        cheapest = min(uex_prices, key=lambda x: x.get("price_buy", float('inf')))
-                        component_info["price"] = cheapest.get("price_buy")
+                    cheapest = self._get_cheapest_purchase(item.get("uex_prices"))
+                    if cheapest is not None:
+                        component_info["price"] = float(cheapest["price_buy"])
                         component_info["price_location"] = cheapest.get("terminal_name")
+                        component_info["purchasable_ingame"] = True
 
                     components_info.append(component_info)
 
@@ -219,7 +219,8 @@ class ComponentManager(FunctionManager):
                             f"Showing the first {min(total_results, 3)} results.{additional_info} "
                             "Provide a TTS-friendly summary of the most relevant components. "
                             "Mention name, manufacturer, type, size, class, and grade for each. "
-                            "If purchasable in-game, mention the cheapest price in alphaUEC and where to buy it."
+                            "If a purchase price is available, mention it in alphaUEC and where to buy it. "
+                            "If price is null, say that purchase pricing is unavailable; do not invent a price."
                         ),
                         "components": components_info,
                         "total_found": total_results,
@@ -230,7 +231,8 @@ class ComponentManager(FunctionManager):
                         "additional_instructions": (
                             "Provide a TTS-friendly summary of the component information. "
                             "Mention name, manufacturer, type, size, class, and grade. "
-                            "If purchasable in-game, mention the cheapest price in alphaUEC and where to buy it. "
+                            "If a purchase price is available, mention it in alphaUEC and where to buy it. "
+                            "If price is null, say that purchase pricing is unavailable; do not invent a price. "
                             "Speak naturally without mentioning technical details."
                         ),
                         "components": components_info,
@@ -247,6 +249,30 @@ class ComponentManager(FunctionManager):
                     ),
                     "error": str(e),
                 }
+
+    @staticmethod
+    def _get_cheapest_purchase(uex_prices):
+        # The Wiki API wraps offers in 'purchase'; also accept legacy lists.
+        if isinstance(uex_prices, dict):
+            uex_prices = uex_prices.get("purchase", [])
+        if not isinstance(uex_prices, list):
+            return None
+
+        valid_offers = []
+        for offer in uex_prices:
+            if not isinstance(offer, dict):
+                continue
+            value = offer.get("price_buy")
+            if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+                continue
+            try:
+                price = float(value)
+            except (ValueError, OverflowError):
+                continue
+            if math.isfinite(price) and price > 0:
+                valid_offers.append((price, offer))
+
+        return min(valid_offers, key=lambda entry: entry[0])[1] if valid_offers else None
 
 
 if __name__ == "__main__":

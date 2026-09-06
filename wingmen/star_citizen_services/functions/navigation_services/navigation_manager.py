@@ -182,6 +182,9 @@ class NavigationManager(FunctionManager):
         prompt = (
             f"Call '{self.navigate_to_location.__name__}' when the user asks to navigate/route to a destination in starmap. "
             "Use the destination name provided by the user as-is and do not invent missing names. "
+            "Do not add system suffixes the user did not provide. Never select a destination "
+            "the user explicitly excluded. If matching requires confirmation, wait for the "
+            "user's answer before calling navigation again with a suggested name. "
             "If the user specifies a category, pass it as optional 'location_category' "
             "(for example: outpost, station, city, moon, orbit, planet)."
         )
@@ -318,6 +321,12 @@ class NavigationManager(FunctionManager):
                 )
                 if no_match_instructions:
                     response["instructions"] = no_match_instructions
+            response["instructions"] = (
+                response.get("instructions", "") + " "
+                "No route has been plotted. Ask the user to clarify or confirm the destination "
+                "before calling navigation again. Do not use a suggested destination without "
+                "explicit user confirmation, and do not suggest a destination the user excluded."
+            ).strip()
             return response
 
         printr.print(
@@ -325,11 +334,8 @@ class NavigationManager(FunctionManager):
             f"(resolved: '{resolved_location_name}', category: '{requested_location_category}').",
             tags="info",
         )
-        self.overlay.display_overlay_text(
-            f"Cora: Navigating to {resolved_location_name}",
-            vertical_position_ratio=3,
-            display_duration=2500,
-        )
+        # A queued Tk Toplevel can appear after we focus the game and take
+        # keyboard focus back. Show the outcome only after input has finished.
 
         result = self._execute_navigation_sequence(resolved_location_name)
         result["requested_location"] = requested_location_name
@@ -341,7 +347,7 @@ class NavigationManager(FunctionManager):
         return result
 
     def _execute_navigation_sequence(self, location_name: str) -> dict:
-        opened, open_message = self._execute_sc_command("spaceship_hud_v_starmap")
+        opened, open_message = self._execute_sc_command("v_starmap")
         if not opened:
             return self._navigation_error(
                 "Could not open starmap.",
@@ -354,7 +360,7 @@ class NavigationManager(FunctionManager):
         if self.post_zoom_wait_seconds > 0:
             time.sleep(self.post_zoom_wait_seconds)
 
-        search_point, search_from_cache, search_error = self._get_or_capture_click_point(
+        search_point, _, search_error = self._get_or_capture_click_point(
             point_key="search_box",
             overlay_prompt="Please move cursor over search box and click.",
         )
@@ -364,16 +370,15 @@ class NavigationManager(FunctionManager):
                 search_error,
             )
 
-        self._focus_sc_window_for_input(wait_seconds=0.0)
-        if search_from_cache and not self._click_screen_coordinates(
-            search_point[0], search_point[1], move_first=True
-        ):
+        try:
+            self._focus_search_field(search_point)
+            self._typewrite_text(location_name)
+        except Exception as exc:
+            printr.print_warn(f"Navigation search input failed: {exc}")
             return self._navigation_error(
-                "Could not focus starmap search field.",
-                "Search click failed.",
+                "Could not enter destination text in starmap search field.",
+                str(exc),
             )
-        time.sleep(self.search_focus_wait_seconds)
-        self._typewrite_text(location_name)
         time.sleep(self.post_type_wait_seconds)
 
         selection_point, selection_from_cache, selection_error = self._get_or_capture_click_point(
@@ -410,15 +415,16 @@ class NavigationManager(FunctionManager):
         self._press_route_key()
 
         self.overlay.display_overlay_text(
-            f"Cora: Route set for {location_name}",
+            f"Cora: Route requested for {location_name}",
             vertical_position_ratio=3,
             display_duration=2500,
         )
         return {
             "success": True,
-            "message": f"Route to '{location_name}' is set.",
+            "message": f"Route command for '{location_name}' was sent; in-game result is unverified.",
+            "route_verified": False,
             "requested_location": location_name,
-            "instructions": "Confirm route plotting in one short sentence.",
+            "instructions": "Say that the route command was sent and ask the user to check the starmap. Do not claim the route is confirmed.",
         }
 
     def _navigation_error(self, user_message, error_details):
@@ -431,6 +437,11 @@ class NavigationManager(FunctionManager):
             "success": False,
             "message": user_message,
             "error": error_details,
+            "instructions": (
+                "Navigation failed and has stopped. Tell the user that no route was set "
+                "and briefly explain the error. Do not announce that a route is being "
+                "calculated, do not ask the user to wait, and do not retry automatically."
+            ),
         }
 
     @staticmethod
@@ -768,21 +779,51 @@ class NavigationManager(FunctionManager):
 
         return unblock
 
-    def _typewrite_text(self, text: str):
-        pyperclip.copy(text)
+    def _focus_search_field(self, search_point):
+        window = self._focus_sc_window_for_input(
+            wait_seconds=self.map_input_activation_wait_seconds
+        )
+        if window is None:
+            raise RuntimeError("Could not activate Star Citizen for search input.")
+        # An activation click can be consumed without focusing the in-game
+        # widget. Always click again after activation, including manual capture.
+        if not self._click_screen_coordinates(*search_point, move_first=True):
+            raise RuntimeError("Search field focus click failed.")
+        time.sleep(self.search_focus_wait_seconds)
+        self._assert_search_window_active()
 
-        key_module.keyDown("ctrl")
-        key_module.press("a")
-        key_module.keyUp("ctrl")
+    @staticmethod
+    def _assert_search_window_active():
+        active = screenshots.pygetwindow.getActiveWindow()
+        title = active.title if active else "<none>"
+        print_debug(f"Navigation search keyboard foreground: {title!r}")
+        if active is None or "Star Citizen" not in title:
+            raise RuntimeError(f"Star Citizen lost keyboard focus; foreground window: {title!r}.")
+
+    def _typewrite_text(self, text: str):
+        # Keep the original paste sequence; do not overwrite the clipboard or
+        # add copy-back shortcuts while the game processes the paste.
+        pyperclip.copy(text)
+        print_debug(f"Navigation search input: original clipboard sequence for {text!r}")
+
+        try:
+            key_module.keyDown("ctrl")
+            key_module.press("a")
+        finally:
+            key_module.keyUp("ctrl")
         time.sleep(self.text_input_step_wait_seconds)
 
         key_module.press("backspace")
         time.sleep(self.text_input_step_wait_seconds)
 
-        key_module.keyDown("ctrl")
-        key_module.keyDown("v")
-        key_module.keyUp("v")
-        key_module.keyUp("ctrl")
+        try:
+            key_module.keyDown("ctrl")
+            try:
+                key_module.keyDown("v")
+            finally:
+                key_module.keyUp("v")
+        finally:
+            key_module.keyUp("ctrl")
         time.sleep(self.text_input_step_wait_seconds)
 
     def _press_route_key(self):
@@ -801,37 +842,27 @@ class NavigationManager(FunctionManager):
             time.sleep(self.mouse_settle_wait_seconds)
 
         for module in (key_module, scroll_module):
-            if hasattr(module, "click"):
-                module_name = getattr(module, "__name__", str(module))
-                print_debug(f"Attempting click at ({target_x}, {target_y}) using {module_name}")
-                try:
-                    module.click(x=target_x, y=target_y)
-                    return True
-                except TypeError:
-                    try:
-                        module.click()
-                        return True
-                    except Exception:
-                        pass
-                except Exception:
-                    pass
-
             if hasattr(module, "mouseDown") and hasattr(module, "mouseUp"):
                 module_name = getattr(module, "__name__", str(module))
                 print_debug(
                     f"Attempting mouseDown/mouseUp at ({target_x}, {target_y}) using {module_name}"
                 )
                 try:
+                    # Coordinates here would make the backend move the cursor again.
+                    # Keep the settled position and send separate button events so
+                    # the game can observe the press across frames.
                     try:
-                        module.mouseDown(x=target_x, y=target_y, button="left")
-                    except TypeError:
                         module.mouseDown(button="left")
-                    if self.mouse_click_hold_seconds > 0:
-                        time.sleep(self.mouse_click_hold_seconds)
-                    try:
-                        module.mouseUp(x=target_x, y=target_y, button="left")
-                    except TypeError:
+                        if self.mouse_click_hold_seconds > 0:
+                            time.sleep(self.mouse_click_hold_seconds)
+                    finally:
                         module.mouseUp(button="left")
+                    return True
+                except Exception:
+                    pass
+            elif hasattr(module, "click"):
+                try:
+                    module.click()
                     return True
                 except Exception:
                     pass
@@ -1044,6 +1075,17 @@ class NavigationManager(FunctionManager):
                         f"Navigation exact match in category '{category}': '{value}'"
                     )
                     return category, value
+
+        # A bare name can identify a qualified database entry, but only if it
+        # identifies one name uniquely. Never discard a user-supplied qualifier.
+        if self._strip_parenthetical_suffix(normalized_request) == normalized_request:
+            candidates = {}
+            for category in search_categories:
+                for value in self._navigation_location_names_by_category.get(category, []):
+                    if self._strip_parenthetical_suffix(value).lower() == normalized_request:
+                        candidates.setdefault(value.strip().lower(), (category, value))
+            if len(candidates) == 1:
+                return next(iter(candidates.values()))
         return None, None
 
     def _find_fuzzy_location_match_by_category(
@@ -1080,9 +1122,6 @@ class NavigationManager(FunctionManager):
                 f"'{fuzzy_match.get('matched_value')}' with score {score} "
                 f"(cutoff {score_cutoff})"
             )
-            if score_cutoff > 0:
-                return category, fuzzy_match
-
             if best_match is None or score > best_match.get("score", 0):
                 best_match = fuzzy_match
                 best_category = category
@@ -1133,35 +1172,15 @@ class NavigationManager(FunctionManager):
                 True,
             )
 
-        matched_category, fuzzy_match = self._find_fuzzy_location_match_by_category(
-            requested_location_name,
-            score_cutoff=self.location_match_score_cutoff,
-            requested_location_category=requested_location_category,
-        )
-        if fuzzy_match:
-            matched_value = fuzzy_match.get("matched_value", requested_location_name)
-            cleaned_matched_value = self._strip_parenthetical_suffix(matched_value)
-            return (
-                cleaned_matched_value,
-                {
-                    "matched": True,
-                    "method": "fuzzy",
-                    "score": fuzzy_match.get("score"),
-                    "requested_category": requested_location_category,
-                    "matched_category": matched_category,
-                    "matched_value": cleaned_matched_value,
-                    "score_cutoff": self.location_match_score_cutoff,
-                },
-                True,
-            )
-
+        # Similarity is useful for suggestions, never permission to route to a
+        # different name. Shared words and system suffixes can inflate the score.
         suggestion_category, best_candidate = self._find_fuzzy_location_match_by_category(
             requested_location_name,
             score_cutoff=0,
             requested_location_category=requested_location_category,
         )
         suggestion = best_candidate.get("matched_value") if best_candidate else None
-        cleaned_suggestion = self._strip_parenthetical_suffix(suggestion) if suggestion else None
+        cleaned_suggestion = suggestion
         suggestion_score = best_candidate.get("score") if best_candidate else None
         if best_candidate:
             print_debug(
@@ -1179,6 +1198,7 @@ class NavigationManager(FunctionManager):
             {
                 "matched": False,
                 "method": "fuzzy",
+                "reason": "Non-exact destinations require explicit user confirmation.",
                 "score": suggestion_score,
                 "requested_category": requested_location_category,
                 "best_candidate": cleaned_suggestion,

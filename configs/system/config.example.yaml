@@ -407,8 +407,8 @@ wingmen:
         text_input_step_wait_seconds: 0.12
         route_key_wait_seconds: 0.25
         confirmation:
-          function_prompt: If the function returns a confirmation_request because the score is too low, do not start navigation. Ask the user if they meant the suggested location and only call the function again after confirmation.
-          request_reason: Best fuzzy candidate is below auto-match threshold.
+          function_prompt: If the function returns a confirmation_request, do not start navigation. Ask the user to clarify or confirm the destination and only call the function again after confirmation. Never suggest a destination the user explicitly excluded.
+          request_reason: The destination name does not match exactly and requires user confirmation.
           instructions_template: Do not execute navigation yet. Ask the user if they meant '{candidate_location_name}' in category '{candidate_location_category}'. If the user confirms, call navigate_to_location again using the suggested candidate_location_name and candidate_location_category exactly.
           no_match_instructions: Ask the user to repeat or clarify the destination name.
       LoreManager: True # True | False - Allows Cora to search the Galactepedia for lore information. 

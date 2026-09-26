@@ -80,12 +80,18 @@ class InstantCommandCacheTests(unittest.TestCase):
         self.assertTrue(self.wingman._is_cached_command_data_valid([["registered_tool", {}]]))
 
     def test_stale_exact_and_fuzzy_hits_fall_back_without_execution(self):
+        for stale_calls in (calls(OLD), [["search_ship_component", {"component_name": "FR-76"}]]):
+            with self.subTest(stale_calls=stale_calls):
+                self.assertFalse(self.wingman._is_cached_command_data_valid(stale_calls))
+                self.check_stale_cache_fallback(stale_calls)
+
+    def check_stale_cache_fallback(self, stale_calls):
         for fuzzy in (False, True):
             with self.subTest(fuzzy=fuzzy):
                 w = self.wingman
                 cache = Mock()
                 w.instant_command_cache_manager = cache
-                cache.get.side_effect = [None, calls(OLD)] if fuzzy else [calls(OLD)]
+                cache.get.side_effect = [None, stale_calls] if fuzzy else [stale_calls]
                 cache.get_key_from_text.return_value = "old-fuzzy-key"
                 w.cache_config = {key: [] for key in (
                     "delete_last_cached_command_phrases", "do_not_cache_phrases", "short_memory_commands")}

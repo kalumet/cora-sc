@@ -299,10 +299,17 @@ wingmen:
         MiningManager:
           starhead:
             - sc_mining
+        ComponentManager:
+          starhead:
+            - sc_component_info
+            - sc_find_components
+            - sc_where_to_buy
+            - sc_ship_loadout
+            - sc_loadout_calc
 
     record_key: x1  # mouse button
     features: # all features that Cora has. You can activated or deactivate features here.
-      ComponentManager: True # True | False - provides basic information about ship components
+      ComponentManager: True # True | False - provides ship component searches and loadout comparisons via MCP
       MiningManager:
         enabled: False # True | False - captures refinery work orders locally and looks up mining radar signatures.
         signature_observer:

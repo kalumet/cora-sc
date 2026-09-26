@@ -1,9 +1,9 @@
 # StarHead-MCP ausprobieren
 
 Die Anbindung verwendet das offizielle Python-SDK `mcp` (Version 2.2.0).
-Der erste freigegebene Aufruf ist `sc_mining`, ausschließlich über den
-aktivierten MiningManager im CORA-Kontext. Lokale Signaturerkennung und
-Raffinerieaufträge bleiben erhalten.
+Der MiningManager ergänzt seine lokale Signaturerkennung und Raffinerieaufträge
+um `sc_mining`. Der ComponentManager verwendet ausschließlich MCP. Beide Manager
+geben ihre zugeordneten Tools nur im aktivierten Zustand im CORA-Kontext frei.
 
 ## Installation und Konfiguration
 
@@ -27,6 +27,13 @@ mcp:
     MiningManager:
       starhead:
         - sc_mining
+    ComponentManager:
+      starhead:
+        - sc_component_info
+        - sc_find_components
+        - sc_where_to_buy
+        - sc_ship_loadout
+        - sc_loadout_calc
 ```
 
 Die Beispielkonfiguration enthält diesen Abschnitt bereits. Bestehende persönliche
@@ -44,6 +51,29 @@ Beispielfragen:
 - „Wo finde ich Quantanium?“ → `starhead_sc_mining`
 - „Welche Ressource passt zu Signatur 10800?“ → lokale Signatursuche
 - „Zeige meine Raffinerieaufträge.“ → lokale Auftragsverwaltung
+
+## ComponentManager
+
+Nach dem Neustart „Aktiviere Komponenten Manager“ sagen oder unter `features`
+`ComponentManager: true` setzen. `ComponentManager: false` lässt ihn deaktiviert;
+die MCP-Zuordnung aktiviert ihn nicht automatisch. „Deaktiviere Komponenten Manager“
+sperrt seine Tools wieder, sofern kein anderer aktiver Manager sie ebenfalls freigibt.
+
+Der Manager enthält nur Kontext, Fähigkeiten und Hinweise zur Sprachausgabe.
+Komponentensuche, Leistungswerte, Kaufmöglichkeiten und Loadout-Vergleiche werden
+zentral über die oben aufgeführten fünf MCP-Tools abgewickelt. Beispiele:
+
+- „Welche Werte hat der FR-76?“ → `starhead_sc_component_info`
+- „Welche S2-Schilde haben die meisten Schildpunkte?“ → `starhead_sc_find_components`
+- „Wo kann ich einen FR-76 kaufen?“ → `starhead_sc_where_to_buy`
+- „Welche Waffen hat eine Gladius ab Werk?“ → `starhead_sc_ship_loadout`
+- „Wie verändert sich eine Gladius mit drei Attrition-3?“ → `starhead_sc_loadout_calc`
+
+Die bisherige Funktion `search_ship_component` und der Wiki-API-Zugriff entfallen.
+Veraltete Instant-Command-Cache-Einträge dieser Funktion werden bei Verwendung
+verworfen und die Anfrage wird neu verarbeitet; die Argumente werden nicht übersetzt.
+Ohne konfigurierte, erreichbare MCP-Tools ist keine Komponentenabfrage verfügbar.
+CORA soll fehlende Verfügbarkeit oder Daten erklären; es gibt keinen lokalen Fallback.
 
 ## Freigaben und Tool-Namen
 
@@ -123,7 +153,8 @@ starhead:
 ## Betrieb und Fehler
 
 - Discovery erfolgt beim Aktivieren des Managers. Bei Nichterreichbarkeit bleiben
-  die lokalen Funktionen verfügbar; Manager aus- und einschalten wiederholt Discovery.
+  vorhandene lokale Funktionen anderer Manager verfügbar. Der ComponentManager hat
+  keinen lokalen Fallback; Manager aus- und einschalten wiederholt Discovery.
 - Jede Operation öffnet und schließt ihren SDK-Client im selben Event-Loop.
   Das passt zu den separaten Event-Loops der Audioverarbeitung in `main.py`.
 - Das Timeout umfasst Verbindungsaufbau und Abfrage. Fehler werden als Tool-Ergebnis
@@ -142,10 +173,11 @@ Python-Pakete nicht zurück.
 
 ## Tests
 
-Die neuen Tests verwenden das offizielle SDK gegen einen MCP-Testserver im selben
-Prozess, ohne StarHead-Netzwerkzugriff und ohne Desktop-/Audio-Abhängigkeiten:
+Die Tests verwenden das offizielle SDK gegen einen MCP-Testserver im selben
+Prozess, ohne StarHead-Netzwerkzugriff:
 
 ```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s tests -p test_component_manager.py
 .\.venv\Scripts\python.exe -m unittest discover -s tests -p test_manager_mcp.py
 .\.venv\Scripts\python.exe -m unittest discover -s tests -p test_instant_command_cache.py
 ```

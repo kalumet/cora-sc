@@ -68,6 +68,58 @@ Zusätzliche Tools lassen sich später durch weitere Einträge in der Freigabeli
 zuordnen. Änderungen an der YAML-Konfiguration erfordern Neuladen/Neustart.
 Ein deaktivierter Server (`enabled: false`) führt keine Discovery oder Aufrufe aus.
 
+## Toollisten und YAML-Referenz
+
+Alle explizit konfigurierten HTTP-MCP-Server in der globalen Konfiguration und
+unter allen Wingmen abfragen:
+
+```powershell
+.\.venv\Scripts\python.exe scripts/list_mcp_tools.py
+```
+
+Auch deaktivierte Server werden fuer diese reine Discovery abgefragt; sie werden
+nicht aktiviert und ihre Tools nicht ausgefuehrt. `--enabled-only` ueberspringt sie.
+Einzelne Serverfehler werden gemeldet, die anderen Server trotzdem abgefragt.
+Bei Fehlern ist der Exit-Code 1, sonst 0.
+
+Optionen:
+
+```powershell
+# Vollstaendige Beschreibungen und Parameterschemas
+.\.venv\Scripts\python.exe scripts/list_mcp_tools.py --details
+
+# Andere Konfiguration oder nur ein bestimmter Wingman
+.\.venv\Scripts\python.exe scripts/list_mcp_tools.py --config configs/configs/config.yaml --wingman star-citizen-ai
+```
+
+Die Ausgabe enthaelt je Server ein YAML-Dokument mit der Liste seiner Originalnamen.
+Diese Liste kann unter `mcp.manager_tools.<Managername>` eingefuegt werden.
+Die Abfrage aendert keine Freigaben. Fuer eine Freigabe nur die gewuenschten Namen
+uebernehmen.
+
+StarHead-Referenz (abgefragt am 26.09.2026, nicht automatisch freigegeben):
+
+```yaml
+starhead:
+  - sc_search            # Namen suchen
+  - sc_ship_info         # Schiffsdaten
+  - sc_ship_loadout      # Standardausruestung
+  - sc_compare_ships     # Schiffe vergleichen
+  - sc_find_ships        # Schiffe filtern und finden
+  - sc_component_info    # Komponentendaten
+  - sc_find_components   # Passende Komponenten finden
+  - sc_loadout_calc      # Loadout berechnen
+  - sc_trade_route       # Handelsrouten
+  - sc_commodity_prices  # Rohstoffpreise und Verkaufsstellen
+  - sc_where_to_buy      # Bezugsquellen fuer Schiffe/Ausruestung
+  - sc_shop_inventory    # Shop-Sortimente
+  - sc_find_commodities  # Handelswaren vergleichen
+  - sc_mining            # Mining-Fundorte und Vorkommen
+  - sc_crafting          # Bauplaene und Materialien
+  - sc_fps_item_info     # FPS-Ausrüstung
+  - sc_location_info     # Ortsinformationen
+```
+
 ## Betrieb und Fehler
 
 - Discovery erfolgt beim Aktivieren des Managers. Bei Nichterreichbarkeit bleiben

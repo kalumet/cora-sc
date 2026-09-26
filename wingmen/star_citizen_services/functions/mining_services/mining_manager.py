@@ -5,6 +5,7 @@ import os
 import queue
 import re
 import threading
+import tempfile
 import time
 import uuid
 from datetime import datetime, timezone
@@ -95,9 +96,10 @@ SIGNATURE_OBSERVER_DEFAULTS = {
     "debug_log_ocr_candidates": True,
     "debug_log_ocr_timing": True,
     "ocr_psm_modes": [8, 7, 13],
-    "ocr_variant_names": ["glyph_180", "glyph_200", "native_gray", "native_otsu"],
+    "ocr_variant_names": ["row_gray", "row_green", "glyph_200", "native_otsu"],
     "ocr_tesseract_timeout_seconds": 2.0,
     "ocr_tick_budget_seconds": 0.75,
+    "ocr_batch_enabled": True,
     "ocr_fuzzy_reference_match": False,
     "ocr_fuzzy_max_distance": 1,
     "ocr_fuzzy_max_weighted_distance": 0.5,
@@ -1021,7 +1023,6 @@ class MiningManager(FunctionManager):
 
         if (
             number_crop is not None
-            and not self.signature_observer_config.get("local_signature_ocr_enabled", False)
             and self.signature_observer_config.get("vision_signature_fallback_enabled", True)
         ):
             now = time.time()
@@ -1626,6 +1627,18 @@ class MiningManager(FunctionManager):
         cached_vision_value = self._get_cached_signature_vision_value(number_crop)
         if cached_vision_value is not None:
             return cached_vision_value, number_crop
+        # Check verified reuse before paying for another OCR pass. This path
+        # never queues a network request or consumes the request cooldown.
+        if self.signature_observer_config.get("vision_signature_fallback_enabled", True):
+            similar = self._get_recent_similar_signature_vision_crop(
+                number_crop, self._signature_crop_hash(number_crop), time.time()
+            )
+            if similar and similar.get("verified"):
+                value = self.signature_vision_cache.get(similar["image_hash"], {}).get("signature_value")
+                if value is not None:
+                    self.signature_last_value_source = "cache"
+                    self._set_signature_vision_support(value)
+                    return value, number_crop
 
         if not self.signature_observer_config.get("local_signature_ocr_enabled", False):
             queued_vision_value = self._queue_signature_vision_analysis(number_crop, reason="vision_only")
@@ -2227,17 +2240,73 @@ class MiningManager(FunctionManager):
         if image is None or image.size == 0:
             return None
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) if image.ndim == 3 else image
-        points = cv2.findNonZero(cv2.inRange(gray, 180, 255))
-        if points is None:
+        rect = self._signature_text_rect(gray)
+        if rect is None:
             return None
-        x, y, width, height = cv2.boundingRect(points)
+        x, y, width, height = rect
         if height < 4 or width < 8:
             return None
         # Preserve antialiased strokes; the old median/closing mask erased
         # distinguishing digit details and compared absolute HUD positions.
-        pixels = cv2.resize(gray[y:y + height, x:x + width], (128, 32),
+        foreground = self._signature_foreground(gray)
+        pixels = cv2.resize(foreground[y:y + height, x:x + width], (128, 32),
                             interpolation=cv2.INTER_AREA)
         return {"pixels": pixels, "aspect": width / height}
+
+    def _signature_text_rect(self, gray):
+        """Find the digit row starting just after the detected signature icon.
+
+        Distant HUD symbols and large bright scenery must not become part of
+        the OCR line. Commas remain inside the union of the full-height digits.
+        """
+        rect, _ = self._signature_number_region(gray)
+        return rect
+
+    def _signature_number_region(self, gray):
+        mask = cv2.inRange(gray, 180, 255)
+        # A fixed threshold merges bright scenery into the digits. Preserve
+        # the existing dark-background path and subtract local background
+        # when it cannot isolate the text.
+        rect = self._signature_mask_rect(mask) if np.mean(mask > 0) < 0.3 else None
+        if rect is not None:
+            return rect, False
+        foreground = self._signature_foreground(gray)
+        _, mask = cv2.threshold(foreground, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        return self._signature_mask_rect(mask), True
+
+    def _signature_foreground(self, gray, size=9):
+        return cv2.morphologyEx(gray, cv2.MORPH_TOPHAT, np.ones((size, size), np.uint8))
+
+    def _signature_mask_rect(self, mask):
+        _, _, stats, _ = cv2.connectedComponentsWithStats(mask)
+        boxes = sorted(
+            (int(x), int(y), int(w), int(h))
+            for x, y, w, h, area in stats[1:]
+            if 6 <= h <= mask.shape[0] * 0.75 and area >= 8
+            and w <= h * 1.8
+        )
+        group = []
+        for x, y, width, height in boxes:
+            if not group:
+                if x > mask.shape[1] * 0.25:
+                    continue
+            else:
+                left, top, right, bottom = group[0]
+                row_height = bottom - top
+                if min(y + height, bottom) - max(y, top) < min(height, row_height) * 0.6:
+                    continue
+                if x > right + row_height * 1.25:
+                    break
+                x, y, width, height = (left, min(top, y),
+                                      max(right, x + width) - left,
+                                      max(bottom, y + height) - min(top, y))
+            group = [(x, y, x + width, y + height)]
+        if not group:
+            return None
+        left, top, right, bottom = group[0]
+        if right - left < max(12, 2 * (bottom - top)):
+            return None
+        return left, top, right - left, bottom - top
 
     def _signature_crop_text_mask(self, image):
         if image is None or image.size == 0:
@@ -2656,7 +2725,10 @@ class MiningManager(FunctionManager):
         timeout_seconds = float(self.signature_observer_config.get("ocr_tesseract_timeout_seconds", 2.0))
         self._save_signature_ocr_debug_variants(number_crop, variants)
 
-        ocr_results = self._run_signature_ocr_variants(
+        runner = (self._run_signature_ocr_batch
+                  if self.signature_observer_config.get("ocr_batch_enabled", True)
+                  else self._run_signature_ocr_variants)
+        ocr_results = runner(
             variants,
             psm_modes=psm_modes,
             timeout_seconds=timeout_seconds,
@@ -2666,13 +2738,72 @@ class MiningManager(FunctionManager):
         if not selectable_results:
             self.signature_last_ocr_value_support = {}
             self._log_signature_ocr_timing("empty", started_at, 0)
+            self._write_signature_vision_event(
+                "local_recognition", reason="no_digit_row" if not variants else "no_ocr_result",
+                elapsed_ms=round((time.perf_counter() - started_at) * 1000, 1),
+                variants=[name for name, _ in variants],
+            )
             return None
 
         self.signature_last_ocr_value_support = self._count_signature_ocr_values(selectable_results)
         selected_result = self._select_signature_ocr_result(selectable_results)
         self._log_signature_ocr_candidates(ocr_results, selected_result, stage="simple")
         self._log_signature_ocr_timing("simple", started_at, len(ocr_results))
+        self._write_signature_vision_event(
+            "local_recognition", reason="read" if selected_result else "disagreement",
+            signature_value=selected_result["value"] if selected_result else None,
+            candidates=sorted({result["value"] for result in selectable_results}),
+            elapsed_ms=round((time.perf_counter() - started_at) * 1000, 1),
+        )
         return selected_result["value"] if selected_result else None
+
+    def _run_signature_ocr_batch(self, variants, psm_modes, timeout_seconds):
+        """Use Tesseract's image-list input, retaining a separate page per variant.
+
+        Loading its language model once allows all variants to vote within the
+        tick budget. Form feeds retain page identity, even for empty OCR pages.
+        """
+        if not variants or not psm_modes:
+            return []
+        deadline = time.perf_counter() + max(
+            0.05, float(self.signature_observer_config.get("ocr_tick_budget_seconds", 0.75))
+        )
+        with tempfile.TemporaryDirectory(prefix="cora_signature_") as directory:
+            paths = []
+            for index, (_, image) in enumerate(variants):
+                path = os.path.join(directory, f"variant_{index}.png")
+                if not cv2.imwrite(path, image):
+                    return []
+                paths.append(path)
+            input_path = os.path.join(directory, "pages.txt")
+            Path(input_path).write_text("\n".join(paths), encoding="utf-8")
+            remaining = deadline - time.perf_counter()
+            if remaining <= 0:
+                return []
+            mode = psm_modes[0]
+            try:
+                text = pytesseract.image_to_string(
+                    input_path,
+                    config=f"--psm {mode} -c tessedit_char_whitelist=0123456789,",
+                    timeout=min(timeout_seconds, remaining) if timeout_seconds > 0 else remaining,
+                )
+            except RuntimeError as error:
+                self._signature_debug(f"signature OCR batch failed: {error}", throttle_key="ocr_batch_failed")
+                return []
+        pages = text.split("\f")
+        if len(pages) == len(variants) + 1 and not pages[-1].strip():
+            pages.pop()
+        if len(pages) != len(variants):
+            return []
+        results = []
+        for (name, _), page in zip(variants, pages):
+            token = page.strip().strip(",")
+            if not re.fullmatch(r"(?:\d+|\d{1,3}(?:,\d{3})+)", token):
+                continue
+            digits = token.replace(",", "")
+            if len(digits) >= max(1, int(self.signature_observer_config.get("minimum_signature_digits", 4))):
+                results.append({"value": int(digits), "digits": digits, "variant": name, "psm": mode})
+        return results
 
     def _run_signature_ocr_variants(self, variants, psm_modes, timeout_seconds):
         ocr_results = []
@@ -2800,12 +2931,40 @@ class MiningManager(FunctionManager):
             return allowed_names is None or variant_name in allowed_names
 
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        rect, normalize_background = self._signature_number_region(gray)
+        if rect is None:
+            return []
+        x, y, width, height = rect
+        if normalize_background:
+            variants = []
+            for size, smooth in ((7, False), (9, False), (7, True), (9, True)):
+                foreground = self._signature_foreground(gray, size)
+                roi = foreground[y:y + height, x:x + width]
+                if smooth:
+                    roi = cv2.resize(roi, None, fx=4, fy=4, interpolation=cv2.INTER_CUBIC)
+                _, binary = cv2.threshold(roi, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+                if not smooth:
+                    binary = cv2.resize(binary, None, fx=4, fy=4, interpolation=cv2.INTER_NEAREST)
+                variants.append((f"background_{size}_{'smooth' if smooth else 'binary'}",
+                                 cv2.copyMakeBorder(cv2.bitwise_not(binary), 12, 12, 12, 12,
+                                                   cv2.BORDER_CONSTANT, value=255)))
+            return variants
+        image = image[y:y + height, x:x + width]
+        gray = gray[y:y + height, x:x + width]
         enhanced = cv2.convertScaleAbs(gray, alpha=2.2, beta=20)
         scale = max(5, int(180 / max(1, enhanced.shape[0])))
         resized = cv2.resize(enhanced, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
         resized_color = cv2.resize(image, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
 
         variants = []
+        for name, channel in (("row_gray", gray), ("row_green", image[:, :, 1])):
+            if should_build_variant(name):
+                binary = cv2.inRange(channel, 180, 255)
+                binary = cv2.resize(binary, None, fx=4, fy=4, interpolation=cv2.INTER_NEAREST)
+                variants.append((name, cv2.copyMakeBorder(
+                    cv2.bitwise_not(binary), 12, 12, 12, 12,
+                    cv2.BORDER_CONSTANT, value=255,
+                )))
         # Threshold at native resolution before scaling: interpolation and
         # contrast amplification otherwise merge the tiny HUD digit strokes.
         for threshold in (180, 200):
@@ -3213,6 +3372,13 @@ class MiningManager(FunctionManager):
     def _handle_unknown_signature_value(self, signature_value, number_crop, signature_status):
         self.signature_unknown_reads += 1
 
+        # Reading digits and finding a resource are separate outcomes. Only
+        # publish an unmapped value after Vision confirmation; uncertain local
+        # reads still wait for that confirmation instead of inventing a match.
+        if self.signature_last_value_source in ("vision", "cache"):
+            self._handle_observed_signature(signature_value, number_crop)
+            return
+
         if self.signature_observer_config.get("save_number_crops", True):
             self._save_signature_number_crop(signature_value, number_crop)
 
@@ -3277,7 +3443,7 @@ class MiningManager(FunctionManager):
             return
 
         self._show_signature_status_dot(
-            "green",
+            "green" if self._get_observed_signature_status(signature_value) == "known" else "yellow",
             symbol="C" if self.signature_last_value_source == "cache" else None,
         )
         now = time.time()
@@ -3315,6 +3481,10 @@ class MiningManager(FunctionManager):
         self._log_observed_signature_matches(signature_value)
         self._signature_debug(f"displaying stable signature {signature_value}: {overlay_text}")
         self._display_signature_overlay_text(overlay_text)
+        self._write_signature_vision_event(
+            "displayed", signature_value=signature_value,
+            source=self.signature_last_value_source,
+        )
 
     def _clear_signature_overlay(self):
         if not self.signature_overlay_visible and self.last_signature_value is None:
@@ -3388,7 +3558,7 @@ class MiningManager(FunctionManager):
     def _build_signature_overlay_text(self, signature_value):
         reference_entries = self.load_signature_reference()
         if self.is_above_max_known_signature(signature_value, reference_entries):
-            return None
+            return f"{signature_value} -> no reference match"
 
         exact_matches = self.find_signature_matches(signature_value, reference_entries)
         if exact_matches:
@@ -3396,7 +3566,7 @@ class MiningManager(FunctionManager):
             if preferred_match.get("specific_cluster_size"):
                 return f"{signature_value} -> {preferred_match['resource']} cluster {preferred_match['cluster_size']}"
             return f"{signature_value} -> {preferred_match['count']} x {preferred_match['resource']}"
-        return None
+        return f"{signature_value} -> no reference match"
 
     def _log_observed_signature_matches(self, signature_value):
         reference_entries = self.load_signature_reference()

@@ -3,6 +3,7 @@ import copy
 import json
 from pathlib import Path
 import queue
+import shutil
 import tempfile
 import threading
 import unittest
@@ -14,10 +15,12 @@ from wingmen.star_citizen_services.functions.mining_services import mining_manag
 
 
 class SignatureRecognitionTests(unittest.TestCase):
+    FIXTURES = Path(__file__).parent / "fixtures" / "mining_signatures"
     def setUp(self):
         self.manager = object.__new__(mining.MiningManager)
         self.manager.signature_observer_config = copy.deepcopy(mining.SIGNATURE_OBSERVER_DEFAULTS)
         self.manager._signature_debug = Mock()
+        self.manager._write_signature_vision_event = Mock()
         self.manager.signature_last_ocr_value_support = {}
         self.manager.signature_vision_cache = {}
         self.manager.signature_vision_recent_crops = []
@@ -69,8 +72,101 @@ class SignatureRecognitionTests(unittest.TestCase):
     def test_empty_and_short_results_do_not_raise(self):
         self.manager._build_signature_ocr_variants = Mock(return_value=[])
         self.manager._save_signature_ocr_debug_variants = Mock()
-        self.manager._run_signature_ocr_variants = Mock(return_value=[dict(value=123, digits="123")])
+        self.manager._run_signature_ocr_batch = Mock(return_value=[dict(value=123, digits="123")])
         self.assertIsNone(self.manager._ocr_signature_number(self.crop))
+
+    def test_batch_reads_all_variants_in_one_process_and_keeps_empty_pages(self):
+        variants = [(name, self.crop) for name in ("gray", "green", "threshold", "otsu")]
+        def read_pages(path, **kwargs):
+            paths = Path(path).read_text(encoding="utf-8").splitlines()
+            self.assertEqual(len(paths), 4)
+            self.assertTrue(all(Path(p).is_file() for p in paths))
+            return "17,140\n\f\f17,140,\n\f17,140\n"
+        with patch.object(mining.pytesseract, "image_to_string", side_effect=read_pages) as ocr:
+            results = self.manager._run_signature_ocr_batch(variants, [8, 7], 2)
+        ocr.assert_called_once()
+        self.assertEqual([r["variant"] for r in results], ["gray", "threshold", "otsu"])
+        self.assertEqual(self.manager._select_signature_ocr_result(results)["value"], 17140)
+        self.assertFalse(Path(ocr.call_args.args[0]).exists())
+
+    def test_batch_rejects_lost_page_boundaries(self):
+        with patch.object(mining.pytesseract, "image_to_string", return_value="17140\n17140"):
+            self.assertEqual(self.manager._run_signature_ocr_batch(
+                [("gray", self.crop), ("green", self.crop)], [8], 2), [])
+
+    def test_batch_timeout_returns_uncertain(self):
+        with patch.object(mining.pytesseract, "image_to_string", side_effect=RuntimeError("timeout")) as ocr:
+            self.assertEqual(self.manager._run_signature_ocr_batch([("gray", self.crop)], [8], 2), [])
+        self.assertLessEqual(ocr.call_args.kwargs["timeout"], 0.75)
+
+    def test_real_thousands_separator_keeps_all_digits(self):
+        image = mining.cv2.imread(str(self.FIXTURES / "bright_10800.jpg"))
+        gray = mining.cv2.cvtColor(image, mining.cv2.COLOR_BGR2GRAY)
+        x, y, width, height = self.manager._signature_text_rect(gray)
+        self.assertLessEqual(x, 6)
+        self.assertGreaterEqual(x + width, 61)
+        self.assertLessEqual(y, 13)
+        self.assertGreaterEqual(y + height, 23)
+
+    @unittest.skipUnless(shutil.which("tesseract"), "Tesseract executable is required")
+    def test_real_bright_crop_is_read_without_vision(self):
+        image = mining.cv2.imread(str(self.FIXTURES / "bright_10800.jpg"))
+        # Allow slower CI process startup; timing is measured by the benchmark.
+        self.manager.signature_observer_config["ocr_tick_budget_seconds"] = 3
+        self.manager.signature_observer_config["ocr_tesseract_timeout_seconds"] = 3
+        self.assertEqual(self.manager._ocr_signature_number(image), 10800)
+
+    def _prepare_observer_replay(self, image):
+        manager = self.manager
+        manager.signature_reference_path = str(
+            Path(__file__).resolve().parents[1] / "star_citizen_data/mining-data/signature_reference.json")
+        manager.signature_last_watch_area_rect = None
+        manager.signature_candidate_value = None
+        manager.signature_candidate_reads = 0
+        manager.signature_candidate_misses = 0
+        manager.signature_unknown_reads = 0
+        manager.last_signature_value = None
+        manager.last_signature_display_time = 0
+        manager.signature_vision_backoff_until = 0
+        manager._capture_signature_watch_area = Mock(return_value=image)
+        manager._prepare_signature_ocr_crop = Mock(side_effect=lambda image, **kwargs: (image, None))
+        manager._ocr_signature_number = Mock(return_value=None)
+        manager._queue_signature_vision_analysis = Mock(return_value=None)
+        manager._is_signature_analysis_active = Mock(return_value=True)
+        manager._extend_signature_analysis_after_value = Mock(return_value=30)
+        manager._show_signature_status_dot = Mock()
+        manager._display_signature_overlay_text = Mock()
+        manager._log_observed_signature_matches = Mock()
+        manager._write_signature_vision_event = Mock()
+
+    def test_failed_local_read_then_vision_reply_reaches_overlay(self):
+        image = mining.cv2.imread(str(self.FIXTURES / "bright_10800.jpg"))
+        self._prepare_observer_replay(image)
+        self.manager._run_signature_analysis_tick()
+        self.manager._display_signature_overlay_text.assert_not_called()
+        self.manager._show_signature_status_dot.assert_called_with("yellow")
+        image_hash = self.manager._signature_crop_hash(image)
+        self.manager.signature_vision_cache[image_hash] = {"signature_value": 10800}
+        self.manager._run_signature_analysis_tick()
+        self.assertIn("10800", self.manager._display_signature_overlay_text.call_args.args[0])
+
+    def test_vision_confirmed_unmapped_number_is_visible(self):
+        image = mining.cv2.imread(str(self.FIXTURES / "bright_10800.jpg"))
+        self._prepare_observer_replay(image)
+        # Stub the reference result independently of the image's printed value.
+        self.manager.signature_vision_cache[self.manager._signature_crop_hash(image)] = {"signature_value": 12231}
+        self.manager._run_signature_analysis_tick()
+        self.manager._display_signature_overlay_text.assert_called_once_with("12231 -> no reference match")
+
+    def test_reply_for_previous_target_is_not_applied_to_new_target(self):
+        old = mining.cv2.imread(str(self.FIXTURES / "bright_10800.jpg"))
+        current = mining.cv2.imread(str(self.FIXTURES / "bright_4285.jpg"))
+        self._prepare_observer_replay(current)
+        image_hash = self.manager._signature_crop_hash(old)
+        self.manager.signature_vision_cache[image_hash] = {"signature_value": 10800}
+        self.manager._remember_signature_vision_crop(image_hash, old, mining.time.time())
+        self.manager._run_signature_analysis_tick()
+        self.manager._display_signature_overlay_text.assert_not_called()
 
     def test_missing_tesseract_queues_vision(self):
         self.manager.signature_last_watch_area_rect = None
@@ -166,6 +262,36 @@ class SignatureRecognitionTests(unittest.TestCase):
     def test_blank_crop_cannot_match_a_cached_value(self):
         template = self.manager._signature_crop_match_template(self.crop)
         self.assertFalse(self.manager._verify_similar_signature_cache_crop(template, template)["verified"])
+
+    def test_text_row_excludes_distant_hud_symbol_and_bright_scenery(self):
+        number = np.zeros((36, 120, 3), dtype=np.uint8)
+        mining.cv2.putText(number, "17140", (2, 25), mining.cv2.FONT_HERSHEY_SIMPLEX,
+                           0.55, (255, 255, 255), 1, mining.cv2.LINE_AA)
+        contaminated = number.copy()
+        mining.cv2.rectangle(contaminated, (95, 0), (119, 35), (255, 255, 255), -1)
+        clean = self.manager._signature_crop_match_template(number)
+        dirty = self.manager._signature_crop_match_template(contaminated)
+        self.assertTrue(self.manager._verify_similar_signature_cache_crop(clean, dirty)["verified"])
+        clean_variants = self.manager._build_signature_ocr_variants(number)
+        dirty_variants = self.manager._build_signature_ocr_variants(contaminated)
+        for (name, clean_image), (other_name, dirty_image) in zip(clean_variants, dirty_variants):
+            self.assertEqual(name, other_name)
+            np.testing.assert_array_equal(clean_image, dirty_image)
+
+    def test_verified_moving_cache_hit_skips_tesseract(self):
+        first = self.crop.copy()
+        mining.cv2.putText(first, "10800", (3, 24), mining.cv2.FONT_HERSHEY_SIMPLEX,
+                           0.65, (255, 255, 255), 1, mining.cv2.LINE_AA)
+        moved = mining.cv2.warpAffine(first, np.float32([[1, 0, 5], [0, 1, 3]]), (120, 36))
+        self.manager._remember_signature_vision_crop("sent", first, mining.time.time())
+        self.manager.signature_vision_cache["sent"] = dict(signature_value=10800)
+        self.manager.signature_last_watch_area_rect = None
+        self.manager._prepare_signature_ocr_crop = Mock(return_value=(moved, (0, 0, 120, 36)))
+        self.manager._ocr_signature_number = Mock(side_effect=AssertionError("cache hit ran OCR"))
+        value, _ = self.manager._read_signature_value(moved)
+        self.assertEqual(value, 10800)
+        self.assertEqual(self.manager.signature_last_value_source, "cache")
+        self.manager._ocr_signature_number.assert_not_called()
 
     def test_reference_cache_refreshes_when_file_changes(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -354,7 +354,8 @@ wingmen:
           debug_log_ocr_candidates: False # Logs OCR variant candidates; useful while tuning recognition.
           debug_log_ocr_timing: True # Logs whether OCR found digits and how long the simple OCR pass took.
           ocr_psm_modes: [8, 7, 13] # Only used when local_signature_ocr_enabled is True.
-          ocr_variant_names: [glyph_180, glyph_200, native_gray, native_otsu] # Only used when local_signature_ocr_enabled is True.
+          ocr_variant_names: [row_gray, row_green, glyph_200, native_otsu] # Only used when local_signature_ocr_enabled is True.
+          ocr_batch_enabled: True # Read all image variants in one process using the first OCR PSM mode.
           ocr_tick_budget_seconds: 0.75 # Total Tesseract time budget per scan tick.
           ocr_tesseract_timeout_seconds: 2.0 # Only used when local_signature_ocr_enabled is True.
           ocr_fuzzy_reference_match: False # Correct unknown OCR values to a very close known reference value when the match is unambiguous.

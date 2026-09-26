@@ -288,6 +288,18 @@ wingmen:
   # 
   #   3. TODO Cache-Logic for text-to-speech responses to reduce cost with config parameters to specify the ammount of responses to be cached vs. dropped vs. renewed
   star-citizen-ai:
+    # Remote tools are exposed only through explicitly assigned, active managers.
+    mcp:
+      servers:
+        starhead:
+          enabled: true
+          url: https://wingman-ai-mcp-servers.wingman-ai.workers.dev/starhead/mcp
+          timeout_seconds: 30
+      manager_tools:
+        MiningManager:
+          starhead:
+            - sc_mining
+
     record_key: x1  # mouse button
     features: # all features that Cora has. You can activated or deactivate features here.
       ComponentManager: True # True | False - provides basic information about ship components

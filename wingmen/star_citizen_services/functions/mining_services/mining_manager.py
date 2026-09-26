@@ -270,6 +270,10 @@ class MiningManager(FunctionManager):
             f"The following functions allow you to help the player in this task. For each of them, don't make assumptions on the value and set to None if the user hasn't provided information about it. "
             f"- {self.refinery_job_work_order_management.__name__}: call it to add, retrieve, or remove locally stored active refinery work orders. "
             f"- {self.mining_signature_lookup.__name__}: call it when the player asks which mining resource matches a radar signature value. "
+            "When starhead_sc_mining is available, use it for mining locations, materials at a location, "
+            "and ship/ROC/hand mining questions. Use the local signature lookup for numeric radar values "
+            "and the local work order tool for refinery jobs. StarHead is a reference data source, "
+            "not a live observation of the player's HUD. "
             "If the user provided all information required, do not ask for confirmation about the action to be taken. Do not make assumptions on the values and ask for clarification if not clear. "
         )
     

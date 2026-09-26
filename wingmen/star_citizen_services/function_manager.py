@@ -8,6 +8,7 @@ from openai import OpenAI, APIStatusError, AzureOpenAI
 
 from services.open_ai import AzureConfig
 from services.printr import Printr
+from services.manager_mcp import ManagerMcpTools
 
 from wingmen.star_citizen_services.ai_context_enum import AIContext
 
@@ -45,7 +46,26 @@ class StarCitizensAiFunctionsManager:
         self.manager_registered_functions = {}
         self.function_to_manager = {}
         self.command_phrases = {}
+        self.mcp_tools = ManagerMcpTools(
+            config.get("mcp", {}),
+            is_manager_available=self._is_mcp_manager_available,
+            reserved_names=self._reserved_mcp_names,
+            report_warning=printr.print_warn,
+        )
         self.initialize_function_managers(config, secret_keeper)
+        self.mcp_tools.validate_managers(self.manager_classes)
+
+    def _is_mcp_manager_available(self, manager_name, context):
+        return (
+            self.manager_states.get(manager_name, False)
+            and manager_name in self.manager_instances
+            and (context is None or self.manager_context.get(manager_name) == context)
+        )
+
+    def _reserved_mcp_names(self):
+        return set(self.function_registry) | set(self.function_to_manager) | {
+            "execute_command", "switch_context", "switch_tdd_voice", "manage_feature_manager_state",
+        }
 
     def register_manager(self, ai_context: AIContext, manager):
         ai_context_managers = self.managers.get(ai_context, [])
@@ -418,6 +438,7 @@ class StarCitizensAiFunctionsManager:
         self.register_manager(context, manager_instance)
         self._register_manager_functions(resolved_name, manager_instance)
         self.manager_states[resolved_name] = True
+        self.mcp_tools.discover_for_manager(resolved_name)
         if first_initialization:
             manager_instance.after_init()
         try:

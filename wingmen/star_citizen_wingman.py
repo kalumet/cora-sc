@@ -578,6 +578,7 @@ class StarCitizenWingman(OpenAiWingman):
             for ai_function_manager in self.ai_functions_manager.get_managers(current_context):
                 ai_function_manager: FunctionManager
                 tdd_tools.extend(ai_function_manager.get_function_tools())
+            tdd_tools.extend(self.ai_functions_manager.mcp_tools.get_tools(current_context))
             tdd_tools.append(self._tdd_voice_switch_tool())
             tdd_tools.append(self._context_switch_tool(current_context=AIContext.TDD))
             return tdd_tools
@@ -634,6 +635,7 @@ class StarCitizenWingman(OpenAiWingman):
         Returns:
             list[dict]: A list of tool descriptors in OpenAI format.
         """
+        self.current_tools = self._get_context_tools(self.current_context)
         return self.current_tools
 
     async def _execute_command_by_function_call(
@@ -685,8 +687,14 @@ class StarCitizenWingman(OpenAiWingman):
         if function_name == self.manage_feature_manager_state.__name__:
             function_response = self.manage_feature_manager_state(function_args)
 
-        # finally, check for any function managers implementing the called function
-        if function_name in self.ai_functions_manager.get_function_registry():
+        # MCP aliases have explicit ownership; never dispatch them via the global
+        # registry of local methods or trust a stale tool list from conversation history.
+        if self.ai_functions_manager.mcp_tools.handles(function_name):
+            function_response = await self.ai_functions_manager.mcp_tools.call_tool(
+                function_name, function_args, self.current_context
+            )
+        # Finally, check local function managers.
+        elif function_name in self.ai_functions_manager.get_function_registry():
             function_to_call = self.ai_functions_manager.get_function(function_name)
             if callable(function_to_call):
                 manager_instance = getattr(function_to_call, "__self__", None)
@@ -1109,6 +1117,7 @@ class StarCitizenWingman(OpenAiWingman):
         for ai_function_manager in self.ai_functions_manager.get_managers(AIContext.CORA):
             ai_function_manager: FunctionManager
             tools.extend(ai_function_manager.get_function_tools())
+        tools.extend(self.ai_functions_manager.mcp_tools.get_tools(AIContext.CORA))
         tools.append(self._context_switch_tool(current_context=AIContext.CORA))
 
         return tools

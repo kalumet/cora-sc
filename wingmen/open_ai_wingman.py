@@ -926,7 +926,12 @@ class OpenAiWingman(Wingman):
             ):
                 if hasattr(self.instant_command_cache_manager, "_remove_entry"):
                     self.instant_command_cache_manager._remove_entry(call_cache_key)
+                printr.print(
+                    f"Discarding incompatible instant command cache entry: {call_cache_key}",
+                    tags="info",
+                )
                 cached_command_data = None
+                call_cache_key = self._generate_cache_key(normalized_transcript)
 
             if cached_command_data:
                 printr.print(
@@ -934,7 +939,7 @@ class OpenAiWingman(Wingman):
                 )
 
                 instant_response, tts_cache_key = await self._handle_tool_calls(
-                    None, call_cache_key, normalized_transcript
+                    None, call_cache_key, command_phrase=normalized_transcript
                 )
 
                 if self._pending_tool_payloads_suppress_tts():
@@ -1010,8 +1015,11 @@ class OpenAiWingman(Wingman):
 
         return final_text_to_speak, instant_response, tts_cache_key
 
+    def _is_cached_command_name_valid(self, command_name):
+        return self._get_command(command_name) is not None
+
     def _is_cached_command_data_valid(self, cached_command_data):
-        if not isinstance(cached_command_data, list):
+        if not isinstance(cached_command_data, list) or not cached_command_data:
             return False
 
         built_in_functions = {
@@ -1027,7 +1035,15 @@ class OpenAiWingman(Wingman):
             if not isinstance(function_call, (list, tuple)) or len(function_call) < 2:
                 return False
 
-            function_name = function_call[0]
+            function_name, function_args = function_call[:2]
+            if not isinstance(function_name, str) or not isinstance(function_args, dict):
+                return False
+            if function_name == "execute_command":
+                command_name = function_args.get("command_name")
+                if not isinstance(command_name, str) or not command_name:
+                    return False
+                if not self._is_cached_command_name_valid(command_name):
+                    return False
             if function_name in built_in_functions:
                 continue
             if function_name in registered_functions:
@@ -1294,7 +1310,12 @@ class OpenAiWingman(Wingman):
                 # Don't use self._add_user_message_to_history here because we never want to skip this because of history limitions
                 self.messages.append(msg)
        
-            if do_cache:
+            if (
+                do_cache
+                and call_cache_key
+                and self.instant_command_cache_manager
+                and self._is_cached_command_data_valid(cached_function_calls)
+            ):
                 if self.debug or DEBUG:
                     printr.print(
                         f"Caching function call '{function_name}':#{call_cache_key}", tags="info"

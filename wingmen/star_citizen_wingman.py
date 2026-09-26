@@ -1047,6 +1047,14 @@ class StarCitizenWingman(OpenAiWingman):
             }
         }
     
+    def _is_cached_command_name_valid(self, command_name):
+        if super()._is_cached_command_name_valid(command_name):
+            return True
+        return (
+            command_name not in self.config.get("avoid-commands", [])
+            and command_name in self.sc_keybinding_service.get_bound_keybinding_names()
+        )
+
     def _get_keybinding_commands(self) -> list[dict]:
         # get defined commands in config
         commands = [

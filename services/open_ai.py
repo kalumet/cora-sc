@@ -8,6 +8,10 @@ from dataclasses import dataclass
 from types import SimpleNamespace
 from openai import OpenAI, APIStatusError, AzureOpenAI
 from services.printr import Printr
+from services.openai_chat import create_chat_completion
+from services.realtime_tts import (
+    RealtimeTtsError, is_realtime_model, resolve_realtime_voice, synthesize_realtime_speech,
+)
 
 printr = Printr()
 
@@ -277,7 +281,7 @@ class OpenAi:
             if reasoning_effort:
                 completion_kwargs["reasoning_effort"] = reasoning_effort
 
-            completion = client.chat.completions.create(**completion_kwargs)
+            completion = create_chat_completion(client, **completion_kwargs)
             return completion
         except APIStatusError as e:
             if not tools and self._is_tool_call_without_tools_error(e):
@@ -328,19 +332,20 @@ class OpenAi:
             retry_messages.extend(original_messages)
             retry_kwargs = completion_kwargs.copy()
             retry_kwargs["messages"] = retry_messages
-            return client.chat.completions.create(**retry_kwargs)
+            return create_chat_completion(client, **retry_kwargs)
         except Exception:
             return None
 
     def speak(self, 
               text: str, 
-              model: str = "tts-1", 
-              voice: str = "nova",
+              model: str = "gpt-realtime-2.1-mini",
+              voice: str | None = None,
               voice_instruction: str = "",
               player_language: str = "de_DE",):
         try:
+            model = model or "gpt-realtime-2.1-mini"
             if not voice:
-                voice = "nova"
+                voice = "marin" if is_realtime_model(model) else "nova"
 
             text = self._sanitize_tts_input(text)
             if not text:
@@ -353,7 +358,13 @@ class OpenAi:
             if voice_instruction is None:
                 voice_instruction = ""
 
-            if model == "gpt-4o-mini-tts":
+            if is_realtime_model(model):
+                voice = resolve_realtime_voice(voice, report_warning=printr.print_warn)
+                response = synthesize_realtime_speech(
+                    client_to_use, text=text, model=model, voice=voice,
+                    voice_instruction=voice_instruction, player_language=player_language,
+                )
+            elif model == "gpt-4o-mini-tts":
                 voice_instruction += f" Please speak in {player_language}."
                 response = client_to_use.audio.speech.create(
                     model=model,
@@ -368,6 +379,9 @@ class OpenAi:
                     input=text,
                 )
             return response
+        except RealtimeTtsError as e:
+            printr.print(f"Fehler bei der Realtime-Sprachausgabe: {e}", tags="err")
+            return None
         except APIStatusError as e:
             self._handle_api_error(e)
             return None

@@ -304,13 +304,13 @@ class TddManager(FunctionManager):
             "price_type": f"{operation}_average",
             "location": location_name,
             "average_price": average_price,
-            "currency": "alpha you ee see",
+            "currency": "alphayouesee",
             "minimum_price": function_response.get("minimum_price"),
             "maximum_price": function_response.get("maximum_price"),
             "price_count": function_response.get("price_count"),
             "spoken_instruction": (
                 f"Answer with the average {price_label} price only. "
-                "Name the currency as alpha you ee see. "
+                "Name the currency as alphayouesee. "
                 "Write out all numbers in words and do not use decimal places. "
                 "Do not mention routes or alternatives."
             )
@@ -356,13 +356,13 @@ class TddManager(FunctionManager):
             "best_result": {
                 "terminal": terminal,
                 "area": area,
-                "currency": "alpha you ee see",
+                "currency": "alphayouesee",
                 price_key: price
             },
             "number_of_alternatives": function_response.get("number_of_alternatives", 1),
             "spoken_instruction": (
                 "Keep the answer to one short sentence. "
-                "Name the currency as alpha you ee see. "
+                "Name the currency as alphayouesee. "
                 "Write out all numbers in words."
             )
         }
@@ -383,20 +383,20 @@ class TddManager(FunctionManager):
                 "terminal": self._route_origin_name(route),
                 "area": self._route_origin_area(route),
                 "price": self._route_buy_price(route),
-                "currency": "alpha you ee see"
+                "currency": "alphayouesee"
             },
             "sell": {
                 "terminal": self._route_destination_name(route),
                 "area": self._route_destination_area(route),
                 "price": self._route_sell_price(route),
-                "currency": "alpha you ee see"
+                "currency": "alphayouesee"
             },
             "profit": route.get("profit", ""),
-            "profit_currency": "alpha you ee see",
+            "profit_currency": "alphayouesee",
             "number_of_alternatives": function_response.get("number_of_alternatives", 1),
             "spoken_instruction": (
                 "Describe the best route only. Mention alternatives only as a count. "
-                "Name the currency as alpha you ee see. "
+                "Name the currency as alphayouesee. "
                 "Write out all numbers in words. "
                 "Keep the answer concise."
             )

@@ -7,6 +7,7 @@ from abc import ABC, abstractmethod
 from openai import OpenAI, APIStatusError, AzureOpenAI
 
 from services.open_ai import AzureConfig
+from services.openai_chat import create_chat_completion
 from services.printr import Printr
 from services.manager_mcp import ManagerMcpTools
 
@@ -971,9 +972,7 @@ class FunctionManager(ABC):
             if resolved_reasoning_effort:
                 completion_kwargs["reasoning_effort"] = resolved_reasoning_effort
 
-            completion = client.chat.completions.create(
-                **completion_kwargs,
-            )
+            completion = create_chat_completion(client, **completion_kwargs)
             if self._ask_ai_debug_response_logger:
                 self._ask_ai_debug_response_logger(
                     f"{stage_base}.response",

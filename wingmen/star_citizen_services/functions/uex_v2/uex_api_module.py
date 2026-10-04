@@ -63,7 +63,7 @@ TRADE_ROUTE_PROMPT_INSTRUCTIONS = (
     "especially if he has to travel to another planetary body (orbit) or even a different star system. "
     "If the other alternatives have similar profit without system change, mention that to the player. "
     "Write out all numbers in words, especially prices. "
-    "Always name the currency as alpha you ee see for money values. "
+    "Always name the currency as alphayouesee for money values. "
     "Example: instead of 24 write 'twentyfour'!"
 )
 
@@ -1433,7 +1433,7 @@ class UEXApi2():
                 "Answer only the requested commodity price. "
                 "For buy_average, call it the average buying price. "
                 "For sell_average, call it the average selling price. "
-                "Always name the currency as alpha you ee see. "
+                "Always name the currency as alphayouesee. "
                 "Write out all numbers in words and do not use decimal places. "
                 "Do not mention trade routes or locations unless a location was requested."
             )

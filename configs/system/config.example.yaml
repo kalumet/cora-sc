@@ -160,13 +160,14 @@ openai:
   # gpt-3.5 is the default and should be enough for most use cases.
   # If something is not working as expected, you might want to test it with gpt-4.
   conversation_model: gpt-4.1-mini # available: gpt-5-mini, gpt-4.1-nano, gpt-4.1-mini, gpt-4o, gpt-4o-mini, gpt-3.5-turbo-1106, gpt-4-1106-preview (and more)
+  # GPT-6 models automatically use the Responses API for conversations, tools and summaries.
   # Optional reasoning effort for this provider/model call (supported values depend on the model/provider)
-  #conversation_reasoning_effort: low # optional: low, medium, high
+  #conversation_reasoning_effort: low # optional, model-dependent: none, low, medium, high, xhigh, max
 
   # This model summarizes function responses, like API call responses etc.
   # In most cases gpt-3.5 should be enough.
   summarize_model: gpt-4.1-mini # gpt-5-mini, gpt-3.5-turbo-0125 # available: gpt-4o, gpt-4o-mini, gpt-3.5-turbo-1106, gpt-4-1106-preview (and more)
-  #summarize_reasoning_effort: low # optional: low, medium, high
+  #summarize_reasoning_effort: low # optional, model-dependent: none, low, medium, high, xhigh, max
 
   summarize_instructions: |
     You are a professional voice‑script writer.
@@ -192,8 +193,8 @@ openai:
 
   # The voice to use for OpenAI text-to-speech.
   # Only used if features > tts_provider is set to 'openai' above.
-  tts_voice: nova # available: nova, alloy, echo, fable, onyx, shimmer
-  tts_model: tts-1 # available: tts-1, tts-1-hd or gpt-4o-mini-tts
+  tts_voice: marin # Realtime: alloy, ash, ballad, coral, echo, sage, shimmer, verse, marin, cedar
+  tts_model: gpt-realtime-2.1-mini # Realtime API; legacy speech models are also supported until retirement.
   tts_voice_instructions:  #| # leider kann man die Persona nicht "speichern", so dass sie jedes mal etwas anders klingt.
     # Voice characteristics:
     # - Accent: Standard (clear, neutral)
@@ -517,8 +518,8 @@ wingmen:
       context: |
         just a fake context to not break initialisation stuff.
       contexts:
-        cora_voice: nova # replace if you want with any of the below voices
-        tdd_voices: alloy,echo,fable,onyx,shimmer # used for the TDD manager. 
+        cora_voice: marin # Must be supported by the configured tts_model; overrides tts_voice for Cora.
+        tdd_voices: alloy,echo,ballad,cedar,shimmer # used for the TDD manager.
         context-CORA: 
           conversation_model: gpt-4.1-mini # gpt-5-mini, gpt-4.1-mini, gpt-4o-2024-11-20 | gpt-4o-mini | gpt-4o | gpt-3.5-turbo-1106  the openai model to use for conversations
           context: |

@@ -1,6 +1,7 @@
 import base64
 import hashlib
 import json
+import math
 import os
 import queue
 import re
@@ -345,10 +346,93 @@ class MiningManager(FunctionManager):
 
     # overwritten
     def cora_start_information(self):
-        """  
-            This method can be implemented to retrieve information from the manager, that Cora should provide to the user on startup.
-        """
-        return ""
+        """Describe only work orders worth mentioning when the manager starts."""
+        summaries = self._summarize_work_orders(self.load_active_work_orders())
+        finished_orders = [
+            order for order in summaries
+            if order["estimated_completion"] == "completed"
+        ]
+        active_count = len(summaries) - len(finished_orders)
+        messages = []
+
+        if active_count == 1:
+            messages.append("Ein Auftrag ist noch aktiv.")
+        elif active_count > 1:
+            messages.append(f"{active_count} Aufträge sind noch aktiv.")
+
+        if finished_orders:
+            finished_count = len(finished_orders)
+            station_names = [
+                order["station_name"].strip()
+                for order in finished_orders
+                if isinstance(order.get("station_name"), str)
+                and order["station_name"].strip()
+            ]
+            station_name = (
+                station_names[0]
+                if len(station_names) == finished_count and len(set(station_names)) == 1
+                else None
+            )
+            location = f" in der Raffinerie {station_name}" if station_name else ""
+            if finished_count == 1:
+                messages.append(f"Ein Auftrag ist voraussichtlich{location} abgeschlossen.")
+            else:
+                messages.append(
+                    f"{finished_count} Aufträge sind voraussichtlich{location} abgeschlossen."
+                )
+
+        return " ".join(messages)
+
+    def _summarize_work_orders(self, work_orders):
+        now = datetime.now(timezone.utc)
+        return [
+            {
+                "id": entry.get("id"),
+                "station_name": (entry.get("work_order") or {}).get("station_name"),
+                "estimated_completion": self._estimate_work_order_completion(entry, now),
+            }
+            for entry in work_orders
+        ]
+
+    @staticmethod
+    def _estimate_work_order_completion(entry, now):
+        """Estimate completion from the local save time and scanned duration."""
+        work_order = entry.get("work_order") or {}
+        duration = work_order.get("processing_time")
+        created_at = entry.get("created_at")
+        if not isinstance(duration, str) or not isinstance(created_at, str):
+            return "unknown"
+
+        match = re.fullmatch(
+            r"\s*(?:(\d+)\s*d\s*)?(?:(\d+)\s*h\s*)?(?:(\d+)\s*m\s*)?",
+            duration,
+            re.IGNORECASE,
+        )
+        if not match or all(part is None for part in match.groups()):
+            return "unknown"
+
+        try:
+            saved_at = datetime.fromisoformat(created_at)
+        except ValueError:
+            return "unknown"
+        if saved_at.tzinfo is None:
+            return "unknown"
+
+        days, hours, minutes = (int(part or 0) for part in match.groups())
+        remaining_seconds = (
+            saved_at.timestamp() + ((days * 24 + hours) * 60 + minutes) * 60
+            - now.timestamp()
+        )
+        if remaining_seconds <= 0:
+            return "completed"
+
+        remaining_minutes = math.ceil(remaining_seconds / 60)
+        remaining_hours, remaining_minutes = divmod(remaining_minutes, 60)
+        if remaining_hours and remaining_minutes:
+            return f"in {remaining_hours}h {remaining_minutes}m"
+        if remaining_hours:
+            return f"in {remaining_hours}h"
+        return f"in {remaining_minutes}m"
 
     def refinery_job_work_order_management(self, function_args):
         printr.print(f"Executing function '{self.refinery_job_work_order_management.__name__}'.", tags="info")
@@ -362,6 +446,12 @@ class MiningManager(FunctionManager):
             work_order_id=work_order_id,
         )
         function_response["do_not_cache"] = True  # we don't want work order management commands to be cached, as they are usually one-time commands that change frequently
+        if function_response.get("success"):
+            instruction = function_response.get("response_instructions", "")
+            function_response["response_instructions"] = (
+                f"{instruction} Work order IDs are for later tool calls only; "
+                "do not say or spell them out in the spoken response."
+            ).strip()
         printr.print(f'-> Result: {json.dumps(function_response, indent=2)}', tags="info")
         return function_response
     
@@ -437,10 +527,10 @@ class MiningManager(FunctionManager):
             return function_response
         
         if type == "get_all_work_orders":
-            work_orders = self.load_active_work_orders()
+            work_orders = self._summarize_work_orders(self.load_active_work_orders())
             return {
                 "success": True,
-                "message": f"{len(work_orders)} active refinery work order(s) retrieved.",
+                "message": f"{len(work_orders)} locally stored refinery work order(s) retrieved.",
                 "work_orders": work_orders,
             }
 

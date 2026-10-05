@@ -10,8 +10,10 @@ from openai import OpenAI, APIStatusError, AzureOpenAI
 from services.printr import Printr
 from services.openai_chat import create_chat_completion
 from services.realtime_tts import (
-    RealtimeTtsError, is_realtime_model, resolve_realtime_voice, synthesize_realtime_speech,
+    RealtimeSessionPool, RealtimeTtsError, SpeechCancelled, is_realtime_model,
+    resolve_realtime_voice, synthesize_realtime_speech,
 )
+from services.streaming_tts import STREAMING_SPEECH_MODELS, synthesize_streaming_speech
 
 printr = Printr()
 
@@ -48,6 +50,7 @@ class OpenAi:
         self.api_key = api_key
 
         self.client = None
+        self._realtime_sessions = RealtimeSessionPool()
         if api_key:
             self.client = OpenAI(
                 api_key=api_key,
@@ -336,13 +339,22 @@ class OpenAi:
         except Exception:
             return None
 
+    def close_speech_sessions(self):
+        self._realtime_sessions.close()
+
+    def supports_speech_streaming(self, model=None):
+        model = model or "gpt-realtime-2.1-mini"
+        return is_realtime_model(model) or model in STREAMING_SPEECH_MODELS
+
     def speak(self, 
               text: str, 
               model: str = "gpt-realtime-2.1-mini",
               voice: str | None = None,
               voice_instruction: str = "",
-              player_language: str = "de_DE",):
+              player_language: str = "de_DE", on_audio=None, cancel_event=None):
         try:
+            if cancel_event is not None and cancel_event.is_set():
+                return None
             model = model or "gpt-realtime-2.1-mini"
             if not voice:
                 voice = "marin" if is_realtime_model(model) else "nova"
@@ -363,6 +375,13 @@ class OpenAi:
                 response = synthesize_realtime_speech(
                     client_to_use, text=text, model=model, voice=voice,
                     voice_instruction=voice_instruction, player_language=player_language,
+                    on_audio=on_audio, cancel_event=cancel_event,
+                    session_pool=getattr(self, "_realtime_sessions", None),
+                )
+            elif on_audio is not None and model in STREAMING_SPEECH_MODELS:
+                response = synthesize_streaming_speech(
+                    client_to_use, text, model, voice, voice_instruction,
+                    player_language, on_audio, cancel_event,
                 )
             elif model == "gpt-4o-mini-tts":
                 voice_instruction += f" Please speak in {player_language}."
@@ -378,7 +397,11 @@ class OpenAi:
                     voice=voice,
                     input=text,
                 )
+            if cancel_event is not None and cancel_event.is_set():
+                return None
             return response
+        except SpeechCancelled:
+            return None
         except RealtimeTtsError as e:
             printr.print(f"Fehler bei der Realtime-Sprachausgabe: {e}", tags="err")
             return None

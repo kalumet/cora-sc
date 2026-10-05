@@ -309,6 +309,7 @@ class Wingman(FileCreator):
             printr.print(f">> (You): {transcript}", tags="violet")
 
             if self._should_ignore_transcript(transcript):
+                self.audio_player.stop()
                 instant_response = self.transcript_ignore_response
                 process_result = instant_response
                 printr.print("Transcript ignore phrase detected. Skipping processing.", tags="info")

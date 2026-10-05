@@ -40,13 +40,16 @@ GPT-6.1 Sol do not support `none`. See the
 `gpt-realtime-2.1-mini` uses the Realtime endpoint over WebSocket, rather than
 `/v1/audio/speech`. Wingman sends the already prepared spoken answer as text with
 instructions to read it verbatim, collects the audio response and converts PCM16
-audio at 24 kHz to a mono WAV file in memory. The existing player, effects and
-cache continue to consume audio bytes through `response.content`.
+audio at 24 kHz to a mono WAV file in memory. With streaming enabled, the player
+also receives PCM chunks during generation. The complete WAV remains available
+through `response.content` for the existing audio cache.
 
 ```yaml
 openai:
   tts_model: gpt-realtime-2.1-mini
   tts_voice: marin
+  tts_streaming: true
+  tts_stream_buffer_ms: 150
 ```
 
 For Star Citizen, also set `wingmen.star-citizen-ai.openai.contexts.cora_voice`,
@@ -57,10 +60,62 @@ Existing legacy voice settings are mapped with a warning: `nova` to `marin`,
 identical renditions of the legacy voices. Unknown voice names produce a
 configuration error before connecting.
 
-Each speech request uses a fresh GA Realtime session, with automatic input turn
-detection disabled and no tools. A speech response must complete successfully
-before its audio is returned or cached. Server errors, incomplete responses,
-disconnects, invalid audio and a 120-second deadline stop generation.
+Streaming uses one continuous output stream, a configurable 150 ms start buffer
+and the existing 200 ms leading silence once per utterance. Audio is played as
+it arrives; network gaps insert silence without discarding speech samples.
+Volume, radio/interior effects and optional start/end beeps remain supported.
+`ROBOT` also streams, including in the Cora context. Its streaming path uses a
+separate pitch shifter with two crossfaded delay-line readers, still targeting
+one semitone down. This avoids a Pedalboard `PitchShift(reset=False)` bug that
+returns silence or empty audio (see the
+[upstream fix proposal](https://github.com/spotify/pedalboard/pull/486)). The
+remaining delay, chorus, reverb, distortion and gain effects keep their settings
+and retain state across chunks. The pitch shifter uses about 40 ms of bounded
+audio history and releases its delayed final samples before the closing beep.
+Cancellation prevents those delayed samples from being played.
+
+This is a different pitch-shifting algorithm, so its texture can differ from
+the original buffered `ROBOT` sound. Buffered playback and existing cache hits
+continue to use the original Pedalboard effect; cache entries remain compatible
+and never require a new TTS call merely because streaming is enabled. Set
+`tts_streaming: false` to return to buffered playback for any model.
+
+Each OpenAI service keeps GA Realtime sessions open per model and voice. After
+the first uncached utterance, further utterances reuse the socket and skip both
+the connection handshake and `session.update`. Each response supplies its own
+text and voice instructions using `conversation: "none"`, so spoken responses
+do not accumulate conversation history. Responses are matched by request metadata
+and response ID to exclude delayed events from earlier utterances. Separate
+connections are necessary because a Realtime voice cannot change after audio
+has been generated. The first request for a different voice still requires setup.
+
+Idle connections close after ten minutes (cleanup runs every thirty seconds),
+and sessions rotate after 55 minutes, before the API's one-hour session limit.
+The pool holds at most sixteen sessions per service and serializes requests for
+the same connection, with cancellable waits. Context reload and application
+shutdown close all sessions. A stale reused socket reconnects once if no audio
+has arrived; a partially streamed response is never retried automatically.
+Cancellation, timeout or an error discards the affected connection, so the next
+uncached utterance creates a clean session. Automatic input turn detection
+remains disabled and no tools are available. Only successfully completed
+responses are returned or cached. Errors and interrupted responses stop playback and do not
+store partial audio. The configured spoken cancellation phrases (for example,
+"Abbruch") stop both live and buffered audio. A cancellation token prevents late
+audio chunks or a pending buffered TTS response from restarting playback. The
+existing configured acknowledgment is still spoken after cancellation.
+
+The cache is checked before starting streaming or calling a TTS model. Existing
+command cache keys and manually edited text with the regeneration flag retain
+their behavior. Answers without a command key also use a key derived from the
+spoken text. Cache hits play the complete stored audio through the existing
+player. A newly streamed response is cached once and is not played again.
+
+OpenAI `tts-1`, `tts-1-hd` and `gpt-4o-mini-tts` also support PCM streaming through
+the Speech endpoint. Other models and providers keep their buffered path and
+the same cache checks. Speech generation runs off the event loop. Realtime
+receive waits check cancellation every 100 ms; connection establishment and
+provider calls may take longer to return, but cancelled requests cannot play.
+The Realtime generation deadline remains 120 seconds.
 
 The connection uses the configured OpenAI client's API credentials, organization,
 project, custom headers and base URL. It uses the existing `websockets==12.0`
@@ -79,6 +134,9 @@ returned WAV samples and existing `OpenAi.speak` integration:
 
 ```sh
 python -m unittest discover -s tests -p test_realtime_tts.py -v
+python -m unittest discover -s tests -p test_realtime_sessions.py -v
+python -m unittest discover -s tests -p test_speech_streaming.py -v
+python -m unittest discover -s tests -p test_streaming_pitch_shift.py -v
 ```
 
 ## Dependencies and chat regression tests

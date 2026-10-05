@@ -1422,7 +1422,7 @@ class MacroManager(FunctionManager):
 
         if priority and self._is_audio_output_busy() and sd is not None:
             try:
-                sd.stop()
+                AudioPlayer.stop_all()
             except Exception:
                 pass
 
@@ -1568,13 +1568,7 @@ class MacroManager(FunctionManager):
         return stats
 
     def _is_audio_output_busy(self) -> bool:
-        if sd is None:
-            return False
-        try:
-            stream = sd.get_stream()
-            return bool(stream and getattr(stream, "active", False))
-        except Exception:
-            return False
+        return AudioPlayer.is_busy()
 
     def _get_or_generate_tts_audio(self, text: str) -> bytes:
         audio_data, _, _ = self._get_or_generate_tts_audio_meta(text)

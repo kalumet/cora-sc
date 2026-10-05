@@ -54,6 +54,7 @@ class WingmanAI:
         self.active = False
         # Save caches before potentially switching context/reloading tower
         self.save_wingman_caches()
+        self.close_speech_sessions()
         try:
             # ConfigManager handles finding the correct config file
             config = self.config_manager.get_context_config(context)
@@ -227,12 +228,23 @@ class WingmanAI:
                 except Exception as e:
                     print(f"Error saving caches for wingman {wingman.name}: {e}")
 
+    def close_speech_sessions(self):
+        if self.tower:
+            for wingman in self.tower.get_wingmen():
+                close = getattr(wingman, "close_speech_sessions", None)
+                if callable(close):
+                    try:
+                        close()
+                    except Exception as error:
+                        print(f"Error closing speech sessions for {wingman.name}: {error}")
+
     def shutdown(self):
         """Gracefully shuts down services."""
         print("Shutting down WingmanAI...")
         self.deactivate()
         # Save caches on shutdown
         self.save_wingman_caches()
+        self.close_speech_sessions()
         # Close audio recorder stream
         if self.audio_recorder:
             self.audio_recorder.close()

@@ -5,7 +5,7 @@ import base64
 import io
 import json
 from pathlib import Path
-from threading import Thread
+from threading import Event, Thread
 import unittest
 from unittest.mock import Mock, patch
 import wave
@@ -17,8 +17,9 @@ from websockets.sync.server import serve
 
 from services.realtime_tts import (
     LEGACY_VOICE_REPLACEMENTS, REALTIME_VOICES, RealtimeTtsError,
-    is_realtime_model, resolve_realtime_voice, synthesize_realtime_speech,
+    SpeechCancelled, is_realtime_model, resolve_realtime_voice, synthesize_realtime_speech,
 )
+from services.streaming_tts import STREAMING_SPEECH_MODELS, synthesize_streaming_speech
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -68,13 +69,15 @@ def load_speech_service():
     tree = ast.parse(path.read_text(encoding="utf-8"))
     cls = next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "OpenAi")
     cls.body = [node for node in cls.body if isinstance(node, ast.FunctionDef) and node.name in {
-        "speak", "_sanitize_tts_input",
+        "speak", "_sanitize_tts_input", "supports_speech_streaming",
     }]
     cls.body.insert(0, ast.Assign(targets=[ast.Name(id="_MAX_TTS_INPUT_CHARS", ctx=ast.Store())], value=ast.Constant(4000)))
     namespace = {
         "is_realtime_model": is_realtime_model, "resolve_realtime_voice": resolve_realtime_voice,
         "synthesize_realtime_speech": synthesize_realtime_speech,
         "RealtimeTtsError": RealtimeTtsError, "APIStatusError": APIStatusError,
+        "SpeechCancelled": SpeechCancelled, "STREAMING_SPEECH_MODELS": STREAMING_SPEECH_MODELS,
+        "synthesize_streaming_speech": synthesize_streaming_speech,
         "printr": Mock(), "traceback": Mock(),
     }
     exec(compile(ast.fix_missing_locations(ast.Module(body=[cls], type_ignores=[])), str(path), "exec"), namespace)
@@ -132,6 +135,69 @@ class RealtimeTtsTests(unittest.TestCase):
         self.assertIn("verbatim", instructions)
         self.assertIn("Do not answer", instructions)
         self.assertIn("preserving its language and wording", instructions)
+
+    def test_audio_arrives_before_completion_and_full_wav_is_retained(self):
+        chunks = []
+
+        def receive(chunk):
+            self.assertFalse(self.connection.closed)
+            chunks.append(chunk)
+
+        result = self.synthesize(on_audio=receive)
+        self.assertEqual(b"".join(chunks), PCM)
+        with wave.open(io.BytesIO(result.content), "rb") as wav:
+            self.assertEqual(wav.readframes(wav.getnframes()), PCM)
+
+    def test_cancel_during_audio_stops_generation_without_returning_partial_wav(self):
+        cancel = Event()
+        with self.assertRaises(SpeechCancelled):
+            self.synthesize(on_audio=lambda chunk: cancel.set(), cancel_event=cancel)
+        self.assertEqual(self.connection.sent[-1]["type"], "response.cancel")
+        self.assertTrue(self.connection.closed)
+
+    def test_cancel_before_connection_does_not_call_api(self):
+        cancel = Event()
+        cancel.set()
+        with self.assertRaises(SpeechCancelled):
+            self.synthesize(cancel_event=cancel)
+        self.connector.assert_not_called()
+
+    def test_cancel_interrupts_receive_wait(self):
+        cancel = Event()
+
+        def receive(timeout=None):
+            self.assertLessEqual(timeout, 0.1)
+            cancel.set()
+            raise TimeoutError()
+
+        self.connection.recv = receive
+        with self.assertRaises(SpeechCancelled):
+            self.synthesize(cancel_event=cancel)
+
+    def test_receive_polling_still_respects_generation_deadline(self):
+        self.connection.events = iter([TimeoutError()])
+        with patch("services.realtime_tts.time.monotonic", side_effect=[0, 0, 2]):
+            with self.assertRaisesRegex(RealtimeTtsError, "Zeitlimit"):
+                self.synthesize(cancel_event=Event(), timeout_seconds=1)
+
+    def test_speech_streaming_capabilities_leave_unknown_models_buffered(self):
+        cls, _ = load_speech_service()
+        service = cls()
+        for model in (None, "gpt-realtime-2.1-mini", "tts-1", "tts-1-hd", "gpt-4o-mini-tts"):
+            self.assertTrue(service.supports_speech_streaming(model))
+        self.assertFalse(service.supports_speech_streaming("custom-speech-model"))
+
+    def test_pcm_network_boundaries_preserve_complete_frames(self):
+        self.connection.events = iter([
+            {"type": "session.updated"},
+            *[{"type": "response.output_audio.delta", "delta": base64.b64encode(chunk).decode()}
+              for chunk in (PCM[:1], PCM[1:5], PCM[5:])],
+            {"type": "response.done", "response": {"status": "completed"}},
+        ])
+        chunks = []
+        self.synthesize(on_audio=chunks.append)
+        self.assertTrue(all(len(chunk) % 2 == 0 for chunk in chunks))
+        self.assertEqual(b"".join(chunks), PCM)
 
     def test_real_websocket_transport_against_local_server(self):
         received = []

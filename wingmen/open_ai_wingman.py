@@ -1,4 +1,5 @@
 import json
+import asyncio
 import os
 from datetime import datetime
 from uuid import uuid4
@@ -372,6 +373,10 @@ class OpenAiWingman(Wingman):
             }
         )
 
+    def close_speech_sessions(self):
+        if self.openai is not None:
+            self.openai.close_speech_sessions()
+
     def validate(self):
         errors = super().validate()
         self.load_caches() 
@@ -405,6 +410,7 @@ class OpenAiWingman(Wingman):
         # Keep original behavior: Check errors *before* initializing OpenAI client
         if not errors:
             try:
+                self.close_speech_sessions()
                 self.openai = OpenAi(
                     organization=openai_organization,
                     api_key=self.openai_api_key,
@@ -1722,10 +1728,24 @@ class OpenAiWingman(Wingman):
         return function_response, instant_reponse
 
     async def _play_to_user(self, text, tts_cache_key=None):
+        if not text or text.strip().lower() == "ok":
+            return
+        cancel_event = self.audio_player.begin_speech()
+        try:
+            await asyncio.to_thread(self._play_to_user_sync, text, tts_cache_key, cancel_event)
+        except asyncio.CancelledError:
+            cancel_event.set()
+            raise
+
+    def _play_to_user_sync(self, text, tts_cache_key, cancel_event):
         """Plays audio using cache (metadata + file) or TTS API."""
         # Keep original checks
         if not text or text.strip().lower() == "ok":
             return
+        if cancel_event.is_set():
+            return
+        # Normal conversation responses also reuse audio by their spoken text.
+        tts_cache_key = tts_cache_key or self._generate_cache_key(text)
         self._log_debug_event(
             "tts_start",
             {
@@ -1739,6 +1759,7 @@ class OpenAiWingman(Wingman):
         cached_audio_bytes = None
         cache_hit = False
         needs_update = False
+        streamed = False
 
         # Check TTS Cache using the provided key
         if self.tts_cache_manager and tts_cache_key:
@@ -1780,8 +1801,35 @@ class OpenAiWingman(Wingman):
             elif self.tts_provider == "elevenlabs":  # Added condition for elevenlabs
                 audio_bytes_generated = self._generate_with_elevenlabs(text)
             else:  # Default to OpenAI
-                # Call original _play_with_openai but modify it to *return bytes*
-                audio_bytes_generated = self._generate_with_openai(text)
+                streaming = (
+                    self.openai is not None
+                    and self.tts_provider in (None, "openai")
+                    and self.config.get("openai", {}).get("tts_streaming", True)
+                    and self.openai.supports_speech_streaming(self.config["openai"].get("tts_model"))
+                )
+                if streaming:
+                    playback = None
+                    try:
+                        playback = self.audio_player.start_pcm_stream(self.config, cancel_event)
+                        audio_bytes_generated = self._generate_with_openai(
+                            text, on_audio=playback.append, cancel_event=cancel_event,
+                        )
+                        if audio_bytes_generated and not cancel_event.is_set():
+                            playback.finish()
+                            streamed = True
+                    except Exception as error:
+                        if not cancel_event.is_set():
+                            printr.print_err(f"Streaming playback failed: {error}")
+                    finally:
+                        if playback is not None and not streamed:
+                            playback.abort()
+                    if not streamed:
+                        return
+                else:
+                    audio_bytes_generated = self._generate_with_openai(text, cancel_event=cancel_event)
+
+            if cancel_event.is_set():
+                return
 
             if audio_bytes_generated:
                 cached_audio_bytes = audio_bytes_generated
@@ -1819,14 +1867,14 @@ class OpenAiWingman(Wingman):
                 return  # Don't attempt to play if generation failed
 
         # --- Play Audio (from cache or new generation) ---
-        if cached_audio_bytes:
-            self.audio_player.stream_with_effects(cached_audio_bytes, self.config)
+        if cached_audio_bytes and not streamed:
+            self.audio_player.stream_with_effects(cached_audio_bytes, self.config, cancel_event=cancel_event)
             self._log_debug_event(
                 "tts_playback_complete",
                 {"audio_bytes": len(cached_audio_bytes)},
             )
 
-    def _generate_with_openai(self, text):
+    def _generate_with_openai(self, text, on_audio=None, cancel_event=None):
         if not self.openai:
             return None
         try:
@@ -1847,6 +1895,7 @@ class OpenAiWingman(Wingman):
                 voice,
                 self.config["openai"].get("tts_voice_instructions", ""),
                 self.config["openai"].get("player_language"),
+                on_audio=on_audio, cancel_event=cancel_event,
             )
             # Return bytes directly
             self._log_debug_event(

@@ -1,15 +1,74 @@
 import io
+from threading import Event, RLock
+from weakref import WeakSet
 from os import path
 import numpy as np
 import soundfile as sf
 import sounddevice as sd
 from scipy.signal import resample
 from services.sound_effects import get_sound_effects_from_config
+from services.pcm_player import PcmPlayback
+from services.realtime_tts import SAMPLE_RATE, SpeechCancelled
+
+
+_PLAYBACK_LOCK = RLock()
+_PLAYERS = WeakSet()
 
 
 class AudioPlayer:
     def __init__(self, sound_config: dict):
         self.sound_config = sound_config
+        self._cancel_event = Event()
+        self._pcm_playback = None
+        with _PLAYBACK_LOCK:
+            _PLAYERS.add(self)
+
+    @staticmethod
+    def stop_all():
+        """Stop buffered playback, live streams and their pending generation."""
+        with _PLAYBACK_LOCK:
+            for player in list(_PLAYERS):
+                player._cancel_event.set()
+                if player._pcm_playback is not None:
+                    player._pcm_playback.abort()
+                    player._pcm_playback = None
+            sd.stop()
+
+    def stop(self):
+        self.stop_all()
+
+    @staticmethod
+    def is_busy():
+        with _PLAYBACK_LOCK:
+            if any(player._pcm_playback is not None and player._pcm_playback.active for player in _PLAYERS):
+                return True
+            try:
+                stream = sd.get_stream()
+                return bool(stream and stream.active)
+            except RuntimeError:
+                return False
+
+    def begin_speech(self):
+        with _PLAYBACK_LOCK:
+            self.stop_all()
+            self._cancel_event = Event()
+            return self._cancel_event
+
+    def start_pcm_stream(self, config, cancel_event):
+        with _PLAYBACK_LOCK:
+            if cancel_event.is_set():
+                raise SpeechCancelled()
+            beep = None
+            if config.get("sound", {}).get("play_beep", False):
+                beep_path = path.join(path.dirname(__file__), "../audio_samples/beep.wav")
+                if path.exists(beep_path):
+                    beep, rate = self.get_audio_from_file(beep_path)
+                    if rate != SAMPLE_RATE and len(beep):
+                        beep = self._resample_audio(beep, rate, SAMPLE_RATE)
+                    if beep.ndim > 1:
+                        beep = beep.mean(axis=1)
+            self._pcm_playback = PcmPlayback(config, cancel_event, beep=beep)
+            return self._pcm_playback
 
     def play_file(self, filename: str):
         with open(filename, "rb") as f:
@@ -33,7 +92,9 @@ class AudioPlayer:
         audio = audio * volume
         audio = np.clip(audio, -1.0, 1.0)  # Prevent clipping
         audio = self.prepend_silence(audio, sample_rate, ms=50)  # 50ms Stille am Anfang
-        sd.play(audio, sample_rate)
+        with _PLAYBACK_LOCK:
+            self.stop_all()
+            sd.play(audio, sample_rate)
         if wait:
             sd.wait()
 
@@ -43,12 +104,16 @@ class AudioPlayer:
         return np.concatenate([silence, audio])
 
     def stream_with_effects(
-        self, input_data: bytes | tuple, config: dict, wait: bool = False
+        self, input_data: bytes | tuple, config: dict, wait: bool = False, cancel_event=None
     ):
         """
         Plays audio with effects. Accepts raw bytes (e.g., from cache or TTS API)
         or a pre-decoded tuple (audio_array, sample_rate).
         """
+        if cancel_event is None:
+            cancel_event = self.begin_speech()
+        if cancel_event.is_set():
+            return
         if isinstance(input_data, bytes):
             # Decode bytes first
             try:
@@ -107,7 +172,10 @@ class AudioPlayer:
         audio = np.clip(audio, -1.0, 1.0)  # Prevent clipping
 
         # Play the final audio
-        sd.play(audio, sample_rate)
+        with _PLAYBACK_LOCK:
+            if cancel_event is not None and cancel_event.is_set():
+                return
+            sd.play(audio, sample_rate)
 
         if wait:
             sd.wait()

@@ -103,6 +103,17 @@ class StarCitizenWingman(OpenAiWingman):
         # the config is dynamically expanded for all mapped keybinds.
         # the user only configures special commands i.e. combination of keybindings to press
 
+    def close_speech_sessions(self):
+        super().close_speech_sessions()
+        if self.ai_functions_manager is not None:
+            for manager in self.ai_functions_manager.manager_instances.values():
+                close = getattr(manager, "close_speech_sessions", None)
+                if callable(close):
+                    try:
+                        close()
+                    except Exception as error:
+                        printr.print_warn(f"Could not close {manager.name} speech sessions: {error}")
+
     def validate(self):
         errors = super().validate()
     

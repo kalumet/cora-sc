@@ -13,6 +13,10 @@ from openai import OpenAI, AzureOpenAI, APIStatusError
 
 from services.audio_player import AudioPlayer
 from services.printr import Printr
+from services.realtime_tts import (
+    RealtimeSessionPool, is_realtime_model, resolve_realtime_voice,
+    synthesize_realtime_speech,
+)
 from wingmen.star_citizen_services.ai_context_enum import AIContext
 from wingmen.star_citizen_services.function_manager import FunctionManager
 
@@ -161,6 +165,7 @@ class MacroManager(FunctionManager):
         self._beep_audio_bytes: Optional[bytes] = None
 
         self._openai_tts_client: Optional[OpenAI] = None
+        self._realtime_tts_sessions = RealtimeSessionPool()
         self._azure_tts_client: Optional[AzureOpenAI] = None
         self._openai_api_key = None
         self._azure_tts_api_key = None
@@ -176,11 +181,19 @@ class MacroManager(FunctionManager):
         self.load_macro_definitions()
 
     def on_manager_enabled(self, source: str = "manual"):
+        self._realtime_tts_sessions.close()
+        self._realtime_tts_sessions = RealtimeSessionPool()
         self.load_macro_definitions()
         self._activate_enabled_macros_from_disk()
 
     def on_manager_disabled(self, source: str = "manual"):
-        self.stop_all_macros(persist_state=False)
+        self.close_speech_sessions()
+
+    def close_speech_sessions(self):
+        try:
+            self.stop_all_macros(persist_state=False)
+        finally:
+            self._realtime_tts_sessions.close()
 
     def get_context_mapping(self) -> AIContext:
         return AIContext.CORA
@@ -1727,7 +1740,17 @@ class MacroManager(FunctionManager):
             )
 
         try:
-            if model == "gpt-4o-mini-tts":
+            if is_realtime_model(model):
+                response = synthesize_realtime_speech(
+                    self._openai_tts_client,
+                    text=text,
+                    model=model,
+                    voice=resolve_realtime_voice(voice, report_warning=printr.print_warn),
+                    voice_instruction=self.config.get("openai", {}).get("tts_voice_instructions") or "",
+                    player_language=player_language,
+                    session_pool=self._realtime_tts_sessions,
+                )
+            elif model == "gpt-4o-mini-tts":
                 instructions = self.config.get("openai", {}).get("tts_voice_instructions", "")
                 instructions = (instructions or "") + f" You have to speak in the language with language-code: {player_language}."
                 response = self._openai_tts_client.audio.speech.create(

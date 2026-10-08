@@ -122,6 +122,13 @@ project, custom headers and base URL. It uses the existing `websockets==12.0`
 dependency directly; no additional SDK upgrade is needed for this TTS path.
 The retired Realtime beta header is excluded.
 
+Macro countdowns and reminders also route Realtime models through this helper,
+using a dedicated session pool. The macro spoken-text and WAV caches retain
+their existing keys and are checked before generating audio. Macro playback
+continues to consume complete cached WAV audio. Disabling the MacroManager,
+reloading the context or exiting the application stops its jobs and closes
+its Realtime sessions; re-enabling the manager creates a fresh pool.
+
 Explicitly configured legacy speech models retain their existing REST path.
 OpenAI lists January 6, 2027 as the retirement date for `tts-1`, `tts-1-hd` and
 the deprecated GPT-4o Mini TTS snapshots, recommending `gpt-realtime-2.1-mini`.
@@ -135,6 +142,7 @@ returned WAV samples and existing `OpenAi.speak` integration:
 ```sh
 python -m unittest discover -s tests -p test_realtime_tts.py -v
 python -m unittest discover -s tests -p test_realtime_sessions.py -v
+python -m unittest discover -s tests -p test_macro_tts.py -v
 python -m unittest discover -s tests -p test_speech_streaming.py -v
 python -m unittest discover -s tests -p test_streaming_pitch_shift.py -v
 ```

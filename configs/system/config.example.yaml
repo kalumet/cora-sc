@@ -312,6 +312,9 @@ wingmen:
 
     record_key: x1  # mouse button
     features: # all features that Cora has. You can activated or deactivate features here.
+      StarStringsManager:
+        enabled: True # Default. Check/install MrKraken/StarStrings LIVE release in the background at Cora startup.
+        timeout_seconds: 15 # Per HTTP request. Preserve user.cfg settings; set g_language = english.
       ComponentManager: True # True | False - provides ship component searches and loadout comparisons via MCP
       MiningManager:
         enabled: False # True | False - captures refinery work orders locally and looks up mining radar signatures.

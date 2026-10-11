@@ -308,9 +308,10 @@ class StarCitizensAiFunctionsManager:
         return deduped
 
     def _resolve_feature_enabled(self, manager_name: str) -> bool:
-        value = self.config.get("features", {}).get(manager_name, False)
+        default = getattr(self.manager_classes.get(manager_name), "DEFAULT_ENABLED", False)
+        value = self.config.get("features", {}).get(manager_name, default)
         if isinstance(value, dict):
-            return bool(value.get("enabled", False))
+            return bool(value.get("enabled", default))
         return bool(value)
 
     def _normalize_context(self, context):
